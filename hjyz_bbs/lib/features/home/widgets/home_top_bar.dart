@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/config/app_config.dart';
+import '../../../core/widgets/safe_network_image.dart';
+import '../../auth/auth_controller.dart';
+
+class HomeTopBar extends ConsumerWidget {
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onSearchTap;
+  final VoidCallback? onMessageTap;
+
+  const HomeTopBar({
+    super.key,
+    this.onAvatarTap,
+    this.onSearchTap,
+    this.onMessageTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+
+    final avatar = auth.user?['avatar']?.toString() ?? '';
+
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 6,
+        left: 12,
+        right: 12,
+        bottom: 8,
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onAvatarTap,
+            child: SafeNetworkImage(
+              url: avatar.isNotEmpty ? avatar : AppConfig.defaultAvatar,
+              width: 36,
+              height: 36,
+              borderRadius: BorderRadius.circular(18),
+              errorWidget: CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey.shade200,
+                child: Icon(
+                  auth.loggedIn ? Icons.person : Icons.person_outline,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: onSearchTap,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F4F4),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.search_rounded,
+                      color: Colors.grey.shade500,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '搜索帖子、版块、用户',
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: onMessageTap,
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.mail_outline_rounded,
+                    color: Colors.grey.shade800,
+                    size: 25,
+                  ),
+                  if (auth.loggedIn)
+                    Positioned(
+                      right: 5,
+                      top: 6,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFB7299),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

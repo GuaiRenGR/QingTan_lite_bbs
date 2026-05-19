@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import 'features/auth/login_page.dart';
+import 'features/auth/register_page.dart';
+import 'features/main/main_shell_page.dart';
+import 'features/me/settings_page.dart';
+import 'features/message/messages_page.dart';
+import 'features/thread/create_thread_page.dart';
+import 'features/thread/thread_detail_page.dart';
+import 'features/user/user_home_page.dart';
+
+final router = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (_, _) => const MainShellPage(),
+    ),
+    GoRoute(
+      path: '/login',
+      builder: (_, _) => const LoginPage(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (_, _) => const RegisterPage(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (_, _) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/messages',
+      builder: (_, _) => const MessagesPage(),
+    ),
+    GoRoute(
+      path: '/thread/create',
+      builder: (_, state) {
+        final forumId =
+            int.tryParse(state.uri.queryParameters['forum_id'] ?? '') ?? 1;
+        return CreateThreadPage(forumId: forumId);
+      },
+    ),
+    GoRoute(
+      path: '/thread/:id',
+      builder: (_, state) {
+        final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+        return ThreadDetailPage(threadId: id);
+      },
+    ),
+    GoRoute(
+      path: '/user/:id',
+      builder: (_, state) {
+        final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+        return UserHomePage(userId: id);
+      },
+    ),
+  ],
+  errorBuilder: (_, _) {
+    return const Scaffold(
+      body: Center(
+        child: Text('页面不存在'),
+      ),
+    );
+  },
+);

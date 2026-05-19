@@ -1,0 +1,900 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/api/api_client.dart';
+import '../../core/widgets/safe_network_image.dart';
+import 'widgets/forum_content_view.dart';
+
+class CreateThreadPage extends StatefulWidget {
+  final int forumId;
+
+  const CreateThreadPage({
+    super.key,
+    this.forumId = 1,
+  });
+
+  @override
+  State<CreateThreadPage> createState() => _CreateThreadPageState();
+}
+
+class _CreateThreadPageState extends State<CreateThreadPage> {
+  final titleController = TextEditingController();
+  final contentController = TextEditingController();
+
+  final imagePicker = ImagePicker();
+
+  String mode = 'article';
+
+  bool publishing = false;
+  bool uploadingImage = false;
+  bool uploadingMusic = false;
+
+  final List<String> imageUrls = [];
+  final List<int> attachmentIds = [];
+
+  String musicUrl = '';
+  String musicName = '';
+
+  Timer? draftTimer;
+
+  String get _draftKey => 'create_thread_draft_forum_${widget.forumId}';
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkDraft();
+    });
+
+    titleController.addListener(_scheduleAutoSaveDraft);
+    contentController.addListener(_scheduleAutoSaveDraft);
+  }
+
+  @override
+  void dispose() {
+    draftTimer?.cancel();
+    titleController.dispose();
+    contentController.dispose();
+    super.dispose();
+  }
+
+  // Draft methods
+
+  void _scheduleAutoSaveDraft() {
+    draftTimer?.cancel();
+
+    draftTimer = Timer(const Duration(seconds: 2), () {
+      _saveDraft(showToast: false);
+    });
+  }
+
+  Future<void> _checkDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_draftKey);
+
+    if (raw == null || raw.isEmpty) return;
+    if (!mounted) return;
+
+    final restore = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('发现本地草稿'),
+          content: const Text('是否恢复上次未发布的内容？'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('不要'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('恢复'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (restore == true) {
+      await _loadDraft();
+    }
+  }
+
+  Future<void> _saveDraft({
+    bool showToast = true,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = {
+      'title': titleController.text,
+      'content': contentController.text,
+      'mode': mode,
+      'image_urls': imageUrls,
+      'attachment_ids': attachmentIds,
+      'music_url': musicUrl,
+      'music_name': musicName,
+      'saved_at': DateTime.now().toIso8601String(),
+    };
+
+    await prefs.setString(
+      _draftKey,
+      jsonEncode(data),
+    );
+
+    if (showToast && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('草稿已保存')),
+      );
+    }
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_draftKey);
+
+    if (raw == null || raw.isEmpty) return;
+
+    final decoded = jsonDecode(raw);
+
+    if (decoded is! Map) return;
+
+    setState(() {
+      titleController.text = decoded['title']?.toString() ?? '';
+      contentController.text = decoded['content']?.toString() ?? '';
+      mode = decoded['mode']?.toString() == 'image' ? 'image' : 'article';
+
+      imageUrls
+        ..clear()
+        ..addAll(
+          decoded['image_urls'] is List
+              ? (decoded['image_urls'] as List).map((e) => e.toString())
+              : [],
+        );
+
+      attachmentIds
+        ..clear()
+        ..addAll(
+          decoded['attachment_ids'] is List
+              ? (decoded['attachment_ids'] as List)
+                  .map((e) => int.tryParse(e.toString()) ?? 0)
+                  .where((e) => e > 0)
+              : [],
+        );
+
+      musicUrl = decoded['music_url']?.toString() ?? '';
+      musicName = decoded['music_name']?.toString() ?? '';
+    });
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey);
+  }
+
+  // Upload methods
+
+  Future<void> _pickAndUploadImages() async {
+    if (uploadingImage) return;
+
+    final files = await imagePicker.pickMultiImage(
+      imageQuality: 90,
+    );
+
+    if (files.isEmpty) return;
+
+    setState(() {
+      uploadingImage = true;
+    });
+
+    try {
+      for (final xfile in files) {
+        final result = await ApiClient.instance.uploadFile(
+          'upload/media',
+          file: File(xfile.path),
+          fields: {
+            'type': 'image',
+          },
+        );
+
+        if (!mounted) return;
+
+        if (!result.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message)),
+          );
+          continue;
+        }
+
+        final data = result.data;
+
+        if (data is Map<String, dynamic>) {
+          final url = data['url']?.toString() ?? '';
+          final id = _toInt(data['id']);
+
+          if (url.isNotEmpty) {
+            imageUrls.add(url);
+
+            if (id > 0) {
+              attachmentIds.add(id);
+            }
+
+            if (mode == 'article') {
+              final old = contentController.text;
+              final insert = '\n[img=$url]\n';
+
+              contentController.text = old + insert;
+              contentController.selection = TextSelection.fromPosition(
+                TextPosition(offset: contentController.text.length),
+              );
+            }
+          }
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          uploadingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadMusic() async {
+    if (uploadingMusic) return;
+
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'mp3',
+        'm4a',
+        'aac',
+        'wav',
+        'ogg',
+        'flac',
+      ],
+      allowMultiple: false,
+    );
+
+    if (picked == null || picked.files.isEmpty) return;
+
+    final path = picked.files.single.path;
+
+    if (path == null || path.isEmpty) return;
+
+    setState(() {
+      uploadingMusic = true;
+    });
+
+    final result = await ApiClient.instance.uploadFile(
+      'upload/media',
+      file: File(path),
+      fields: {
+        'type': 'music',
+      },
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      uploadingMusic = false;
+    });
+
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    final data = result.data;
+
+    if (data is Map<String, dynamic>) {
+      setState(() {
+        musicUrl = data['url']?.toString() ?? '';
+        musicName = data['name']?.toString() ?? picked.files.single.name;
+      });
+    }
+  }
+
+  // Insert methods
+
+  void _insertMarkdownBlock() {
+    final selection = contentController.selection;
+    final text = contentController.text;
+
+    const template =
+        '[markdown]\n# 标题\n\n这里写 Markdown 内容\n\n```dart\nprint("hello");\n```\n[/markdown]';
+
+    final start = selection.start < 0 ? text.length : selection.start;
+    final end = selection.end < 0 ? text.length : selection.end;
+
+    final newText = text.replaceRange(start, end, template);
+
+    contentController.text = newText;
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: start + template.length),
+    );
+  }
+
+  Future<void> _insertUrlTag() async {
+    final urlController = TextEditingController();
+    final textController = TextEditingController();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('插入链接'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: urlController,
+                decoration: const InputDecoration(
+                  labelText: '链接',
+                  hintText: 'https://example.com',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: textController,
+                decoration: const InputDecoration(
+                  labelText: '显示文字',
+                  hintText: '点击查看',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop({
+                  'url': urlController.text.trim(),
+                  'text': textController.text.trim(),
+                });
+              },
+              child: const Text('插入'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    final url = result['url'] ?? '';
+    final text = result['text']?.isNotEmpty == true ? result['text']! : url;
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('链接必须以 http:// 或 https:// 开头')),
+      );
+      return;
+    }
+
+    final tag = '[url=$url]$text[/url]';
+
+    final selection = contentController.selection;
+    final oldText = contentController.text;
+
+    final start = selection.start < 0 ? oldText.length : selection.start;
+    final end = selection.end < 0 ? oldText.length : selection.end;
+
+    final newText = oldText.replaceRange(start, end, tag);
+
+    contentController.text = newText;
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: start + tag.length),
+    );
+  }
+
+  // Preview
+
+  void _previewThread() {
+    final title = titleController.text.trim();
+    final content = contentController.text.trim();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, controller) {
+            return ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title.isEmpty ? '未填写标题' : title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (mode == 'image' && imageUrls.isNotEmpty) ...[
+                  AspectRatio(
+                    aspectRatio: 1,
+                    child: PageView.builder(
+                      itemCount: imageUrls.length,
+                      itemBuilder: (context, index) {
+                        return SafeNetworkImage(
+                          url: imageUrls[index],
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          borderRadius: BorderRadius.circular(14),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (musicUrl.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF2F6),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.music_note_rounded,
+                          color: Color(0xFFFB7299),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            musicName.isEmpty ? '已添加音乐' : musicName,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                ForumContentView(
+                  content: content.isEmpty ? '暂无正文内容' : content,
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Publish
+
+  Future<void> _publish() async {
+    if (publishing) return;
+
+    final title = titleController.text.trim();
+    final content = contentController.text.trim();
+
+    if (title.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入至少 2 个字的标题')),
+      );
+      return;
+    }
+
+    if (content.isEmpty && imageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入内容或上传图片')),
+      );
+      return;
+    }
+
+    if (mode == 'image' && imageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('图片模式至少需要一张图片')),
+      );
+      return;
+    }
+
+    setState(() {
+      publishing = true;
+    });
+
+    final result = await ApiClient.instance.post(
+      'threads/create',
+      data: {
+        'forum_id': widget.forumId,
+        'title': title,
+        'content': content,
+        'mode': mode,
+        'image_urls': imageUrls,
+        'attachment_ids': attachmentIds,
+        'music_url': musicUrl,
+        'music_name': musicName,
+      },
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      publishing = false;
+    });
+
+    if (result.success) {
+      final data = result.data;
+      int threadId = 0;
+
+      if (data is Map<String, dynamic>) {
+        threadId = _toInt(data['thread_id'] ?? data['id']);
+      }
+
+      await _clearDraft();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('发布成功')),
+      );
+
+      if (threadId > 0) {
+        context.pushReplacement('/thread/$threadId');
+      } else {
+        context.pop(true);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isImageMode = mode == 'image';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('发布帖子'),
+        actions: [
+          IconButton(
+            tooltip: '预览',
+            onPressed: _previewThread,
+            icon: const Icon(Icons.visibility_outlined),
+          ),
+          IconButton(
+            tooltip: '保存草稿',
+            onPressed: () {
+              _saveDraft(showToast: true);
+            },
+            icon: const Icon(Icons.save_outlined),
+          ),
+          TextButton(
+            onPressed: publishing ? null : _publish,
+            child: publishing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('发布'),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        children: [
+          _ModeSwitch(
+            mode: mode,
+            onChanged: (value) {
+              setState(() {
+                mode = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: titleController,
+            maxLength: 80,
+            decoration: InputDecoration(
+              hintText: isImageMode ? '给图片笔记起个标题' : '请输入标题',
+              filled: true,
+              fillColor: Colors.white,
+              counterText: '',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (isImageMode) _ImageModePanel(imageUrls: imageUrls),
+          if (isImageMode) const SizedBox(height: 12),
+          TextField(
+            controller: contentController,
+            minLines: isImageMode ? 5 : 12,
+            maxLines: null,
+            decoration: InputDecoration(
+              hintText: isImageMode
+                  ? '分享这组图片背后的故事...'
+                  : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (musicUrl.isNotEmpty)
+            _MusicSelectedCard(
+              name: musicName,
+              onRemove: () {
+                setState(() {
+                  musicUrl = '';
+                  musicName = '';
+                });
+              },
+            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _ToolButton(
+                icon: Icons.image_outlined,
+                text: uploadingImage ? '上传中...' : '上传图片',
+                onTap: uploadingImage ? null : _pickAndUploadImages,
+              ),
+              _ToolButton(
+                icon: Icons.notes_rounded,
+                text: '插入 Markdown',
+                onTap: _insertMarkdownBlock,
+              ),
+              _ToolButton(
+                icon: Icons.link_rounded,
+                text: '插入链接',
+                onTap: _insertUrlTag,
+              ),
+              _ToolButton(
+                icon: Icons.music_note_rounded,
+                text: uploadingMusic ? '上传中...' : '上传音乐',
+                onTap: uploadingMusic ? null : _pickAndUploadMusic,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _HelpCard(isImageMode: isImageMode),
+        ],
+      ),
+      backgroundColor: const Color(0xFFF7F7F7),
+    );
+  }
+}
+
+class _ModeSwitch extends StatelessWidget {
+  final String mode;
+  final ValueChanged<String> onChanged;
+
+  const _ModeSwitch({
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(
+          value: 'article',
+          label: Text('图文模式'),
+          icon: Icon(Icons.article_outlined),
+        ),
+        ButtonSegment(
+          value: 'image',
+          label: Text('图片模式'),
+          icon: Icon(Icons.photo_library_outlined),
+        ),
+      ],
+      selected: {
+        mode,
+      },
+      onSelectionChanged: (set) {
+        onChanged(set.first);
+      },
+    );
+  }
+}
+
+class _ImageModePanel extends StatelessWidget {
+  final List<String> imageUrls;
+
+  const _ImageModePanel({
+    required this.imageUrls,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrls.isEmpty) {
+      return Container(
+        height: 150,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Colors.grey.shade200,
+          ),
+        ),
+        child: Text(
+          '图片模式：请先上传图片',
+          style: TextStyle(
+            color: Colors.grey.shade500,
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: imageUrls.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          return SafeNetworkImage(
+            url: imageUrls[index],
+            width: 120,
+            height: 150,
+            borderRadius: BorderRadius.circular(14),
+            fit: BoxFit.cover,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MusicSelectedCard extends StatelessWidget {
+  final String name;
+  final VoidCallback onRemove;
+
+  const _MusicSelectedCard({
+    required this.name,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF2F6),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.music_note_rounded,
+            color: Color(0xFFFB7299),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name.isEmpty ? '已添加音乐' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolButton extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback? onTap;
+
+  const _ToolButton({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(text),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF333333),
+        side: BorderSide(
+          color: Colors.grey.shade200,
+        ),
+      ),
+    );
+  }
+}
+
+class _HelpCard extends StatelessWidget {
+  final bool isImageMode;
+
+  const _HelpCard({
+    required this.isImageMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        isImageMode
+            ? '图片模式类似小红书：上方展示图片轮播，下方展示文字。上传图片后会保存在 OneDrive，不占用虚拟主机空间。'
+            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. Markdown 代码块必须放在 [markdown][/markdown] 中\n3. 上传图片会自动插入 [img=链接]\n4. 链接标签：[url=链接]文字[/url]',
+        style: TextStyle(
+          color: Colors.grey.shade600,
+          fontSize: 13,
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+}
