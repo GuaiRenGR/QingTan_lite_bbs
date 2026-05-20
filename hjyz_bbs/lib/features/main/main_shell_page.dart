@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/update_service.dart';
 import '../auth/auth_controller.dart';
 import '../discover/discover_page.dart';
 import '../dynamic/dynamic_page.dart';
@@ -10,11 +11,24 @@ import '../me/me_page.dart';
 import '../post/create_post_page.dart';
 import 'main_tab_provider.dart';
 
-class MainShellPage extends ConsumerWidget {
+class MainShellPage extends ConsumerStatefulWidget {
   const MainShellPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainShellPage> createState() => _MainShellPageState();
+}
+
+class _MainShellPageState extends ConsumerState<MainShellPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService.checkOnStart(context);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentIndex = ref.watch(mainTabIndexProvider);
 
     const pages = [

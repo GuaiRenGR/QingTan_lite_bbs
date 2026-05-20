@@ -6,10 +6,14 @@ import '../../../core/widgets/safe_network_image.dart';
 
 class ForumContentView extends StatelessWidget {
   final String content;
+  final bool canViewHidden;
+  final VoidCallback? onNeedReply;
 
   const ForumContentView({
     super.key,
     required this.content,
+    this.canViewHidden = false,
+    this.onNeedReply,
   });
 
   @override
@@ -98,6 +102,86 @@ class ForumContentView extends StatelessWidget {
           ),
         );
 
+      case _ContentPartType.hidden:
+        if (canViewHidden) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.lock_open_rounded, size: 16, color: Colors.amber.shade700),
+                      const SizedBox(width: 6),
+                      Text(
+                        '隐藏内容（回复可见）',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.amber.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    part.value,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      height: 1.65,
+                      color: Color(0xFF222222),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: GestureDetector(
+            onTap: onNeedReply,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 18, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '回复后可见隐藏内容',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '去回复',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
       case _ContentPartType.link:
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -128,7 +212,7 @@ class ForumContentView extends StatelessWidget {
     final List<_ContentPart> result = [];
 
     final reg = RegExp(
-      r'(\[markdown\]([\s\S]*?)\[\/markdown\])|(\[img=(https?:\/\/[^\]\s]+)\])|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
+      r'(\[markdown\]([\s\S]*?)\[\/markdown\])|(\[img=(https?:\/\/[^\]\s]+)\])|(\[hide\]([\s\S]*?)\[\/hide\])|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
       caseSensitive: false,
     );
 
@@ -148,8 +232,9 @@ class ForumContentView extends StatelessWidget {
 
       final markdown = match.group(2);
       final image = match.group(4);
-      final linkUrl = match.group(6);
-      final linkText = match.group(7);
+      final hidden = match.group(6);
+      final linkUrl = match.group(8);
+      final linkText = match.group(9);
 
       if (markdown != null) {
         result.add(
@@ -163,6 +248,13 @@ class ForumContentView extends StatelessWidget {
           _ContentPart(
             type: _ContentPartType.image,
             value: image.trim(),
+          ),
+        );
+      } else if (hidden != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.hidden,
+            value: hidden.trim(),
           ),
         );
       } else if (linkUrl != null) {
@@ -198,6 +290,7 @@ enum _ContentPartType {
   image,
   markdown,
   link,
+  hidden,
 }
 
 class _ContentPart {

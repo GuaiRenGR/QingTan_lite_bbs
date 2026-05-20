@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 import '../auth/login_page.dart';
+import '../checkin/checkin_card.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -139,6 +140,8 @@ class MePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 14),
+          const CheckinCard(),
+          const SizedBox(height: 14),
           _MenuItem(
             icon: Icons.article_outlined,
             text: '我的帖子',
@@ -154,9 +157,25 @@ class MePage extends ConsumerWidget {
             },
           ),
           _MenuItem(
-            icon: Icons.calendar_month_outlined,
-            text: '签到中心',
-            onTap: () {},
+            icon: Icons.edit_outlined,
+            text: '编辑资料',
+            onTap: () {
+              context.push('/profile/edit');
+            },
+          ),
+          _MenuItem(
+            icon: Icons.dashboard_customize_outlined,
+            text: '创作中心',
+            onTap: () {
+              context.push('/creator');
+            },
+          ),
+          _MenuItem(
+            icon: Icons.history_rounded,
+            text: '浏览历史',
+            onTap: () {
+              context.push('/history');
+            },
           ),
           _MenuItem(
             icon: Icons.settings_outlined,

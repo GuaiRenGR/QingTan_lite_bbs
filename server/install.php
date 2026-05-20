@@ -74,6 +74,9 @@ function createTables(PDO $pdo, string $prefix)
       `group_id` INT NOT NULL DEFAULT 1,
       `level` INT NOT NULL DEFAULT 1,
       `score` INT NOT NULL DEFAULT 0,
+      `points` INT NOT NULL DEFAULT 0,
+      `checkin_days` INT NOT NULL DEFAULT 0,
+      `last_checkin_date` DATE DEFAULT NULL,
       `followers_count` INT NOT NULL DEFAULT 0,
       `following_count` INT NOT NULL DEFAULT 0,
       `status` TINYINT NOT NULL DEFAULT 1,
@@ -328,6 +331,72 @@ function createTables(PDO $pdo, string $prefix)
       `updated_at` DATETIME DEFAULT NULL,
       PRIMARY KEY (`id`),
       UNIQUE KEY `uk_key` (`setting_key`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}app_versions` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `platform` VARCHAR(30) NOT NULL DEFAULT 'all',
+      `version` VARCHAR(50) NOT NULL,
+      `build_number` INT NOT NULL DEFAULT 1,
+      `force_update` TINYINT NOT NULL DEFAULT 0,
+      `title` VARCHAR(255) DEFAULT NULL,
+      `content` TEXT DEFAULT NULL,
+      `download_url` VARCHAR(1000) DEFAULT NULL,
+      `status` TINYINT NOT NULL DEFAULT 1,
+      `created_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      KEY `idx_platform_status` (`platform`, `status`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}content_stats_daily` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `object_type` VARCHAR(30) NOT NULL,
+      `object_id` BIGINT UNSIGNED NOT NULL,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `stat_date` DATE NOT NULL,
+      `view_count` INT NOT NULL DEFAULT 0,
+      `like_count` INT NOT NULL DEFAULT 0,
+      `favorite_count` INT NOT NULL DEFAULT 0,
+      `share_count` INT NOT NULL DEFAULT 0,
+      `reply_count` INT NOT NULL DEFAULT 0,
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME DEFAULT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_object_date` (`object_type`, `object_id`, `stat_date`),
+      KEY `idx_user_date` (`user_id`, `stat_date`),
+      KEY `idx_object` (`object_type`, `object_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}histories` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `object_type` VARCHAR(30) NOT NULL,
+      `object_id` BIGINT UNSIGNED NOT NULL,
+      `last_viewed_at` DATETIME NOT NULL,
+      `view_count` INT NOT NULL DEFAULT 1,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_user_object` (`user_id`, `object_type`, `object_id`),
+      KEY `idx_user_time` (`user_id`, `last_viewed_at`),
+      KEY `idx_object` (`object_type`, `object_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}search_logs` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `user_id` BIGINT UNSIGNED DEFAULT NULL,
+      `keyword` VARCHAR(255) NOT NULL,
+      `ip` VARCHAR(64) DEFAULT NULL,
+      `created_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      KEY `idx_keyword` (`keyword`),
+      KEY `idx_user` (`user_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

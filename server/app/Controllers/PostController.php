@@ -62,7 +62,7 @@ class PostController
         $posts = \Database::table('posts');
 
         $thread = \Database::fetch(
-            "SELECT id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, user_id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -105,6 +105,14 @@ class PostController
                     now(),
                     $threadId,
                 ]
+            );
+
+            add_content_daily_stat(
+                'thread',
+                $threadId,
+                (int)$thread['user_id'],
+                'reply_count',
+                1
             );
 
             \Database::commit();

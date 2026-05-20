@@ -8,7 +8,7 @@ class ThreadCreateController
     {
         $user = \Auth::requireLogin();
 
-        $forumId = \Request::int('forum_id', 1);
+        $forumId = \Request::int('forum_id', 0);
         $title = trim(\Request::str('title'));
         $content = \Request::input('content', '');
         $mode = \Request::str('mode', 'article');
@@ -18,9 +18,20 @@ class ThreadCreateController
 
         $imageUrls = parse_json_array_input(\Request::input('image_urls', []));
         $attachmentIds = parse_json_array_input(\Request::input('attachment_ids', []));
+        $tagNames = \Request::input('tags', []);
 
         if (!in_array($mode, ['article', 'image'], true)) {
             $mode = 'article';
+        }
+
+        if (!is_array($tagNames)) {
+            $tagNames = [];
+        }
+
+        $tagNames = array_slice($tagNames, 0, 5);
+
+        if ($forumId <= 0) {
+            $forumId = ForumController::defaultId();
         }
 
         if ($title === '' || mb_strlen($title) < 2 || mb_strlen($title) > 80) {
@@ -33,22 +44,23 @@ class ThreadCreateController
             \Response::json(422, '请输入帖子内容或上传图片');
         }
 
-        $tagImages = extract_img_tags($content);
+        $remoteImages = extract_forum_img_urls($content);
 
-        $allImages = array_merge($imageUrls, $tagImages);
-        $allImages = array_values(array_unique(array_filter($allImages, function ($url) {
-            return validate_remote_url($url);
-        })));
+        if ($mode === 'image' && empty($imageUrls) && empty($remoteImages)) {
+            \Response::json(422, '图片模式至少需要上传图片或插入远程图片');
+        }
 
-        if ($mode === 'image' && empty($allImages)) {
-            \Response::json(422, '图片模式至少需要上传一张图片');
+        $allImages = array_values(array_unique(array_merge($imageUrls, $remoteImages)));
+
+        $cover = '';
+
+        if (!empty($allImages[0])) {
+            $cover = $allImages[0];
         }
 
         if ($musicUrl !== '' && !validate_remote_url($musicUrl)) {
             \Response::json(422, '音乐地址必须是远程 URL');
         }
-
-        $cover = $allImages[0] ?? '';
 
         $summarySource = preg_replace('/\[markdown\]([\s\S]*?)\[\/markdown\]/i', '$1', $content);
         $summarySource = preg_replace('/\[img=https?:\/\/[^\]\s]+\]/i', '', $summarySource);
@@ -101,6 +113,8 @@ class ThreadCreateController
                     );
                 }
             }
+
+            sync_thread_tags($threadId, $tagNames);
 
             \Database::commit();
 

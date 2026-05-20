@@ -36,7 +36,7 @@ class ThreadActionController
         $shares = \Database::table('shares');
 
         $thread = \Database::fetch(
-            "SELECT id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, user_id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -62,6 +62,14 @@ class ThreadActionController
                 $_SERVER['REMOTE_ADDR'] ?? '',
                 now(),
             ]
+        );
+
+        add_content_daily_stat(
+            'thread',
+            $threadId,
+            (int)$thread['user_id'],
+            'share_count',
+            1
         );
 
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -90,7 +98,7 @@ class ThreadActionController
         $likes = \Database::table('likes');
 
         $thread = \Database::fetch(
-            "SELECT id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, user_id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -122,6 +130,14 @@ class ThreadActionController
                          SET like_count = like_count + 1
                          WHERE id = ?",
                         [$threadId]
+                    );
+
+                    add_content_daily_stat(
+                        'thread',
+                        $threadId,
+                        (int)$thread['user_id'],
+                        'like_count',
+                        1
                     );
                 }
 
@@ -178,7 +194,7 @@ class ThreadActionController
         $favorites = \Database::table('favorites');
 
         $thread = \Database::fetch(
-            "SELECT id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, user_id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -210,6 +226,14 @@ class ThreadActionController
                          SET favorite_count = favorite_count + 1
                          WHERE id = ?",
                         [$threadId]
+                    );
+
+                    add_content_daily_stat(
+                        'thread',
+                        $threadId,
+                        (int)$thread['user_id'],
+                        'favorite_count',
+                        1
                     );
                 }
 

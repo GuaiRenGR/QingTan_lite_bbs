@@ -2,6 +2,12 @@
 cmake_minimum_required(VERSION 3.14)
 project(hjyz_bbs LANGUAGES CXX)
 
+if (MSVC)
+  add_compile_options(/FS)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "hjyz_bbs")

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="hjyz_bbs"
+        android:label="获嘉一中论坛"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

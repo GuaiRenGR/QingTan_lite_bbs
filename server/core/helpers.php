@@ -130,7 +130,101 @@ function sanitize_forum_content($content)
         return '[url=' . $url . ']' . $text . '[/url]';
     }, $content);
 
+    // 保留 hide 标签，但清理空内容
+    $content = preg_replace_callback('/\[hide\]([\s\S]*?)\[\/hide\]/i', function ($m) {
+        $text = trim($m[1]);
+
+        if ($text === '') {
+            return '';
+        }
+
+        return '[hide]' . $text . '[/hide]';
+    }, $content);
+
     return trim($content);
+}
+
+if (!function_exists('today_date')) {
+    function today_date()
+    {
+        return date('Y-m-d');
+    }
+}
+
+if (!function_exists('add_content_daily_stat')) {
+    function add_content_daily_stat($objectType, $objectId, $userId, $field, $delta = 1)
+    {
+        $allowed = [
+            'view_count',
+            'like_count',
+            'favorite_count',
+            'share_count',
+            'reply_count',
+        ];
+
+        if (!in_array($field, $allowed, true)) {
+            return;
+        }
+
+        $objectType = (string)$objectType;
+        $objectId = (int)$objectId;
+        $userId = (int)$userId;
+        $delta = (int)$delta;
+
+        if ($objectId <= 0 || $userId <= 0 || $delta === 0) {
+            return;
+        }
+
+        $table = Database::table('content_stats_daily');
+        $date = today_date();
+        $now = now();
+
+        Database::execute(
+            "INSERT INTO {$table}
+            (`object_type`, `object_id`, `user_id`, `stat_date`, `{$field}`, `created_at`, `updated_at`)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              `{$field}` = `{$field}` + VALUES(`{$field}`),
+              `updated_at` = VALUES(`updated_at`)",
+            [
+                $objectType,
+                $objectId,
+                $userId,
+                $date,
+                $delta,
+                $now,
+                $now,
+            ]
+        );
+    }
+}
+
+if (!function_exists('record_thread_history')) {
+    function record_thread_history($userId, $threadId)
+    {
+        $userId = (int)$userId;
+        $threadId = (int)$threadId;
+
+        if ($userId <= 0 || $threadId <= 0) {
+            return;
+        }
+
+        $histories = Database::table('histories');
+
+        Database::execute(
+            "INSERT INTO {$histories}
+            (`user_id`, `object_type`, `object_id`, `last_viewed_at`, `view_count`)
+            VALUES (?, 'thread', ?, ?, 1)
+            ON DUPLICATE KEY UPDATE
+              `last_viewed_at` = VALUES(`last_viewed_at`),
+              `view_count` = `view_count` + 1",
+            [
+                $userId,
+                $threadId,
+                now(),
+            ]
+        );
+    }
 }
 
 function parse_json_array_input($value)
@@ -148,4 +242,148 @@ function parse_json_array_input($value)
     }
 
     return [];
+}
+
+if (!function_exists('extract_forum_img_urls')) {
+    function extract_forum_img_urls($content)
+    {
+        $content = (string)$content;
+
+        preg_match_all('/\[img=(https?:\/\/[^\]\s]+)\]/i', $content, $matches);
+
+        if (empty($matches[1])) {
+            return [];
+        }
+
+        $urls = [];
+
+        foreach ($matches[1] as $url) {
+            $url = trim($url);
+
+            if ($url !== '' && validate_remote_url($url)) {
+                $urls[] = $url;
+            }
+        }
+
+        return array_values(array_unique($urls));
+    }
+}
+
+if (!function_exists('normalize_tag_name')) {
+    function normalize_tag_name($name)
+    {
+        $name = trim((string)$name);
+        $name = preg_replace('/\s+/u', '', $name);
+        $name = mb_substr($name, 0, 20);
+
+        return $name;
+    }
+}
+
+if (!function_exists('sync_thread_tags')) {
+    function sync_thread_tags($threadId, $tagNames)
+    {
+        $threadId = (int)$threadId;
+
+        if ($threadId <= 0) {
+            return [];
+        }
+
+        if (!is_array($tagNames)) {
+            $tagNames = [];
+        }
+
+        $cleanNames = [];
+
+        foreach ($tagNames as $name) {
+            $name = normalize_tag_name($name);
+
+            if ($name !== '') {
+                $cleanNames[] = $name;
+            }
+        }
+
+        $cleanNames = array_values(array_unique($cleanNames));
+        $cleanNames = array_slice($cleanNames, 0, 5);
+
+        $tags = Database::table('tags');
+        $threadTags = Database::table('thread_tags');
+
+        Database::execute(
+            "DELETE FROM {$threadTags} WHERE thread_id = ?",
+            [$threadId]
+        );
+
+        $result = [];
+
+        foreach ($cleanNames as $name) {
+            Database::execute(
+                "INSERT INTO {$tags}
+                (`name`, `use_count`, `created_at`)
+                VALUES (?, 1, ?)
+                ON DUPLICATE KEY UPDATE `use_count` = `use_count` + 1",
+                [
+                    $name,
+                    now(),
+                ]
+            );
+
+            $tag = Database::fetch(
+                "SELECT id, name FROM {$tags} WHERE name = ? LIMIT 1",
+                [$name]
+            );
+
+            if (!$tag) {
+                continue;
+            }
+
+            Database::execute(
+                "INSERT IGNORE INTO {$threadTags}
+                (`thread_id`, `tag_id`, `created_at`)
+                VALUES (?, ?, ?)",
+                [
+                    $threadId,
+                    $tag['id'],
+                    now(),
+                ]
+            );
+
+            $result[] = [
+                'id' => (int)$tag['id'],
+                'name' => $tag['name'],
+            ];
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('get_thread_tags')) {
+    function get_thread_tags($threadId)
+    {
+        $threadId = (int)$threadId;
+
+        if ($threadId <= 0) {
+            return [];
+        }
+
+        $tags = Database::table('tags');
+        $threadTags = Database::table('thread_tags');
+
+        $rows = Database::fetchAll(
+            "SELECT tg.id, tg.name
+             FROM {$threadTags} tt
+             INNER JOIN {$tags} tg ON tg.id = tt.tag_id
+             WHERE tt.thread_id = ?
+             ORDER BY tt.id ASC",
+            [$threadId]
+        );
+
+        return array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+            ];
+        }, $rows);
+    }
 }

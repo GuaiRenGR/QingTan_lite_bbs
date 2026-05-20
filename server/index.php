@@ -140,12 +140,72 @@ try {
             App\Controllers\PostController::create();
             break;
 
+        case 'app/version/check':
+            App\Controllers\AppVersionController::check();
+            break;
+
         case 'checkin/status':
             App\Controllers\CheckinController::status();
             break;
 
         case 'checkin/do':
             App\Controllers\CheckinController::doCheckin();
+            break;
+
+        case 'creator/summary':
+            App\Controllers\CreatorController::summary();
+            break;
+
+        case 'creator/threads':
+            App\Controllers\CreatorController::threads();
+            break;
+
+        case 'threads/recommend':
+            App\Controllers\RecommendController::threads();
+            break;
+
+        case 'history/list':
+            App\Controllers\HistoryController::list();
+            break;
+
+        case 'history/delete':
+            App\Controllers\HistoryController::delete();
+            break;
+
+        case 'history/clear':
+            App\Controllers\HistoryController::clear();
+            break;
+
+        case 'search/threads':
+            App\Controllers\SearchController::threads();
+            break;
+
+        case 'search/hot':
+            App\Controllers\SearchController::hot();
+            break;
+
+        case 'tags/hot':
+            App\Controllers\TagController::hot();
+            break;
+
+        case 'threads/update':
+            App\Controllers\ThreadManageController::update();
+            break;
+
+        case 'threads/delete':
+            App\Controllers\ThreadManageController::delete();
+            break;
+
+        case 'threads/report':
+            App\Controllers\ThreadManageController::report();
+            break;
+
+        case 'profile/get':
+            App\Controllers\ProfileController::get();
+            break;
+
+        case 'profile/update':
+            App\Controllers\ProfileController::update();
             break;
 
         default:

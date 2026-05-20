@@ -14,11 +14,15 @@ import 'widgets/forum_content_view.dart';
 
 class CreateThreadPage extends StatefulWidget {
   final int forumId;
+  final int? editThreadId;
 
   const CreateThreadPage({
     super.key,
-    this.forumId = 1,
+    this.forumId = 0,
+    this.editThreadId,
   });
+
+  bool get isEdit => editThreadId != null && editThreadId! > 0;
 
   @override
   State<CreateThreadPage> createState() => _CreateThreadPageState();
@@ -42,6 +46,13 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   String musicUrl = '';
   String musicName = '';
 
+  int selectedForumId = 0;
+
+  final List<Map<String, dynamic>> forums = [];
+  final List<String> tags = [];
+
+  final tagController = TextEditingController();
+
   Timer? draftTimer;
 
   String get _draftKey => 'create_thread_draft_forum_${widget.forumId}';
@@ -50,9 +61,17 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkDraft();
-    });
+    selectedForumId = widget.forumId;
+
+    _loadForums();
+
+    if (widget.isEdit) {
+      _loadEditThread();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkDraft();
+      });
+    }
 
     titleController.addListener(_scheduleAutoSaveDraft);
     contentController.addListener(_scheduleAutoSaveDraft);
@@ -63,6 +82,7 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     draftTimer?.cancel();
     titleController.dispose();
     contentController.dispose();
+    tagController.dispose();
     super.dispose();
   }
 
@@ -181,6 +201,131 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   Future<void> _clearDraft() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_draftKey);
+  }
+
+  // Forums
+
+  Future<void> _loadForums() async {
+    final result = await ApiClient.instance.get('forums/list');
+
+    if (!mounted) return;
+
+    if (result.success && result.data is Map<String, dynamic>) {
+      final data = result.data as Map<String, dynamic>;
+      final raw = data['list'];
+
+      final loaded = raw is List
+          ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+          : <Map<String, dynamic>>[];
+
+      setState(() {
+        forums
+          ..clear()
+          ..addAll(loaded);
+
+        if (selectedForumId <= 0 && forums.isNotEmpty) {
+          final defaultForum = forums.cast<Map<String, dynamic>?>().firstWhere(
+                (e) => e?['is_default'] == true,
+                orElse: () => forums.first,
+              );
+
+          selectedForumId =
+              int.tryParse(defaultForum?['id']?.toString() ?? '') ?? 1;
+        }
+      });
+    }
+  }
+
+  // Edit mode
+
+  Future<void> _loadEditThread() async {
+    final result = await ApiClient.instance.get(
+      'threads/detail',
+      query: {
+        'id': widget.editThreadId,
+      },
+    );
+
+    if (!mounted) return;
+
+    if (!result.success || result.data is! Map<String, dynamic>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    final data = result.data as Map<String, dynamic>;
+    final thread = data['thread'] is Map<String, dynamic>
+        ? data['thread'] as Map<String, dynamic>
+        : data;
+
+    setState(() {
+      titleController.text = thread['title']?.toString() ?? '';
+      contentController.text = thread['content']?.toString() ?? '';
+      mode = thread['mode']?.toString() == 'image' ? 'image' : 'article';
+      selectedForumId = int.tryParse(thread['forum_id']?.toString() ?? '') ?? 0;
+
+      imageUrls
+        ..clear()
+        ..addAll(
+          thread['images'] is List
+              ? (thread['images'] as List).map((e) => e.toString())
+              : [],
+        );
+
+      tags
+        ..clear()
+        ..addAll(
+          thread['tags'] is List
+              ? (thread['tags'] as List)
+                  .whereType<Map>()
+                  .map((e) => e['name']?.toString() ?? '')
+                  .where((e) => e.isNotEmpty)
+              : [],
+        );
+    });
+  }
+
+  // Tags
+
+  void _addTag() {
+    final value = tagController.text.trim().replaceAll(RegExp(r'\s+'), '');
+
+    if (value.isEmpty) return;
+
+    if (tags.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('最多添加 5 个标签')),
+      );
+      return;
+    }
+
+    if (tags.contains(value)) {
+      tagController.clear();
+      return;
+    }
+
+    setState(() {
+      tags.add(value);
+      tagController.clear();
+    });
+  }
+
+  // Remote images
+
+  List<String> _extractRemoteImagesFromContent(String content) {
+    final reg = RegExp(
+      r'\[img=(https?:\/\/[^\]\s]+)\]',
+      caseSensitive: false,
+    );
+
+    return reg
+        .allMatches(content)
+        .map((e) => e.group(1)?.trim() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
   }
 
   // Upload methods
@@ -328,6 +473,23 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     );
   }
 
+  void _insertHideBlock() {
+    final selection = contentController.selection;
+    final text = contentController.text;
+
+    const template = '[hide]\n回复后可见的内容\n[/hide]';
+
+    final start = selection.start < 0 ? text.length : selection.start;
+    final end = selection.end < 0 ? text.length : selection.end;
+
+    final newText = text.replaceRange(start, end, template);
+
+    contentController.text = newText;
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: start + template.length),
+    );
+  }
+
   Future<void> _insertUrlTag() async {
     final urlController = TextEditingController();
     final textController = TextEditingController();
@@ -413,6 +575,10 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   void _previewThread() {
     final title = titleController.text.trim();
     final content = contentController.text.trim();
+    final previewImages = [
+      ...imageUrls,
+      ..._extractRemoteImagesFromContent(content),
+    ].toSet().toList();
 
     showModalBottomSheet(
       context: context,
@@ -454,14 +620,14 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                if (mode == 'image' && imageUrls.isNotEmpty) ...[
+                if (mode == 'image' && previewImages.isNotEmpty) ...[
                   AspectRatio(
                     aspectRatio: 1,
                     child: PageView.builder(
-                      itemCount: imageUrls.length,
+                      itemCount: previewImages.length,
                       itemBuilder: (context, index) {
                         return SafeNetworkImage(
-                          url: imageUrls[index],
+                          url: previewImages[index],
                           width: double.infinity,
                           height: double.infinity,
                           fit: BoxFit.cover,
@@ -529,9 +695,11 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
       return;
     }
 
-    if (mode == 'image' && imageUrls.isEmpty) {
+    final remoteImages = _extractRemoteImagesFromContent(content);
+
+    if (mode == 'image' && imageUrls.isEmpty && remoteImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('图片模式至少需要一张图片')),
+        const SnackBar(content: Text('图片模式至少需要上传图片或插入远程图片')),
       );
       return;
     }
@@ -540,19 +708,22 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
       publishing = true;
     });
 
-    final result = await ApiClient.instance.post(
-      'threads/create',
-      data: {
-        'forum_id': widget.forumId,
-        'title': title,
-        'content': content,
-        'mode': mode,
-        'image_urls': imageUrls,
-        'attachment_ids': attachmentIds,
-        'music_url': musicUrl,
-        'music_name': musicName,
-      },
-    );
+    final endpoint = widget.isEdit ? 'threads/update' : 'threads/create';
+
+    final body = {
+      if (widget.isEdit) 'thread_id': widget.editThreadId,
+      'forum_id': selectedForumId,
+      'title': title,
+      'content': content,
+      'mode': mode,
+      'image_urls': imageUrls,
+      'attachment_ids': attachmentIds,
+      'music_url': musicUrl,
+      'music_name': musicName,
+      'tags': tags,
+    };
+
+    final result = await ApiClient.instance.post(endpoint, data: body);
 
     if (!mounted) return;
 
@@ -561,25 +732,27 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     });
 
     if (result.success) {
-      final data = result.data;
-      int threadId = 0;
-
-      if (data is Map<String, dynamic>) {
-        threadId = _toInt(data['thread_id'] ?? data['id']);
-      }
-
-      await _clearDraft();
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('发布成功')),
+        SnackBar(content: Text(widget.isEdit ? '保存成功' : '发布成功')),
       );
 
-      if (threadId > 0) {
-        context.pushReplacement('/thread/$threadId');
-      } else {
+      if (widget.isEdit) {
         context.pop(true);
+      } else {
+        await _clearDraft();
+
+        final data = result.data;
+        final threadId = data is Map<String, dynamic>
+            ? int.tryParse((data['thread_id'] ?? data['id']).toString()) ?? 0
+            : 0;
+
+        if (threadId > 0) {
+          context.pushReplacement('/thread/$threadId');
+        } else {
+          context.pop(true);
+        }
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -600,7 +773,7 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('发布帖子'),
+        title: Text(widget.isEdit ? '编辑帖子' : '发布帖子'),
         actions: [
           IconButton(
             tooltip: '预览',
@@ -638,6 +811,37 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
             },
           ),
           const SizedBox(height: 12),
+          const Text(
+            '选择分区',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: forums.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final forum = forums[index];
+                final id = int.tryParse(forum['id']?.toString() ?? '') ?? 0;
+                final selected = selectedForumId == id;
+
+                return ChoiceChip(
+                  label: Text(forum['name']?.toString() ?? ''),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() {
+                      selectedForumId = id;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: titleController,
             maxLength: 80,
@@ -671,6 +875,54 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          const Text(
+            '标签，最多 5 个',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: tagController,
+                  decoration: const InputDecoration(
+                    hintText: '输入标签，例如 校园',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(14)),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onSubmitted: (_) => _addTag(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _addTag,
+                child: const Text('添加'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in tags)
+                InputChip(
+                  label: Text('#$tag'),
+                  onDeleted: () {
+                    setState(() {
+                      tags.remove(tag);
+                    });
+                  },
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (musicUrl.isNotEmpty)
             _MusicSelectedCard(
@@ -695,6 +947,11 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
                 icon: Icons.notes_rounded,
                 text: '插入 Markdown',
                 onTap: _insertMarkdownBlock,
+              ),
+              _ToolButton(
+                icon: Icons.lock_outline_rounded,
+                text: '插入隐藏',
+                onTap: _insertHideBlock,
               ),
               _ToolButton(
                 icon: Icons.link_rounded,

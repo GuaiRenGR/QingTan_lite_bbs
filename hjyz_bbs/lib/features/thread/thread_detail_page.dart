@@ -8,6 +8,7 @@ import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
 import '../../core/widgets/safe_network_image.dart';
 import 'widgets/forum_content_view.dart';
+import 'widgets/xhs_image_pager.dart';
 
 class ThreadDetailPage extends StatefulWidget {
   final int threadId;
@@ -257,6 +258,95 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     );
   }
 
+  Future<void> _deleteThread() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除帖子'),
+          content: const Text('确定要删除这个帖子吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    final result = await ApiClient.instance.post(
+      'threads/delete',
+      data: {
+        'thread_id': widget.threadId,
+      },
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+
+    if (result.success) {
+      context.go('/');
+    }
+  }
+
+  Future<void> _reportThread() async {
+    final controller = TextEditingController();
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('举报'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: '请输入举报原因',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(controller.text.trim());
+              },
+              child: const Text('提交'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (reason == null) return;
+
+    final result = await ApiClient.instance.post(
+      'threads/report',
+      data: {
+        'thread_id': widget.threadId,
+        'reason': reason,
+      },
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -292,6 +382,45 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'edit') {
+                final changed = await context.push<bool>(
+                  '/thread/${widget.threadId}/edit',
+                );
+
+                if (changed == true) {
+                  _load();
+                }
+              } else if (value == 'delete') {
+                _deleteThread();
+              } else if (value == 'report') {
+                _reportThread();
+              }
+            },
+            itemBuilder: (context) {
+              final isOwner = data['is_owner'] == true;
+
+              return [
+                if (isOwner)
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Text('编辑'),
+                  ),
+                if (isOwner)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('删除'),
+                  ),
+                const PopupMenuItem(
+                  value: 'report',
+                  child: Text('举报'),
+                ),
+              ];
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -303,6 +432,7 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                 children: [
                   _ThreadMainCard(
                     thread: data,
+                    canViewHidden: data['can_view_hidden'] == true,
                     onAuthorTap: () {
                       final author = data['author'];
 
@@ -356,12 +486,14 @@ class _ThreadMainCard extends StatelessWidget {
   final VoidCallback onAuthorTap;
   final VoidCallback onMusicTap;
   final bool musicPlaying;
+  final bool canViewHidden;
 
   const _ThreadMainCard({
     required this.thread,
     required this.onAuthorTap,
     required this.onMusicTap,
     required this.musicPlaying,
+    this.canViewHidden = false,
   });
 
   int _toInt(dynamic value) {
@@ -450,7 +582,7 @@ class _ThreadMainCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (mode == 'image' && images.isNotEmpty) ...[
-            _ImagePager(images: images),
+            XhsImagePager(images: images),
             const SizedBox(height: 14),
           ],
           if (musicUrl.isNotEmpty) ...[
@@ -461,7 +593,10 @@ class _ThreadMainCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
-          ForumContentView(content: content),
+          ForumContentView(
+            content: content,
+            canViewHidden: canViewHidden,
+          ),
           const SizedBox(height: 8),
           Text(
             thread['created_at']?.toString() ?? '',
@@ -476,69 +611,6 @@ class _ThreadMainCard extends StatelessWidget {
   }
 }
 
-class _ImagePager extends StatefulWidget {
-  final List<String> images;
-
-  const _ImagePager({
-    required this.images,
-  });
-
-  @override
-  State<_ImagePager> createState() => _ImagePagerState();
-}
-
-class _ImagePagerState extends State<_ImagePager> {
-  int index = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          PageView.builder(
-            itemCount: widget.images.length,
-            onPageChanged: (value) {
-              setState(() {
-                index = value;
-              });
-            },
-            itemBuilder: (context, i) {
-              return SafeNetworkImage(
-                url: widget.images[i],
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                borderRadius: BorderRadius.circular(14),
-              );
-            },
-          ),
-          Positioned(
-            right: 10,
-            top: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: Text(
-                '${index + 1}/${widget.images.length}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _MusicCard extends StatelessWidget {
   final String name;

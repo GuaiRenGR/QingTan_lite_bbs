@@ -3,11 +3,15 @@ import 'package:go_router/go_router.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
+import 'features/creator/creator_center_page.dart';
+import 'features/history/history_page.dart';
 import 'features/main/main_shell_page.dart';
 import 'features/me/settings_page.dart';
 import 'features/message/messages_page.dart';
+import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
+import 'features/profile/edit_profile_page.dart';
 import 'features/user/user_home_page.dart';
 
 final router = GoRouter(
@@ -54,6 +58,29 @@ final router = GoRouter(
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
         return UserHomePage(userId: id);
       },
+    ),
+    GoRoute(
+      path: '/thread/:id/edit',
+      builder: (_, state) {
+        final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+        return CreateThreadPage(editThreadId: id);
+      },
+    ),
+    GoRoute(
+      path: '/profile/edit',
+      builder: (_, _) => const EditProfilePage(),
+    ),
+    GoRoute(
+      path: '/search',
+      builder: (_, _) => const SearchPage(),
+    ),
+    GoRoute(
+      path: '/history',
+      builder: (_, _) => const HistoryPage(),
+    ),
+    GoRoute(
+      path: '/creator',
+      builder: (_, _) => const CreatorCenterPage(),
     ),
   ],
   errorBuilder: (_, _) {

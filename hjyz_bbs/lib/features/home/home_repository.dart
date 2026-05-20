@@ -9,7 +9,7 @@ class HomeRepository {
     required String channel,
   }) async {
     final result = await ApiClient.instance.get(
-      'home/feed',
+      'threads/recommend',
       query: {
         'page': page,
         'page_size': AppConfig.pageSize,

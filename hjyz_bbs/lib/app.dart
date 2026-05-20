@@ -8,7 +8,7 @@ class ForumXApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'ForumX Lite',
+      title: '获嘉一中论坛',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       theme: ThemeData(

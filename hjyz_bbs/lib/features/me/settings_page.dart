@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/services/update_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -12,11 +15,14 @@ class _SettingsPageState extends State<SettingsPage> {
   bool autoPlayMusic = false;
   bool autoPlayVideo = true;
   bool showImagesOnMobile = true;
+  bool autoCheckUpdate = true;
+  String appVersion = '';
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _loadVersion();
   }
 
   Future<void> _loadSettings() async {
@@ -29,6 +35,22 @@ class _SettingsPageState extends State<SettingsPage> {
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
       });
     } catch (_) {}
+
+    final enabled = await UpdateService.isAutoCheckEnabled();
+    if (mounted) {
+      setState(() {
+        autoCheckUpdate = enabled;
+      });
+    }
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        appVersion = '${info.version}+${info.buildNumber}';
+      });
+    }
   }
 
   Future<void> _saveBool(String key, bool value) async {
@@ -109,6 +131,30 @@ class _SettingsPageState extends State<SettingsPage> {
                     showImagesOnMobile = value;
                   });
                   _saveBool('show_images_on_mobile', value);
+                },
+              ),
+            ],
+          ),
+          _Section(
+            title: '更新',
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.system_update_outlined),
+                title: const Text('启动时自动检查更新'),
+                value: autoCheckUpdate,
+                onChanged: (value) {
+                  setState(() {
+                    autoCheckUpdate = value;
+                  });
+                  UpdateService.setAutoCheckEnabled(value);
+                },
+              ),
+              _SettingTile(
+                icon: Icons.refresh_rounded,
+                title: '检查更新',
+                subtitle: '当前版本 $appVersion',
+                onTap: () {
+                  UpdateService.check(context);
                 },
               ),
             ],

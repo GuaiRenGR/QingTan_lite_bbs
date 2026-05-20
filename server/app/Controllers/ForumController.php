@@ -9,10 +9,40 @@ class ForumController
         $forums = \Database::table('forums');
 
         $rows = \Database::fetchAll(
-            "SELECT * FROM {$forums} WHERE status = 1 ORDER BY sort_order ASC, id ASC"
+            "SELECT id, name, description, icon, is_default
+             FROM {$forums}
+             WHERE status = 1
+             ORDER BY sort_order ASC, id ASC"
         );
 
-        \Response::success($rows);
+        $list = array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+                'description' => $row['description'] ?? '',
+                'icon' => $row['icon'] ?? '',
+                'is_default' => (int)$row['is_default'] === 1,
+            ];
+        }, $rows);
+
+        \Response::success([
+            'list' => $list,
+        ]);
+    }
+
+    public static function defaultId()
+    {
+        $forums = \Database::table('forums');
+
+        $row = \Database::fetch(
+            "SELECT id
+             FROM {$forums}
+             WHERE status = 1
+             ORDER BY is_default DESC, sort_order ASC, id ASC
+             LIMIT 1"
+        );
+
+        return $row ? (int)$row['id'] : 1;
     }
 
     public static function detail()

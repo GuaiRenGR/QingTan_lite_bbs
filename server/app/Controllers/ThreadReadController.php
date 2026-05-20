@@ -66,6 +66,41 @@ class ThreadReadController
             $isFavorited = $fav ? true : false;
         }
 
+        add_content_daily_stat(
+            'thread',
+            $threadId,
+            (int)$thread['user_id'],
+            'view_count',
+            1
+        );
+
+        if ($viewerId > 0) {
+            record_thread_history($viewerId, $threadId);
+        }
+
+        $canViewHidden = false;
+
+        if ($viewerId > 0) {
+            if ($viewerId === (int)$thread['user_id']) {
+                $canViewHidden = true;
+            } else {
+                $reply = \Database::fetch(
+                    "SELECT id
+                     FROM {$posts}
+                     WHERE thread_id = ?
+                       AND user_id = ?
+                       AND status = 1
+                     LIMIT 1",
+                    [
+                        $threadId,
+                        $viewerId,
+                    ]
+                );
+
+                $canViewHidden = $reply ? true : false;
+            }
+        }
+
         $commentRows = \Database::fetchAll(
             "SELECT
                 p.*,
@@ -113,6 +148,9 @@ class ThreadReadController
                 'share_count' => (int)($thread['share_count'] ?? 0),
                 'is_liked' => $isLiked,
                 'is_favorited' => $isFavorited,
+                'is_owner' => $viewerId > 0 && $viewerId === (int)$thread['user_id'],
+                'can_view_hidden' => $canViewHidden,
+                'tags' => get_thread_tags($thread['id']),
                 'created_at' => $thread['created_at'],
                 'author' => [
                     'id' => (int)$thread['author_id'],
