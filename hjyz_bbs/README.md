@@ -1,17 +1,42 @@
-# hjyz_bbs
+# 获嘉一中论坛 - Flutter 客户端
 
-A new Flutter project.
+获嘉一中校园论坛 Flutter 客户端，支持 Android、iOS、Windows、macOS、Linux、Web。
 
-## Getting Started
+## 功能模块
 
-This project is a starting point for a Flutter application.
+| 模块 | 说明 |
+|------|------|
+| auth | 登录、注册 |
+| checkin | 每日签到 |
+| creator | 创作者中心 |
+| discover | 发现页 |
+| history | 浏览历史 |
+| home | 首页（推荐/热门/精华/最新） |
+| main | 底部导航框架 |
+| me | 个人中心、设置 |
+| message | 私信聊天 |
+| post | 发帖（文字、图片、视频、Markdown） |
+| profile | 编辑资料 |
+| search | 搜索帖子、用户 |
+| thread | 帖子详情、评论 |
+| user | 用户主页 |
 
-A few resources to get you started if this is your first Flutter project:
+## 运行
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 构建
+
+```bash
+# Android
+flutter build apk
+
+# Windows
+flutter build windows
+
+# iOS
+flutter build ios
+```
