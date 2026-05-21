@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_client.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/home_feed_page.dart';
 import 'widgets/home_top_bar.dart';
@@ -16,6 +17,8 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with SingleTickerProviderStateMixin {
   late final TabController tabController;
+
+  String avatarUrl = '';
 
   final tabs = const [
     _HomeTab('推荐', 'recommend'),
@@ -32,6 +35,27 @@ class _HomePageState extends ConsumerState<HomePage>
       length: tabs.length,
       vsync: this,
     );
+
+    _loadMe();
+  }
+
+  Future<void> _loadMe() async {
+    final auth = ref.read(authControllerProvider);
+    final userId = int.tryParse(auth.user?['id']?.toString() ?? '') ?? 0;
+
+    if (userId <= 0) return;
+
+    final result = await ApiClient.instance.get('profile/get');
+
+    if (!mounted) return;
+
+    if (result.success && result.data is Map<String, dynamic>) {
+      final data = result.data as Map<String, dynamic>;
+
+      setState(() {
+        avatarUrl = data['avatar']?.toString() ?? '';
+      });
+    }
   }
 
   @override
@@ -46,6 +70,7 @@ class _HomePageState extends ConsumerState<HomePage>
       body: Column(
         children: [
           HomeTopBar(
+            avatarUrl: avatarUrl,
             onAvatarTap: () {
               final auth = ref.read(authControllerProvider);
               final userId =

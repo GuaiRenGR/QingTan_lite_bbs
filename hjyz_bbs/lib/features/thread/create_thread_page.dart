@@ -570,15 +570,32 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     );
   }
 
+  void _insertVideoTag() {
+    final selection = contentController.selection;
+    final text = contentController.text;
+
+    const template = '[video=https://example.com/video.mp4]';
+
+    final start = selection.start < 0 ? text.length : selection.start;
+    final end = selection.end < 0 ? text.length : selection.end;
+
+    final newText = text.replaceRange(start, end, template);
+
+    contentController.text = newText;
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: start + template.length),
+    );
+  }
+
   // Preview
 
   void _previewThread() {
     final title = titleController.text.trim();
     final content = contentController.text.trim();
-    final previewImages = [
+    final previewImages = <dynamic>{
       ...imageUrls,
       ..._extractRemoteImagesFromContent(content),
-    ].toSet().toList();
+    }.toList();
 
     showModalBottomSheet(
       context: context,
@@ -708,61 +725,88 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
       publishing = true;
     });
 
-    final endpoint = widget.isEdit ? 'threads/update' : 'threads/create';
+    try {
+      final endpoint = widget.isEdit ? 'threads/update' : 'threads/create';
 
-    final body = {
-      if (widget.isEdit) 'thread_id': widget.editThreadId,
-      'forum_id': selectedForumId,
-      'title': title,
-      'content': content,
-      'mode': mode,
-      'image_urls': imageUrls,
-      'attachment_ids': attachmentIds,
-      'music_url': musicUrl,
-      'music_name': musicName,
-      'tags': tags,
-    };
+      final body = {
+        if (widget.isEdit) 'thread_id': widget.editThreadId,
+        'forum_id': selectedForumId,
+        'title': title,
+        'content': content,
+        'mode': mode,
+        'image_urls': imageUrls,
+        'attachment_ids': attachmentIds,
+        'music_url': musicUrl,
+        'music_name': musicName,
+        'tags': tags,
+      };
 
-    final result = await ApiClient.instance.post(endpoint, data: body);
+      final result = await ApiClient.instance.post(endpoint, data: body);
 
-    if (!mounted) return;
-
-    setState(() {
-      publishing = false;
-    });
-
-    if (result.success) {
       if (!mounted) return;
+
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message.isEmpty ? '操作失败' : result.message)),
+        );
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.isEdit ? '保存成功' : '发布成功')),
       );
 
       if (widget.isEdit) {
-        context.pop(true);
-      } else {
-        await _clearDraft();
+        if (mounted) Navigator.of(context).pop(true);
+        return;
+      }
 
-        final data = result.data;
-        final threadId = data is Map<String, dynamic>
-            ? int.tryParse((data['thread_id'] ?? data['id']).toString()) ?? 0
-            : 0;
+      final data = result.data;
 
-        if (threadId > 0) {
-          context.pushReplacement('/thread/$threadId');
-        } else {
-          context.pop(true);
+      int threadId = 0;
+
+      if (data is Map<String, dynamic>) {
+        threadId = _toInt(data['thread_id']);
+        if (threadId <= 0) {
+          threadId = _toInt(data['id']);
         }
       }
-    } else {
+
+      await _clearDraftSafely();
+
+      if (!mounted) return;
+
+      if (threadId > 0) {
+        context.go('/thread/$threadId');
+      } else {
+        context.go('/');
+      }
+    } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
+        SnackBar(content: Text('发布失败：$e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          publishing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearDraftSafely() async {
+    try {
+      await _clearDraft();
+    } catch (_) {
+      // 草稿清理失败不影响发布结果
     }
   }
 
   int _toInt(dynamic value) {
     if (value is int) return value;
+    if (value is double) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
@@ -823,7 +867,7 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: forums.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final forum = forums[index];
                 final id = int.tryParse(forum['id']?.toString() ?? '') ?? 0;
@@ -957,6 +1001,11 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
                 icon: Icons.link_rounded,
                 text: '插入链接',
                 onTap: _insertUrlTag,
+              ),
+              _ToolButton(
+                icon: Icons.play_circle_outline_rounded,
+                text: '插入视频',
+                onTap: _insertVideoTag,
               ),
               _ToolButton(
                 icon: Icons.music_note_rounded,
@@ -1145,7 +1194,7 @@ class _HelpCard extends StatelessWidget {
       child: Text(
         isImageMode
             ? '图片模式类似小红书：上方展示图片轮播，下方展示文字。上传图片后会保存在 OneDrive，不占用虚拟主机空间。'
-            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. Markdown 代码块必须放在 [markdown][/markdown] 中\n3. 上传图片会自动插入 [img=链接]\n4. 链接标签：[url=链接]文字[/url]',
+            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. 视频标签：[video=视频链接]\n3. Markdown 代码块必须放在 [markdown][/markdown] 中\n4. 上传图片会自动插入 [img=链接]\n5. 链接标签：[url=链接]文字[/url]',
         style: TextStyle(
           color: Colors.grey.shade600,
           fontSize: 13,

@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/safe_network_image.dart';
+import 'forum_video_player.dart';
 
 class ForumContentView extends StatelessWidget {
   final String content;
@@ -59,6 +60,9 @@ class ForumContentView extends StatelessWidget {
             ),
           ),
         );
+
+      case _ContentPartType.video:
+        return ForumVideoPlayer(url: part.value);
 
       case _ContentPartType.markdown:
         return Padding(
@@ -212,7 +216,11 @@ class ForumContentView extends StatelessWidget {
     final List<_ContentPart> result = [];
 
     final reg = RegExp(
-      r'(\[markdown\]([\s\S]*?)\[\/markdown\])|(\[img=(https?:\/\/[^\]\s]+)\])|(\[hide\]([\s\S]*?)\[\/hide\])|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
+      r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
+      r'|(\[img=(https?:\/\/[^\]\s]+)\])'
+      r'|(\[video=(https?:\/\/[^\]\s]+)\])'
+      r'|(\[hide\]([\s\S]*?)\[\/hide\])'
+      r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
       caseSensitive: false,
     );
 
@@ -232,9 +240,10 @@ class ForumContentView extends StatelessWidget {
 
       final markdown = match.group(2);
       final image = match.group(4);
-      final hidden = match.group(6);
-      final linkUrl = match.group(8);
-      final linkText = match.group(9);
+      final video = match.group(6);
+      final hidden = match.group(8);
+      final linkUrl = match.group(10);
+      final linkText = match.group(11);
 
       if (markdown != null) {
         result.add(
@@ -248,6 +257,13 @@ class ForumContentView extends StatelessWidget {
           _ContentPart(
             type: _ContentPartType.image,
             value: image.trim(),
+          ),
+        );
+      } else if (video != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.video,
+            value: video.trim(),
           ),
         );
       } else if (hidden != null) {
@@ -288,6 +304,7 @@ class ForumContentView extends StatelessWidget {
 enum _ContentPartType {
   text,
   image,
+  video,
   markdown,
   link,
   hidden,

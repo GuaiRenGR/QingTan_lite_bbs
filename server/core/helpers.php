@@ -115,6 +115,16 @@ function sanitize_forum_content($content)
         return '[img=' . $url . ']';
     }, $content);
 
+    $content = preg_replace_callback('/\[video=([^\]]+)\]/i', function ($m) {
+        $url = trim($m[1]);
+
+        if (!validate_remote_url($url)) {
+            return '';
+        }
+
+        return '[video=' . $url . ']';
+    }, $content);
+
     $content = preg_replace_callback('/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/i', function ($m) {
         $url = trim($m[1]);
         $text = trim($m[2]);

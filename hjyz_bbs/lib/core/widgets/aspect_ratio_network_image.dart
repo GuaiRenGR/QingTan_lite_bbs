@@ -76,7 +76,7 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
           _aspectRatio = displayRatio;
         });
       },
-      onError: (_, __) {
+      onError: (_, _) {
         if (!mounted) return;
         setState(() {
           _failed = true;
@@ -139,7 +139,7 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
           width: widget.width ?? double.infinity,
           fit: widget.fit,
           alignment: Alignment.topCenter,
-          errorBuilder: (_, __, ___) {
+          errorBuilder: (_, _, _) {
             return widget.errorWidget ??
                 Container(
                   color: Colors.grey.shade100,
