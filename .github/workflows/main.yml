@@ -1,0 +1,351 @@
+name: Build Flutter
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+# 如果你也想在 main 分支每次 push 时构建，可以取消下面注释
+#  push:
+#    branches:
+#      - main
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_CHANNEL: stable
+  JAVA_VERSION: "17"
+
+jobs:
+  android:
+    name: Android APK / AAB
+    runs-on: ubuntu-latest
+
+    env:
+      # 可选：Android 签名用 secrets
+      # 如果你没有配置 Android release 签名，可以先不管
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # 可选：Android release 签名
+      # 需要你的 android/app/build.gradle 已经读取 android/key.properties
+      - name: Configure Android signing
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build universal APK
+        run: flutter build apk --release
+
+      - name: Build split ABI APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      - name: Collect Android artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/*.apk dist/android/ || true
+          cp build/app/outputs/bundle/release/*.aab dist/android/ || true
+          ls -lah dist/android
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/android/*
+          retention-days: 14
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $src = "build\windows\x64\runner\Release"
+
+          if (!(Test-Path $src)) {
+            $src = "build\windows\runner\Release"
+          }
+
+          if (!(Test-Path $src)) {
+            throw "Windows build output not found."
+          }
+
+          Compress-Archive -Path "$src\*" -DestinationPath "dist\windows-release.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/windows-release.zip
+          retention-days: 14
+
+  harmonyos:
+    name: HarmonyOS / OpenHarmony
+    runs-on:
+      - self-hosted
+      - linux
+      - harmonyos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add Flutter OHOS to PATH
+        run: |
+          echo "$HOME/flutter-ohos/bin" >> "$GITHUB_PATH"
+
+      - name: Build HarmonyOS HAP
+        run: |
+          flutter --version
+          flutter doctor -v
+          flutter pub get
+          flutter build hap --release
+
+      - name: Collect HarmonyOS artifacts
+        run: |
+          mkdir -p dist/harmonyos
+
+          find . -type f \( -name "*.hap" -o -name "*.app" \) \
+            -not -path "./.git/*" \
+            -exec cp {} dist/harmonyos/ \;
+
+          ls -lah dist/harmonyos
+
+      - name: Upload HarmonyOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: harmonyos
+          path: dist/harmonyos/*
+          retention-days: 14
+          
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Package Linux
+        shell: bash
+        run: |
+          mkdir -p dist
+
+          src="build/linux/x64/release/bundle"
+
+          if [ ! -d "$src" ]; then
+            echo "Linux build output not found."
+            exit 1
+          fi
+
+          tar -czf dist/linux-x64-release.tar.gz -C "$src" .
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/linux-x64-release.tar.gz
+          retention-days: 14
+
+  apple:
+    name: macOS / iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Package macOS
+        shell: bash
+        run: |
+          mkdir -p dist
+
+          app_path="$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" -type d | head -n 1)"
+
+          if [ -z "$app_path" ]; then
+            echo "macOS .app not found."
+            exit 1
+          fi
+
+          app_name="$(basename "$app_path" .app)"
+
+          # zip
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "dist/${app_name}-macos.zip"
+
+          # dmg
+          dmg_dir="$RUNNER_TEMP/dmg"
+          rm -rf "$dmg_dir"
+          mkdir -p "$dmg_dir"
+          cp -R "$app_path" "$dmg_dir/"
+
+          hdiutil create \
+            -volname "$app_name" \
+            -srcfolder "$dmg_dir" \
+            -ov \
+            -format UDZO \
+            "dist/${app_name}-macos.dmg"
+
+      - name: Build iOS unsigned app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package iOS unsigned IPA
+        shell: bash
+        run: |
+          mkdir -p dist
+
+          ios_app_path="$(find build/ios/iphoneos -maxdepth 1 -name "*.app" -type d | head -n 1)"
+
+          if [ -z "$ios_app_path" ]; then
+            echo "iOS .app not found."
+            exit 1
+          fi
+
+          ipa_dir="$RUNNER_TEMP/ipa"
+          rm -rf "$ipa_dir"
+          mkdir -p "$ipa_dir/Payload"
+
+          cp -R "$ios_app_path" "$ipa_dir/Payload/"
+
+          cd "$ipa_dir"
+          zip -r "$GITHUB_WORKSPACE/dist/ios-unsigned.ipa" Payload
+
+      - name: Upload Apple artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.ipa
+          retention-days: 14
+
+  github-release:
+    name: Upload to GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - android
+      - windows
+      - linux
+      - apple
+      - harmonyos
+
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Show files
+        run: find dist -type f -maxdepth 3 -print
+
+      - name: Upload files to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
