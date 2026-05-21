@@ -6,15 +6,11 @@ on:
     tags:
       - "v*"
 
-# 如果你也想在 main 分支每次 push 时构建，可以取消下面注释
-#  push:
-#    branches:
-#      - main
-
 permissions:
   contents: write
 
 env:
+  PROJECT_DIR: hjyz_bbs
   FLUTTER_CHANNEL: stable
   JAVA_VERSION: "17"
 
@@ -23,9 +19,11 @@ jobs:
     name: Android APK / AAB
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: hjyz_bbs
+
     env:
-      # 可选：Android 签名用 secrets
-      # 如果你没有配置 Android release 签名，可以先不管
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -53,8 +51,6 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      # 可选：Android release 签名
-      # 需要你的 android/app/build.gradle 已经读取 android/key.properties
       - name: Configure Android signing
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         shell: bash
@@ -89,12 +85,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android
-          path: dist/android/*
+          path: ${{ env.PROJECT_DIR }}/dist/android/*
           retention-days: 14
 
   windows:
     name: Windows
     runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: hjyz_bbs
 
     steps:
       - name: Checkout
@@ -136,51 +136,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/windows-release.zip
+          path: ${{ env.PROJECT_DIR }}/dist/windows-release.zip
           retention-days: 14
 
-  harmonyos:
-    name: HarmonyOS / OpenHarmony
-    runs-on:
-      - self-hosted
-      - linux
-      - harmonyos
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Add Flutter OHOS to PATH
-        run: |
-          echo "$HOME/flutter-ohos/bin" >> "$GITHUB_PATH"
-
-      - name: Build HarmonyOS HAP
-        run: |
-          flutter --version
-          flutter doctor -v
-          flutter pub get
-          flutter build hap --release
-
-      - name: Collect HarmonyOS artifacts
-        run: |
-          mkdir -p dist/harmonyos
-
-          find . -type f \( -name "*.hap" -o -name "*.app" \) \
-            -not -path "./.git/*" \
-            -exec cp {} dist/harmonyos/ \;
-
-          ls -lah dist/harmonyos
-
-      - name: Upload HarmonyOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: harmonyos
-          path: dist/harmonyos/*
-          retention-days: 14
-          
   linux:
     name: Linux
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: hjyz_bbs
 
     steps:
       - name: Checkout
@@ -230,12 +195,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/linux-x64-release.tar.gz
+          path: ${{ env.PROJECT_DIR }}/dist/linux-x64-release.tar.gz
           retention-days: 14
 
   apple:
     name: macOS / iOS
     runs-on: macos-latest
+
+    defaults:
+      run:
+        working-directory: hjyz_bbs
 
     steps:
       - name: Checkout
@@ -273,10 +242,8 @@ jobs:
 
           app_name="$(basename "$app_path" .app)"
 
-          # zip
           ditto -c -k --sequesterRsrc --keepParent "$app_path" "dist/${app_name}-macos.zip"
 
-          # dmg
           dmg_dir="$RUNNER_TEMP/dmg"
           rm -rf "$dmg_dir"
           mkdir -p "$dmg_dir"
@@ -310,17 +277,19 @@ jobs:
 
           cp -R "$ios_app_path" "$ipa_dir/Payload/"
 
+          output_ipa="$PWD/dist/ios-unsigned.ipa"
+
           cd "$ipa_dir"
-          zip -r "$GITHUB_WORKSPACE/dist/ios-unsigned.ipa" Payload
+          zip -r "$output_ipa" Payload
 
       - name: Upload Apple artifacts
         uses: actions/upload-artifact@v4
         with:
           name: apple
           path: |
-            dist/*.zip
-            dist/*.dmg
-            dist/*.ipa
+            ${{ env.PROJECT_DIR }}/dist/*.zip
+            ${{ env.PROJECT_DIR }}/dist/*.dmg
+            ${{ env.PROJECT_DIR }}/dist/*.ipa
           retention-days: 14
 
   github-release:
@@ -331,7 +300,6 @@ jobs:
       - windows
       - linux
       - apple
-      - harmonyos
 
     if: startsWith(github.ref, 'refs/tags/')
 
