@@ -212,6 +212,46 @@ try {
             App\Controllers\FileController::resolve();
             break;
 
+        case 'notifications/list':
+            App\Controllers\NotificationController::list();
+            break;
+
+        case 'notifications/unread':
+            App\Controllers\NotificationController::unreadCount();
+            break;
+
+        case 'notifications/read':
+            App\Controllers\NotificationController::markRead();
+            break;
+
+        case 'notifications/dnd/get':
+            App\Controllers\NotificationController::getDnd();
+            break;
+
+        case 'notifications/dnd/set':
+            App\Controllers\NotificationController::setDnd();
+            break;
+
+        case 'messages/conversations':
+            App\Controllers\MessageController::conversations();
+            break;
+
+        case 'messages/list':
+            App\Controllers\MessageController::messages();
+            break;
+
+        case 'messages/send':
+            App\Controllers\MessageController::send();
+            break;
+
+        case 'messages/unread':
+            App\Controllers\MessageController::unreadCount();
+            break;
+
+        case 'messages/read':
+            App\Controllers\MessageController::markRead();
+            break;
+
         default:
             Response::json(404, '接口不存在');
     }

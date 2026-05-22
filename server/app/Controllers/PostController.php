@@ -115,6 +115,28 @@ class PostController
                 1
             );
 
+            // 创建回复通知
+            if ((int)$user['id'] !== (int)$thread['user_id']) {
+                $threads2 = \Database::table('threads');
+                $threadInfo = \Database::fetch(
+                    "SELECT title FROM {$threads2} WHERE id = ? LIMIT 1",
+                    [$threadId]
+                );
+                $threadTitle = $threadInfo['title'] ?? '帖子';
+
+                \App\Controllers\NotificationController::create(
+                    (int)$thread['user_id'],
+                    'reply',
+                    '回复了我的帖子',
+                    $user['nickname'] ?? '用户' . ' 回复了「' . $threadTitle . '」',
+                    [
+                        'thread_id' => $threadId,
+                        'post_id' => $postId,
+                        'from_user_id' => (int)$user['id'],
+                    ]
+                );
+            }
+
             \Database::commit();
 
             \Response::success([

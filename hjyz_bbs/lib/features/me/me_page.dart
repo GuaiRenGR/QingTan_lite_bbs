@@ -143,6 +143,13 @@ class MePage extends ConsumerWidget {
           const CheckinCard(),
           const SizedBox(height: 14),
           _MenuItem(
+            icon: Icons.mail_outline,
+            text: '消息',
+            onTap: () {
+              context.push('/messages');
+            },
+          ),
+          _MenuItem(
             icon: Icons.article_outlined,
             text: '我的帖子',
             onTap: () {

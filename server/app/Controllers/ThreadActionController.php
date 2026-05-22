@@ -139,6 +139,27 @@ class ThreadActionController
                         'like_count',
                         1
                     );
+
+                    // 创建点赞通知
+                    if ((int)$user['id'] !== (int)$thread['user_id']) {
+                        $threads2 = \Database::table('threads');
+                        $threadInfo = \Database::fetch(
+                            "SELECT title FROM {$threads2} WHERE id = ? LIMIT 1",
+                            [$threadId]
+                        );
+                        $threadTitle = $threadInfo['title'] ?? '帖子';
+
+                        \App\Controllers\NotificationController::create(
+                            (int)$thread['user_id'],
+                            'like',
+                            '赞了我的帖子',
+                            ($user['nickname'] ?? '用户') . ' 赞了「' . $threadTitle . '」',
+                            [
+                                'thread_id' => $threadId,
+                                'from_user_id' => (int)$user['id'],
+                            ]
+                        );
+                    }
                 }
 
                 $message = '点赞成功';

@@ -8,6 +8,9 @@ import 'features/history/history_page.dart';
 import 'features/main/main_shell_page.dart';
 import 'features/me/settings_page.dart';
 import 'features/message/messages_page.dart';
+import 'features/message/notification_list_page.dart';
+import 'features/message/chat_page.dart';
+import 'features/message/notification_settings_page.dart';
 import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
@@ -36,6 +39,32 @@ final router = GoRouter(
     GoRoute(
       path: '/messages',
       builder: (_, _) => const MessagesPage(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (_, state) {
+        final type = state.uri.queryParameters['type'] ?? 'reply';
+        return NotificationListPage(type: type);
+      },
+    ),
+    GoRoute(
+      path: '/chat',
+      builder: (_, state) {
+        final convId =
+            int.tryParse(state.uri.queryParameters['conv_id'] ?? '') ?? 0;
+        final userId =
+            int.tryParse(state.uri.queryParameters['user_id'] ?? '') ?? 0;
+        final nickname = state.uri.queryParameters['nickname'] ?? '用户';
+        return ChatPage(
+          conversationId: convId,
+          targetUserId: userId,
+          targetNickname: nickname,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/notification-settings',
+      builder: (_, _) => const NotificationSettingsPage(),
     ),
     GoRoute(
       path: '/thread/create',

@@ -182,6 +182,13 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
                 isFollowing: isFollowing,
                 onBack: () => Navigator.of(context).pop(),
                 onFollowTap: _toggleFollow,
+                onMessageTap: isSelf
+                    ? null
+                    : () {
+                        context.push(
+                          '/chat?conv_id=0&user_id=${widget.userId}&nickname=${Uri.encodeComponent(nickname)}',
+                        );
+                      },
               ),
             ),
             SliverPersistentHeader(
@@ -243,6 +250,7 @@ class _UserHeader extends StatelessWidget {
   final bool isFollowing;
   final VoidCallback onBack;
   final VoidCallback onFollowTap;
+  final VoidCallback? onMessageTap;
 
   const _UserHeader({
     required this.nickname,
@@ -257,6 +265,7 @@ class _UserHeader extends StatelessWidget {
     required this.isFollowing,
     required this.onBack,
     required this.onFollowTap,
+    this.onMessageTap,
   });
 
   @override
@@ -381,6 +390,20 @@ class _UserHeader extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (!isSelf)
+                          IconButton(
+                            onPressed: onMessageTap,
+                            icon: Icon(
+                              Icons.chat_outlined,
+                              color: Colors.grey.shade600,
+                              size: 22,
+                            ),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(34, 34),
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        if (!isSelf) const SizedBox(width: 4),
                         SizedBox(
                           height: 34,
                           child: FilledButton(
