@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/services/notification_service.dart';
 import '../../core/services/update_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -15,6 +16,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool autoPlayMusic = false;
   bool autoPlayVideo = true;
   bool showImagesOnMobile = true;
+  bool nativeNotifications = true;
   bool autoCheckUpdate = true;
   String appVersion = '';
 
@@ -33,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
         autoPlayMusic = prefs.getBool('auto_play_music') ?? false;
         autoPlayVideo = prefs.getBool('auto_play_video') ?? true;
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
+        nativeNotifications = prefs.getBool('native_notifications') ?? true;
       });
     } catch (_) {}
 
@@ -131,6 +134,28 @@ class _SettingsPageState extends State<SettingsPage> {
                     showImagesOnMobile = value;
                   });
                   _saveBool('show_images_on_mobile', value);
+                },
+              ),
+            ],
+          ),
+          _Section(
+            title: '通知',
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_outlined),
+                title: const Text('系统通知'),
+                subtitle: const Text('在系统通知栏显示新消息'),
+                value: nativeNotifications,
+                onChanged: (value) {
+                  setState(() {
+                    nativeNotifications = value;
+                  });
+                  _saveBool('native_notifications', value);
+                  if (value) {
+                    NotificationService().startPolling();
+                  } else {
+                    NotificationService().stopPolling();
+                  }
                 },
               ),
             ],
