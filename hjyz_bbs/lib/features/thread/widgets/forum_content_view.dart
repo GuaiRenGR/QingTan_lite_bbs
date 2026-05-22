@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/safe_network_image.dart';
@@ -63,6 +64,9 @@ class ForumContentView extends StatelessWidget {
 
       case _ContentPartType.video:
         return ForumVideoPlayer(url: part.value);
+
+      case _ContentPartType.music:
+        return _InlineMusicPlayer(url: part.value);
 
       case _ContentPartType.markdown:
         return Padding(
@@ -219,6 +223,7 @@ class ForumContentView extends StatelessWidget {
       r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
       r'|(\[img=(https?:\/\/[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
+      r'|(\[music=(https?:\/\/[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
       caseSensitive: false,
@@ -241,9 +246,10 @@ class ForumContentView extends StatelessWidget {
       final markdown = match.group(2);
       final image = match.group(4);
       final video = match.group(6);
-      final hidden = match.group(8);
-      final linkUrl = match.group(10);
-      final linkText = match.group(11);
+      final music = match.group(8);
+      final hidden = match.group(10);
+      final linkUrl = match.group(12);
+      final linkText = match.group(13);
 
       if (markdown != null) {
         result.add(
@@ -264,6 +270,13 @@ class ForumContentView extends StatelessWidget {
           _ContentPart(
             type: _ContentPartType.video,
             value: video.trim(),
+          ),
+        );
+      } else if (music != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.music,
+            value: music.trim(),
           ),
         );
       } else if (hidden != null) {
@@ -305,6 +318,7 @@ enum _ContentPartType {
   text,
   image,
   video,
+  music,
   markdown,
   link,
   hidden,
@@ -320,4 +334,98 @@ class _ContentPart {
     required this.value,
     this.extra,
   });
+}
+
+class _InlineMusicPlayer extends StatefulWidget {
+  final String url;
+
+  const _InlineMusicPlayer({required this.url});
+
+  @override
+  State<_InlineMusicPlayer> createState() => _InlineMusicPlayerState();
+}
+
+class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
+  late final AudioPlayer _player;
+  bool _playing = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      await _player.setUrl(widget.url);
+      _player.playerStateStream.listen((state) {
+        if (!mounted) return;
+        setState(() {
+          _playing = state.playing;
+        });
+      });
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _failed
+            ? null
+            : () async {
+                if (_playing) {
+                  await _player.pause();
+                } else {
+                  await _player.play();
+                }
+              },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF2F6),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _failed
+                    ? Icons.error_outline_rounded
+                    : _playing
+                        ? Icons.pause_circle_filled_rounded
+                        : Icons.play_circle_fill_rounded,
+                color: _failed
+                    ? Colors.grey
+                    : const Color(0xFFFB7299),
+                size: 34,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _failed ? '音乐加载失败' : '背景音乐',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

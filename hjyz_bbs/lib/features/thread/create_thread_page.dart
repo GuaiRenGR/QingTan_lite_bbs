@@ -39,12 +39,10 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   bool publishing = false;
   bool uploadingImage = false;
   bool uploadingMusic = false;
+  bool uploadingVideo = false;
 
   final List<String> imageUrls = [];
   final List<int> attachmentIds = [];
-
-  String musicUrl = '';
-  String musicName = '';
 
   int selectedForumId = 0;
 
@@ -143,8 +141,6 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
       'mode': mode,
       'image_urls': imageUrls,
       'attachment_ids': attachmentIds,
-      'music_url': musicUrl,
-      'music_name': musicName,
       'saved_at': DateTime.now().toIso8601String(),
     };
 
@@ -193,8 +189,6 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
               : [],
         );
 
-      musicUrl = decoded['music_url']?.toString() ?? '';
-      musicName = decoded['music_name']?.toString() ?? '';
     });
   }
 
@@ -422,34 +416,45 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
       uploadingMusic = true;
     });
 
-    final result = await ApiClient.instance.uploadFile(
-      'upload/media',
-      file: File(path),
-      fields: {
-        'type': 'music',
-      },
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      uploadingMusic = false;
-    });
-
-    if (!result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
+    try {
+      final result = await ApiClient.instance.uploadFile(
+        'upload/media',
+        file: File(path),
+        fields: {
+          'type': 'music',
+        },
       );
-      return;
-    }
 
-    final data = result.data;
+      if (!mounted) return;
 
-    if (data is Map<String, dynamic>) {
-      setState(() {
-        musicUrl = data['url']?.toString() ?? '';
-        musicName = data['name']?.toString() ?? picked.files.single.name;
-      });
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+        return;
+      }
+
+      final data = result.data;
+
+      if (data is Map<String, dynamic>) {
+        final url = data['url']?.toString() ?? '';
+
+        if (url.isNotEmpty) {
+          final old = contentController.text;
+          final insert = '\n[music=$url]\n';
+
+          contentController.text = old + insert;
+          contentController.selection = TextSelection.fromPosition(
+            TextPosition(offset: contentController.text.length),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          uploadingMusic = false;
+        });
+      }
     }
   }
 
@@ -570,21 +575,64 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     );
   }
 
-  void _insertVideoTag() {
-    final selection = contentController.selection;
-    final text = contentController.text;
+  Future<void> _pickAndUploadVideo() async {
+    if (uploadingVideo) return;
 
-    const template = '[video=https://example.com/video.mp4]';
-
-    final start = selection.start < 0 ? text.length : selection.start;
-    final end = selection.end < 0 ? text.length : selection.end;
-
-    final newText = text.replaceRange(start, end, template);
-
-    contentController.text = newText;
-    contentController.selection = TextSelection.fromPosition(
-      TextPosition(offset: start + template.length),
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: false,
     );
+
+    if (picked == null || picked.files.isEmpty) return;
+
+    final path = picked.files.single.path;
+
+    if (path == null || path.isEmpty) return;
+
+    setState(() {
+      uploadingVideo = true;
+    });
+
+    try {
+      final result = await ApiClient.instance.uploadFile(
+        'upload/media',
+        file: File(path),
+        fields: {
+          'type': 'video',
+        },
+      );
+
+      if (!mounted) return;
+
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+        return;
+      }
+
+      final data = result.data;
+
+      if (data is Map<String, dynamic>) {
+        final url = data['url']?.toString() ?? '';
+
+        if (url.isNotEmpty) {
+          final old = contentController.text;
+          final insert = '\n[video=$url]\n';
+
+          contentController.text = old + insert;
+          contentController.selection = TextSelection.fromPosition(
+            TextPosition(offset: contentController.text.length),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          uploadingVideo = false;
+        });
+      }
+    }
   }
 
   // Preview
@@ -655,30 +703,6 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
                   ),
                   const SizedBox(height: 14),
                 ],
-                if (musicUrl.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF2F6),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.music_note_rounded,
-                          color: Color(0xFFFB7299),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            musicName.isEmpty ? '已添加音乐' : musicName,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
                 ForumContentView(
                   content: content.isEmpty ? '暂无正文内容' : content,
                 ),
@@ -736,8 +760,6 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
         'mode': mode,
         'image_urls': imageUrls,
         'attachment_ids': attachmentIds,
-        'music_url': musicUrl,
-        'music_name': musicName,
         'tags': tags,
       };
 
@@ -968,16 +990,6 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
             ],
           ),
           const SizedBox(height: 12),
-          if (musicUrl.isNotEmpty)
-            _MusicSelectedCard(
-              name: musicName,
-              onRemove: () {
-                setState(() {
-                  musicUrl = '';
-                  musicName = '';
-                });
-              },
-            ),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -1004,8 +1016,8 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
               ),
               _ToolButton(
                 icon: Icons.play_circle_outline_rounded,
-                text: '插入视频',
-                onTap: _insertVideoTag,
+                text: uploadingVideo ? '上传中...' : '上传视频',
+                onTap: uploadingVideo ? null : _pickAndUploadVideo,
               ),
               _ToolButton(
                 icon: Icons.music_note_rounded,
@@ -1106,48 +1118,6 @@ class _ImageModePanel extends StatelessWidget {
   }
 }
 
-class _MusicSelectedCard extends StatelessWidget {
-  final String name;
-  final VoidCallback onRemove;
-
-  const _MusicSelectedCard({
-    required this.name,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF2F6),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.music_note_rounded,
-            color: Color(0xFFFB7299),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name.isEmpty ? '已添加音乐' : name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            onPressed: onRemove,
-            icon: const Icon(Icons.close),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ToolButton extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -1194,7 +1164,7 @@ class _HelpCard extends StatelessWidget {
       child: Text(
         isImageMode
             ? '图片模式类似小红书：上方展示图片轮播，下方展示文字。上传图片后会保存在 OneDrive，不占用虚拟主机空间。'
-            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. 视频标签：[video=视频链接]\n3. Markdown 代码块必须放在 [markdown][/markdown] 中\n4. 上传图片会自动插入 [img=链接]\n5. 链接标签：[url=链接]文字[/url]',
+            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. 视频标签：[video=视频链接]\n3. 音乐标签：[music=音乐链接]\n4. Markdown 代码块必须放在 [markdown][/markdown] 中\n5. 上传图片/视频/音乐会自动插入对应标签\n6. 链接标签：[url=链接]文字[/url]',
         style: TextStyle(
           color: Colors.grey.shade600,
           fontSize: 13,

@@ -149,7 +149,21 @@ class ApiClient {
         'file': await MultipartFile.fromFile(file.path),
       });
 
-      return post(route, formData: formData);
+      final response = await _dio.post(
+        '',
+        queryParameters: {
+          'route': route,
+        },
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 300),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      return ApiResult.fail(_dioErrorMessage(e));
     } catch (e) {
       return ApiResult.fail('上传失败：$e');
     }

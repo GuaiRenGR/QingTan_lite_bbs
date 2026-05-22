@@ -124,7 +124,7 @@ class ThreadManageController
         $threads = \Database::table('threads');
 
         $thread = \Database::fetch(
-            "SELECT id, user_id
+            "SELECT id, user_id, images_json, content
              FROM {$threads}
              WHERE id = ? AND status = 1
              LIMIT 1",
@@ -139,6 +139,8 @@ class ThreadManageController
             \Response::json(403, '无权删除该帖子');
         }
 
+        self::cleanupOneDriveFiles($threadId, $thread);
+
         \Database::execute(
             "UPDATE {$threads}
              SET status = 0,
@@ -151,6 +153,66 @@ class ThreadManageController
         );
 
         \Response::success(null, '已删除');
+    }
+
+    private static function cleanupOneDriveFiles($threadId, $thread)
+    {
+        try {
+            $attachments = \Database::table('attachments');
+            $posts = \Database::table('posts');
+
+            $postIds = \Database::fetchAll(
+                "SELECT id FROM {$posts} WHERE thread_id = ?",
+                [$threadId]
+            );
+            $postIdList = array_column($postIds, 'id');
+
+            $placeholders = implode(',', array_fill(0, count($postIdList), '?'));
+            $params = array_merge([$threadId], $postIdList);
+
+            if ($postIdList) {
+                $rows = \Database::fetchAll(
+                    "SELECT onedrive_item_id, file_url FROM {$attachments}
+                     WHERE onedrive_item_id IS NOT NULL AND onedrive_item_id != ''
+                       AND (
+                           (object_type = 'thread' AND object_id = ?)
+                           OR (object_type = 'post' AND object_id IN ({$placeholders}))
+                       )",
+                    $params
+                );
+            } else {
+                $rows = \Database::fetchAll(
+                    "SELECT onedrive_item_id, file_url FROM {$attachments}
+                     WHERE onedrive_item_id IS NOT NULL AND onedrive_item_id != ''
+                       AND object_type = 'thread' AND object_id = ?",
+                    [$threadId]
+                );
+            }
+
+            $itemIds = [];
+            foreach ($rows as $row) {
+                if (!empty($row['onedrive_item_id'])) {
+                    $itemIds[$row['onedrive_item_id']] = true;
+                }
+            }
+
+            if (empty($itemIds)) {
+                return;
+            }
+
+            $service = new \OneDriveService();
+
+            foreach (array_keys($itemIds) as $itemId) {
+                try {
+                    $service->deleteFile($itemId);
+                } catch (\Throwable $e) {
+                    log_error('OneDrive 删除失败 [' . $itemId . ']: ' . $e->getMessage());
+                }
+            }
+
+        } catch (\Throwable $e) {
+            log_error('清理帖子附件失败 [thread=' . $threadId . ']: ' . $e->getMessage());
+        }
     }
 
     public static function report()

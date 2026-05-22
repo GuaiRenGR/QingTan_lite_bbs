@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
@@ -31,9 +30,6 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
   List<Map<String, dynamic>> posts = [];
 
   final commentController = TextEditingController();
-  final audioPlayer = AudioPlayer();
-
-  bool musicPlaying = false;
 
   @override
   void initState() {
@@ -44,7 +40,6 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
   @override
   void dispose() {
     commentController.dispose();
-    audioPlayer.dispose();
     super.dispose();
   }
 
@@ -210,43 +205,6 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
       await _load();
     } else {
       _toast(result.message);
-    }
-  }
-
-  Future<void> _toggleMusic() async {
-    final data = thread;
-    if (data == null) return;
-
-    final url = data['music_url']?.toString() ?? '';
-
-    if (url.isEmpty) return;
-
-    if (musicPlaying) {
-      await audioPlayer.pause();
-      setState(() {
-        musicPlaying = false;
-      });
-      return;
-    }
-
-    try {
-      await audioPlayer.setUrl(url);
-      await audioPlayer.play();
-
-      setState(() {
-        musicPlaying = true;
-      });
-
-      audioPlayer.playerStateStream.listen((state) {
-        if (!mounted) return;
-        if (state.processingState == ProcessingState.completed) {
-          setState(() {
-            musicPlaying = false;
-          });
-        }
-      });
-    } catch (e) {
-      _toast('音乐播放失败');
     }
   }
 
@@ -443,8 +401,6 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                         }
                       }
                     },
-                    onMusicTap: _toggleMusic,
-                    musicPlaying: musicPlaying,
                   ),
                   const SizedBox(height: 12),
                   _CommentHeader(count: posts.length),
@@ -484,15 +440,11 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
 class _ThreadMainCard extends StatelessWidget {
   final Map<String, dynamic> thread;
   final VoidCallback onAuthorTap;
-  final VoidCallback onMusicTap;
-  final bool musicPlaying;
   final bool canViewHidden;
 
   const _ThreadMainCard({
     required this.thread,
     required this.onAuthorTap,
-    required this.onMusicTap,
-    required this.musicPlaying,
     this.canViewHidden = false,
   });
 
@@ -521,8 +473,6 @@ class _ThreadMainCard extends StatelessWidget {
     final title = thread['title']?.toString() ?? '';
     final content = thread['content']?.toString() ?? '';
     final images = _images(thread['images']);
-    final musicUrl = thread['music_url']?.toString() ?? '';
-    final musicName = thread['music_name']?.toString() ?? '';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -585,14 +535,6 @@ class _ThreadMainCard extends StatelessWidget {
             XhsImagePager(images: images),
             const SizedBox(height: 14),
           ],
-          if (musicUrl.isNotEmpty) ...[
-            _MusicCard(
-              name: musicName.isEmpty ? '帖子音乐' : musicName,
-              playing: musicPlaying,
-              onTap: onMusicTap,
-            ),
-            const SizedBox(height: 14),
-          ],
           ForumContentView(
             content: content,
             canViewHidden: canViewHidden,
@@ -611,55 +553,6 @@ class _ThreadMainCard extends StatelessWidget {
   }
 }
 
-
-class _MusicCard extends StatelessWidget {
-  final String name;
-  final bool playing;
-  final VoidCallback onTap;
-
-  const _MusicCard({
-    required this.name,
-    required this.playing,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF2F6),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              playing
-                  ? Icons.pause_circle_filled_rounded
-                  : Icons.play_circle_fill_rounded,
-              color: const Color(0xFFFB7299),
-              size: 34,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _CommentHeader extends StatelessWidget {
   final int count;

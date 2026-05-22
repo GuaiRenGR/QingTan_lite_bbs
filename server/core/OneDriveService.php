@@ -21,7 +21,7 @@ class OneDriveService
             throw new Exception('上传临时文件不存在');
         }
 
-        $type = $type === 'music' ? 'music' : 'images';
+        $type = in_array($type, ['music', 'video'], true) ? $type : 'images';
 
         $ext = $this->guessExt($originalName, $mime, $type);
 
@@ -76,7 +76,7 @@ class OneDriveService
             'mime' => $mime,
             'path' => '/' . $remotePath,
             'share_url' => $share['share_url'],
-            'file_url' => $share['direct_url'],
+            'file_url' => '',
         ];
     }
 
@@ -191,15 +191,47 @@ class OneDriveService
             throw new Exception('OneDrive 分享链接为空');
         }
 
-        $base64 = base64_encode($webUrl);
-        $base64 = rtrim(strtr($base64, '+/', '-_'), '=');
-
-        $directUrl = 'https://api.onedrive.com/v1.0/shares/u!' . $base64 . '/root/content';
-
         return [
             'share_url' => $webUrl,
-            'direct_url' => $directUrl,
         ];
+    }
+
+    public function deleteFile($itemId)
+    {
+        $accessToken = $this->accessToken();
+
+        $endpoint = 'https://graph.microsoft.com/v1.0/me/drive/items/'
+            . rawurlencode($itemId);
+
+        $this->curl($endpoint, 'DELETE', [
+            'Authorization: Bearer ' . $accessToken,
+        ]);
+    }
+
+    public function getFileUrl($itemId)
+    {
+        $accessToken = $this->accessToken();
+
+        $endpoint = 'https://graph.microsoft.com/v1.0/me/drive/items/'
+            . rawurlencode($itemId)
+            . '/content';
+
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $accessToken,
+        ]);
+        curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+        curl_close($ch);
+
+        if ($code === 302 && $redirectUrl) {
+            return $redirectUrl;
+        }
+
+        throw new Exception('OneDrive 获取文件直链失败');
     }
 
     private function ensureFolder($folder)
@@ -294,6 +326,22 @@ class OneDriveService
             if ($mime === 'audio/flac') return 'flac';
 
             throw new Exception('不支持的音乐格式');
+        }
+
+        if ($type === 'video') {
+            $allowVideo = ['mp4', 'webm', 'mov', 'avi', 'mkv'];
+
+            if (in_array($ext, $allowVideo, true)) {
+                return $ext;
+            }
+
+            if ($mime === 'video/mp4') return 'mp4';
+            if ($mime === 'video/webm') return 'webm';
+            if ($mime === 'video/quicktime') return 'mov';
+            if ($mime === 'video/x-msvideo') return 'avi';
+            if ($mime === 'video/x-matroska') return 'mkv';
+
+            throw new Exception('不支持的视频格式');
         }
 
         throw new Exception('未知文件类型');

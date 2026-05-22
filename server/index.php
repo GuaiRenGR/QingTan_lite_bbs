@@ -208,6 +208,10 @@ try {
             App\Controllers\ProfileController::update();
             break;
 
+        case 'file/resolve':
+            App\Controllers\FileController::resolve();
+            break;
+
         default:
             Response::json(404, '接口不存在');
     }

@@ -9,7 +9,9 @@ class UploadController
         $user = \Auth::requireLogin();
 
         $type = \Request::str('type', 'image');
-        $type = $type === 'music' ? 'music' : 'image';
+        if (!in_array($type, ['image', 'music', 'video'], true)) {
+            $type = 'image';
+        }
 
         if (empty($_FILES['file'])) {
             \Response::json(422, '请选择文件');
@@ -29,6 +31,10 @@ class UploadController
             if ($size > intval($config['max_image_size'])) {
                 \Response::json(422, '图片不能超过 ' . intval($config['max_image_size'] / 1024 / 1024) . 'MB');
             }
+        } elseif ($type === 'video') {
+            if ($size > intval($config['max_video_size'])) {
+                \Response::json(422, '视频不能超过 ' . intval($config['max_video_size'] / 1024 / 1024) . 'MB');
+            }
         } else {
             if ($size > intval($config['max_music_size'])) {
                 \Response::json(422, '音乐不能超过 ' . intval($config['max_music_size'] / 1024 / 1024) . 'MB');
@@ -38,7 +44,7 @@ class UploadController
         $tmp = $file['tmp_name'];
         $originalName = $file['name'];
 
-        $mime = self::detectMime($tmp);
+        $mime = self::detectMime($tmp, $originalName);
 
         if ($type === 'image') {
             if (!in_array($mime, [
@@ -65,13 +71,28 @@ class UploadController
             }
         }
 
+        if ($type === 'video') {
+            if (!in_array($mime, [
+                'video/mp4',
+                'video/webm',
+                'video/quicktime',
+                'video/x-msvideo',
+                'video/x-matroska',
+                'application/octet-stream',
+            ], true)) {
+                \Response::json(422, '不支持的视频格式');
+            }
+        }
+
         try {
             $service = new \OneDriveService();
+
+            $uploadType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : 'music');
 
             $result = $service->upload(
                 $tmp,
                 $originalName,
-                $type === 'image' ? 'images' : 'music',
+                $uploadType,
                 $mime
             );
 
@@ -79,23 +100,27 @@ class UploadController
 
             \Database::execute(
                 "INSERT INTO {$attachments}
-                (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`status`,`created_at`)
-                VALUES (?,NULL,NULL,?,?,?,?,?,1,?)",
+                (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`)
+                VALUES (?,NULL,NULL,?,?,?,?,?,?,1,?)",
                 [
                     $user['id'],
                     $originalName,
                     $result['path'],
-                    $result['file_url'],
+                    '',
                     $mime,
                     $size,
+                    $result['item_id'],
                     now(),
                 ]
             );
 
+            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . \Database::lastInsertId();
+
             \Response::success([
                 'id' => (int)\Database::lastInsertId(),
                 'type' => $type,
-                'url' => $result['file_url'],
+                'url' => $fileUrl,
                 'share_url' => $result['share_url'],
                 'name' => $result['name'],
                 'size' => $result['size'],
@@ -110,18 +135,49 @@ class UploadController
         }
     }
 
-    private static function detectMime($file)
+    private static function detectMime($file, $originalName)
     {
         if (function_exists('finfo_open')) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $file);
-            finfo_close($finfo);
+            $finfo = \finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $mime = \finfo_file($finfo, $file);
+                \finfo_close($finfo);
+                if ($mime && $mime !== 'application/octet-stream') {
+                    return $mime;
+                }
+            }
+        }
 
-            if ($mime) {
+        if (function_exists('mime_content_type')) {
+            $mime = \mime_content_type($file);
+            if ($mime && $mime !== 'application/octet-stream') {
                 return $mime;
             }
         }
 
-        return mime_content_type($file) ?: 'application/octet-stream';
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if ($ext === '') {
+            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        }
+        $map = [
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'mp3'  => 'audio/mpeg',
+            'm4a'  => 'audio/mp4',
+            'aac'  => 'audio/aac',
+            'wav'  => 'audio/wav',
+            'ogg'  => 'audio/ogg',
+            'flac' => 'audio/flac',
+            'mp4'  => 'video/mp4',
+            'webm' => 'video/webm',
+            'mov'  => 'video/quicktime',
+            'avi'  => 'video/x-msvideo',
+            'mkv'  => 'video/x-matroska',
+        ];
+
+        return $map[$ext] ?? 'application/octet-stream';
     }
 }
