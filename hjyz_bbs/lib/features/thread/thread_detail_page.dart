@@ -54,6 +54,16 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     return 0;
   }
 
+  List<String> _images(dynamic value) {
+    if (value is List) {
+      return value
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return [];
+  }
+
   Future<void> _load() async {
     setState(() {
       loading = thread == null;
@@ -448,8 +458,19 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
             child: RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
+                padding: EdgeInsets.fromLTRB(
+                  14,
+                  data['mode']?.toString() == 'image' &&
+                          _images(data['images']).isNotEmpty
+                      ? 0
+                      : 12,
+                  14,
+                  100,
+                ),
                 children: [
+                  if (data['mode']?.toString() == 'image' &&
+                      _images(data['images']).isNotEmpty)
+                    XhsImagePager(images: _images(data['images'])),
                   _ThreadMainCard(
                     thread: data,
                     canViewHidden: data['can_view_hidden'] == true,
@@ -521,25 +542,13 @@ class _ThreadMainCard extends StatelessWidget {
     return 0;
   }
 
-  List<String> _images(dynamic value) {
-    if (value is List) {
-      return value
-          .map((e) => e.toString())
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    return [];
-  }
-
   @override
   Widget build(BuildContext context) {
     final author = thread['author'];
     final authorMap = author is Map ? author : {};
 
-    final mode = thread['mode']?.toString() ?? 'article';
     final title = thread['title']?.toString() ?? '';
     final content = thread['content']?.toString() ?? '';
-    final images = _images(thread['images']);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -598,10 +607,6 @@ class _ThreadMainCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (mode == 'image' && images.isNotEmpty) ...[
-            XhsImagePager(images: images),
-            const SizedBox(height: 14),
-          ],
           ForumContentView(
             content: content,
             canViewHidden: canViewHidden,
