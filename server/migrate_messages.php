@@ -18,8 +18,30 @@ $pdo = new PDO($dsn, $config['username'], $config['password'], [
 $prefix = $config['prefix'];
 
 echo '<pre>';
-echo "=== 轻坛 消息系统迁移 ===\n\n";
+echo "=== 轻坛 v1.1.0 数据迁移 ===\n\n";
 
+// 辅助函数：检查列是否存在
+function column_exists($pdo, $table, $column)
+{
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM {$table} LIKE ?");
+    $stmt->execute([$column]);
+    return $stmt->fetch() ? true : false;
+}
+
+// === 1. posts 表：添加 parent_id 列（评论回复功能） ===
+$posts = "`{$prefix}posts`";
+if (!column_exists($pdo, $posts, 'parent_id')) {
+    try {
+        $pdo->exec("ALTER TABLE {$posts} ADD `parent_id` BIGINT UNSIGNED DEFAULT NULL AFTER `user_id`");
+        echo "[OK] posts 表添加 parent_id 列\n";
+    } catch (Throwable $e) {
+        echo "[失败] posts.parent_id: " . $e->getMessage() . "\n";
+    }
+} else {
+    echo "[跳过] posts.parent_id 已存在\n";
+}
+
+// === 2. 创建新表 ===
 $sqls = [];
 
 $sqls[] = "
