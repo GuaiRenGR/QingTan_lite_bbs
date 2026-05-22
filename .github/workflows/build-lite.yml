@@ -1,0 +1,157 @@
+name: Build Lite
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  PROJECT_DIR: hjyz_bbs
+  FLUTTER_CHANNEL: stable
+  JAVA_VERSION: "17"
+
+jobs:
+  android:
+    name: Android (per ABI)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: hjyz_bbs
+
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Configure Android signing
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build split ABI APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Collect Android artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/*.apk dist/android/ || true
+          ls -lah dist/android
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ env.PROJECT_DIR }}/dist/android/*
+          retention-days: 14
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: hjyz_bbs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $src = "build\windows\x64\runner\Release"
+
+          if (!(Test-Path $src)) {
+            $src = "build\windows\runner\Release"
+          }
+
+          if (!(Test-Path $src)) {
+            throw "Windows build output not found."
+          }
+
+          Compress-Archive -Path "$src\*" -DestinationPath "dist\windows-release.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ${{ env.PROJECT_DIR }}/dist/windows-release.zip
+          retention-days: 14
+
+  github-release:
+    name: Upload to GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - android
+      - windows
+
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Show files
+        run: find dist -type f -maxdepth 3 -print
+
+      - name: Upload files to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
