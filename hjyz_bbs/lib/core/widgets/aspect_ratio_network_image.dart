@@ -8,6 +8,9 @@ class AspectRatioNetworkImage extends StatefulWidget {
   final Widget? placeholder;
   final Widget? errorWidget;
 
+  /// true = 展示整张图不裁剪（图片模式），false = 裁剪填充（推荐页卡片）
+  final bool containMode;
+
   const AspectRatioNetworkImage({
     super.key,
     required this.url,
@@ -16,6 +19,7 @@ class AspectRatioNetworkImage extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.placeholder,
     this.errorWidget,
+    this.containMode = false,
   });
 
   @override
@@ -70,7 +74,9 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
         if (!mounted || width <= 0 || height <= 0) return;
 
         final rawRatio = width / height;
-        final displayRatio = rawRatio.clamp(minRatio, maxRatio).toDouble();
+        final displayRatio = widget.containMode
+            ? rawRatio
+            : rawRatio.clamp(minRatio, maxRatio).toDouble();
 
         setState(() {
           _aspectRatio = displayRatio;
@@ -139,29 +145,31 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
             : (widget.width ?? MediaQuery.of(context).size.width);
         final imageHeight = maxWidth / ratio;
 
+        final img = Image.network(
+          widget.url,
+          width: maxWidth,
+          height: imageHeight,
+          fit: widget.containMode ? BoxFit.contain : widget.fit,
+          alignment:
+              widget.containMode ? Alignment.center : Alignment.topCenter,
+          errorBuilder: (_, _, _) {
+            return widget.errorWidget ??
+                Container(
+                  color: Colors.grey.shade100,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.grey.shade400,
+                  ),
+                );
+          },
+        );
+
         return SizedBox(
           width: maxWidth,
           height: imageHeight,
-          child: ClipRect(
-            child: Image.network(
-              widget.url,
-              width: maxWidth,
-              height: imageHeight,
-              fit: widget.fit,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, _, _) {
-                return widget.errorWidget ??
-                    Container(
-                      color: Colors.grey.shade100,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.grey.shade400,
-                      ),
-                    );
-              },
-            ),
-          ),
+          child:
+              widget.containMode ? img : ClipRect(child: img),
         );
       },
     );

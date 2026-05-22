@@ -45,6 +45,7 @@ class _XhsImagePagerState extends State<XhsImagePager> {
               url: widget.images[i],
               width: double.infinity,
               borderRadius: BorderRadius.circular(14),
+              containMode: true,
             );
           },
         ),
