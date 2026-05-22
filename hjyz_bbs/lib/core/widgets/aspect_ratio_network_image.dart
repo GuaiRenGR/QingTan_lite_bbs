@@ -30,6 +30,9 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
   double? _rawRatio;
   bool _failed = false;
 
+  static const double _minRatio = 9 / 16;
+  static const double _maxRatio = 16 / 9;
+
   @override
   void initState() {
     super.initState();
@@ -128,56 +131,31 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
     if (_failed) return _buildError();
     if (_rawRatio == null) return _buildPlaceholder();
 
-    final ratio = _rawRatio!;
-    const double frameRatio = 9 / 16;
+    final rawRatio = _rawRatio!;
+    final ratio = rawRatio.clamp(_minRatio, _maxRatio).toDouble();
+    final isTall = rawRatio < _minRatio;
 
-    Widget image;
+    Widget image = LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : (widget.width ?? MediaQuery.of(context).size.width);
+        final maxHeight = maxWidth / ratio;
 
-    if (ratio < frameRatio) {
-      // 极高图：固定 9:16 框，contain 缩放不拉伸
-      image = LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : (widget.width ?? MediaQuery.of(context).size.width);
-          final maxHeight = maxWidth / frameRatio;
-
-          return SizedBox(
+        return SizedBox(
+          width: maxWidth,
+          height: maxHeight,
+          child: Image.network(
+            widget.url,
             width: maxWidth,
             height: maxHeight,
-            child: Image.network(
-              widget.url,
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-              errorBuilder: (_, _, _) => _buildError(),
-            ),
-          );
-        },
-      );
-    } else {
-      // 正常/横向图：宽度满屏，高度按图片比例
-      image = LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : (widget.width ?? MediaQuery.of(context).size.width);
-          final maxHeight = maxWidth / ratio;
-
-          return SizedBox(
-            width: maxWidth,
-            height: maxHeight,
-            child: Image.network(
-              widget.url,
-              width: maxWidth,
-              height: maxHeight,
-              fit: widget.fit,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, _, _) => _buildError(),
-            ),
-          );
-        },
-      );
-    }
+            fit: isTall ? BoxFit.contain : widget.fit,
+            alignment: isTall ? Alignment.center : Alignment.topCenter,
+            errorBuilder: (_, _, _) => _buildError(),
+          ),
+        );
+      },
+    );
 
     if (widget.borderRadius != null) {
       image = ClipRRect(
