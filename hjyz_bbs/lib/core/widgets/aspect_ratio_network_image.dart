@@ -27,11 +27,8 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
   ImageStream? _stream;
   ImageStreamListener? _listener;
 
-  double? _aspectRatio;
+  double? _rawRatio;
   bool _failed = false;
-
-  static const double minRatio = 9 / 16;
-  static const double maxRatio = 16 / 9;
 
   @override
   void initState() {
@@ -45,7 +42,7 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
 
     if (oldWidget.url != widget.url) {
       _removeListener();
-      _aspectRatio = null;
+      _rawRatio = null;
       _failed = false;
       _resolve();
     }
@@ -69,11 +66,8 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
 
         if (!mounted || width <= 0 || height <= 0) return;
 
-        final rawRatio = width / height;
-        final displayRatio = rawRatio.clamp(minRatio, maxRatio).toDouble();
-
         setState(() {
-          _aspectRatio = displayRatio;
+          _rawRatio = width / height;
         });
       },
       onError: (_, _) {
@@ -100,71 +94,90 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
     super.dispose();
   }
 
+  Widget _buildError() {
+    return widget.errorWidget ??
+        Container(
+          width: widget.width ?? double.infinity,
+          height: 120,
+          color: Colors.grey.shade100,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: Colors.grey.shade400,
+          ),
+        );
+  }
+
+  Widget _buildPlaceholder() {
+    return widget.placeholder ??
+        Container(
+          width: widget.width ?? double.infinity,
+          height: 160,
+          color: Colors.grey.shade100,
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_failed) {
-      return widget.errorWidget ??
-          Container(
-            width: widget.width ?? double.infinity,
-            height: 120,
-            color: Colors.grey.shade100,
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: Colors.grey.shade400,
+    if (_failed) return _buildError();
+    if (_rawRatio == null) return _buildPlaceholder();
+
+    final ratio = _rawRatio!;
+    const double frameRatio = 9 / 16;
+
+    Widget image;
+
+    if (ratio < frameRatio) {
+      // 极高图：固定 9:16 框，contain 缩放不拉伸
+      image = LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : (widget.width ?? MediaQuery.of(context).size.width);
+          final maxHeight = maxWidth / frameRatio;
+
+          return SizedBox(
+            width: maxWidth,
+            height: maxHeight,
+            child: Image.network(
+              widget.url,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              errorBuilder: (_, _, _) => _buildError(),
             ),
           );
-    }
+        },
+      );
+    } else {
+      // 正常/横向图：宽度满屏，高度按图片比例
+      image = LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : (widget.width ?? MediaQuery.of(context).size.width);
+          final maxHeight = maxWidth / ratio;
 
-    if (_aspectRatio == null) {
-      return widget.placeholder ??
-          Container(
-            width: widget.width ?? double.infinity,
-            height: 160,
-            color: Colors.grey.shade100,
-            alignment: Alignment.center,
-            child: const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
-    }
-
-    Widget image = LayoutBuilder(
-      builder: (context, constraints) {
-        final ratio = _aspectRatio!;
-        final maxWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : (widget.width ?? MediaQuery.of(context).size.width);
-        final imageHeight = maxWidth / ratio;
-
-        return SizedBox(
-          width: maxWidth,
-          height: imageHeight,
-          child: ClipRect(
+          return SizedBox(
+            width: maxWidth,
+            height: maxHeight,
             child: Image.network(
               widget.url,
               width: maxWidth,
-              height: imageHeight,
+              height: maxHeight,
               fit: widget.fit,
               alignment: Alignment.topCenter,
-              errorBuilder: (_, _, _) {
-                return widget.errorWidget ??
-                    Container(
-                      color: Colors.grey.shade100,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.grey.shade400,
-                      ),
-                    );
-              },
+              errorBuilder: (_, _, _) => _buildError(),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    }
 
     if (widget.borderRadius != null) {
       image = ClipRRect(
