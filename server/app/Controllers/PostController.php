@@ -131,6 +131,7 @@ class PostController
             );
 
             $threadTitle = $thread['title'] ?? '帖子';
+            $nickname = $user['nickname'] ?: ($user['username'] ?? '用户');
 
             // 通知帖子作者（如果评论者不是帖子作者）
             if ((int)$user['id'] !== (int)$thread['user_id']) {
@@ -138,7 +139,7 @@ class PostController
                     (int)$thread['user_id'],
                     'reply',
                     '回复了我的帖子',
-                    ($user['nickname'] ?? '用户') . ' 回复了「' . $threadTitle . '」',
+                    $nickname . ' 回复了「' . $threadTitle . '」',
                     [
                         'thread_id' => $threadId,
                         'post_id' => $postId,
@@ -149,12 +150,11 @@ class PostController
 
             // 通知被回复的评论作者（如果回复了某条评论，且评论者不是该评论作者）
             if ($parentPost && (int)$user['id'] !== (int)$parentPost['user_id']) {
-                $parentNickname = $parentPost['nickname'] ?? '用户';
                 \App\Controllers\NotificationController::create(
                     (int)$parentPost['user_id'],
                     'reply',
                     '回复了我的评论',
-                    ($user['nickname'] ?? '用户') . ' 在「' . $threadTitle . '」中回复了你的评论',
+                    $nickname . ' 在「' . $threadTitle . '」中回复了你的评论',
                     [
                         'thread_id' => $threadId,
                         'post_id' => $postId,

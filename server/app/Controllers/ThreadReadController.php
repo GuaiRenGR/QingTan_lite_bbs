@@ -124,7 +124,7 @@ class ThreadReadController
                  WHERE user_id = ? AND object_type = 'post' AND object_id IN ({$placeholders})",
                 array_merge([$viewerId], $postIds)
             );
-            $likedPostIds = array_column($likedRows, 'object_id');
+            $likedPostIds = array_map('intval', array_column($likedRows, 'object_id'));
         }
 
         $images = [];

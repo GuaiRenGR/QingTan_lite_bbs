@@ -152,11 +152,6 @@ class _NotificationListPageState extends State<NotificationListPage> {
     Map<String, dynamic> extra = {};
     if (data is Map) {
       extra = Map<String, dynamic>.from(data);
-    } else if (data is String) {
-      try {
-        final decoded = Uri.decodeComponent(data);
-        // data is JSON string
-      } catch (_) {}
     }
 
     final threadId = _toInt(extra['thread_id']);
