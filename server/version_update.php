@@ -21,7 +21,7 @@ echo '<pre>';
 echo "=== ForumX Lite 版本更新 ===\n\n";
 
 $version = '1.0.4';
-$buildNumber = 4;
+$buildNumber = 2004;
 
 try {
     $stmt = $pdo->prepare(
