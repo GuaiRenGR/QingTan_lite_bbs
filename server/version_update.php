@@ -20,8 +20,8 @@ $prefix = $config['prefix'];
 echo '<pre>';
 echo "=== ForumX Lite 版本更新 ===\n\n";
 
-$version = '1.0.3';
-$buildNumber = 3;
+$version = '1.0.4';
+$buildNumber = 4;
 
 try {
     $stmt = $pdo->prepare(
@@ -35,7 +35,7 @@ try {
         $version,
         $buildNumber,
         '发现新版本 v' . $version,
-        '1. 支持视频上传（最大200MB）\n2. 音乐改为标签模式\n3. 上传超时时间延长',
+        '1. 新增头像上传功能\n2. 修正编辑资料入口\n3. 修复图片模式帖子无限长\n4. 添加网络权限修复无法联网\n5. 过滤帖子摘要中的编辑器标签',
         '',
         0,
         1,

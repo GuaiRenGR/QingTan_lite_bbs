@@ -64,7 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showAboutDialog(
       context: context,
       applicationName: 'ForumX Lite',
-      applicationVersion: '1.0.0',
+      applicationVersion: appVersion.isNotEmpty ? appVersion : '1.0.4',
       applicationIcon: const FlutterLogo(size: 42),
       children: [
         Text(content),
@@ -180,7 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   _showInfo(
                     '关于软件',
-                    'ForumX Lite App 1.0.0\n基于 Flutter 开发。',
+                    'ForumX Lite App ${appVersion.isNotEmpty ? appVersion : '1.0.4'}\n基于 Flutter 开发。',
                   );
                 },
               ),
