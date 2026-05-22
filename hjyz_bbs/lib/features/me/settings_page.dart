@@ -63,7 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showInfo(String title, String content) {
     showAboutDialog(
       context: context,
-      applicationName: 'ForumX Lite',
+      applicationName: '轻坛',
       applicationVersion: appVersion.isNotEmpty ? appVersion : '1.0.4',
       applicationIcon: const FlutterLogo(size: 42),
       children: [
@@ -169,7 +169,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   _showInfo(
                     '关于我们',
-                    'ForumX Lite 是一套适配虚拟主机的轻量社区系统。',
+                    '轻坛 是一套适配虚拟主机的轻量社区系统。',
                   );
                 },
               ),
@@ -180,7 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   _showInfo(
                     '关于软件',
-                    'ForumX Lite App ${appVersion.isNotEmpty ? appVersion : '1.0.4'}\n基于 Flutter 开发。',
+                    '轻坛 App ${appVersion.isNotEmpty ? appVersion : '1.0.4'}\n基于 Flutter 开发。',
                   );
                 },
               ),
