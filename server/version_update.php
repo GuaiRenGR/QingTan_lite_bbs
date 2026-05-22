@@ -18,10 +18,10 @@ $pdo = new PDO($dsn, $config['username'], $config['password'], [
 $prefix = $config['prefix'];
 
 echo '<pre>';
-echo "=== ForumX Lite 版本更新 ===\n\n";
+echo "=== 轻坛 版本更新 ===\n\n";
 
-$version = '1.0.4';
-$buildNumber = 2004;
+$version = '1.1.0';
+$buildNumber = 2005;
 
 try {
     $stmt = $pdo->prepare(
@@ -35,7 +35,7 @@ try {
         $version,
         $buildNumber,
         '发现新版本 v' . $version,
-        '1. 新增头像上传功能\n2. 修正编辑资料入口\n3. 修复图片模式帖子无限长\n4. 添加网络权限修复无法联网\n5. 过滤帖子摘要中的编辑器标签',
+        "1. 新增消息通知系统（回复、@我、点赞、系统通知）\n2. 新增用户私信功能\n3. 新增评论点赞和回复评论\n4. 支持 Android/Windows 原生系统通知\n5. 通知免打扰设置\n6. 个人主页添加私信按钮",
         '',
         0,
         1,
