@@ -131,27 +131,39 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
           );
     }
 
-    Widget image = AspectRatio(
-      aspectRatio: _aspectRatio!,
-      child: ClipRect(
-        child: Image.network(
-          widget.url,
-          width: widget.width ?? double.infinity,
-          fit: widget.fit,
-          alignment: Alignment.topCenter,
-          errorBuilder: (_, _, _) {
-            return widget.errorWidget ??
-                Container(
-                  color: Colors.grey.shade100,
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: Colors.grey.shade400,
-                  ),
-                );
-          },
-        ),
-      ),
+    Widget image = LayoutBuilder(
+      builder: (context, constraints) {
+        final ratio = _aspectRatio!;
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : (widget.width ?? MediaQuery.of(context).size.width);
+        final imageHeight = maxWidth / ratio;
+
+        return SizedBox(
+          width: maxWidth,
+          height: imageHeight,
+          child: ClipRect(
+            child: Image.network(
+              widget.url,
+              width: maxWidth,
+              height: imageHeight,
+              fit: widget.fit,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) {
+                return widget.errorWidget ??
+                    Container(
+                      color: Colors.grey.shade100,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.grey.shade400,
+                      ),
+                    );
+              },
+            ),
+          ),
+        );
+      },
     );
 
     if (widget.borderRadius != null) {
