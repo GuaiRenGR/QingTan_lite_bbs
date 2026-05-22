@@ -140,6 +140,14 @@ try {
             App\Controllers\PostController::create();
             break;
 
+        case 'posts/like':
+            App\Controllers\PostController::like();
+            break;
+
+        case 'posts/unlike':
+            App\Controllers\PostController::unlike();
+            break;
+
         case 'app/version/check':
             App\Controllers\AppVersionController::check();
             break;

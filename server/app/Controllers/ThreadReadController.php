@@ -114,6 +114,19 @@ class ThreadReadController
             [$threadId]
         );
 
+        // 获取当前用户已点赞的评论 ID
+        $likedPostIds = [];
+        if ($viewerId > 0 && !empty($commentRows)) {
+            $postIds = array_column($commentRows, 'id');
+            $placeholders = implode(',', array_fill(0, count($postIds), '?'));
+            $likedRows = \Database::fetchAll(
+                "SELECT object_id FROM {$likes}
+                 WHERE user_id = ? AND object_type = 'post' AND object_id IN ({$placeholders})",
+                array_merge([$viewerId], $postIds)
+            );
+            $likedPostIds = array_column($likedRows, 'object_id');
+        }
+
         $images = [];
 
         if (!empty($thread['images_json'])) {
@@ -159,13 +172,16 @@ class ThreadReadController
                     'avatar' => $thread['author_avatar'] ?: '',
                 ],
             ],
-            'posts' => array_map(function ($row) {
+            'posts' => array_map(function ($row) use ($likedPostIds) {
                 return [
                     'id' => (int)$row['id'],
                     'thread_id' => (int)$row['thread_id'],
                     'user_id' => (int)$row['user_id'],
+                    'parent_id' => $row['parent_id'] ? (int)$row['parent_id'] : null,
                     'content' => $row['content'],
                     'floor' => (int)$row['floor'],
+                    'like_count' => (int)($row['like_count'] ?? 0),
+                    'is_liked' => in_array((int)$row['id'], $likedPostIds),
                     'created_at' => $row['created_at'],
                     'author' => [
                         'id' => (int)$row['user_id'],

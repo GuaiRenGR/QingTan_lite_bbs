@@ -30,6 +30,9 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
   List<Map<String, dynamic>> posts = [];
 
   final commentController = TextEditingController();
+  final commentFocus = FocusNode();
+
+  Map<String, dynamic>? _replyTo; // 正在回复的评论
 
   @override
   void initState() {
@@ -40,6 +43,7 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
   @override
   void dispose() {
     commentController.dispose();
+    commentFocus.dispose();
     super.dispose();
   }
 
@@ -182,6 +186,58 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     }
   }
 
+  Future<void> _togglePostLike(Map<String, dynamic> post) async {
+    final postId = _toInt(post['id']);
+    if (postId <= 0) return;
+
+    final isLiked = post['is_liked'] == true;
+
+    final result = await ApiClient.instance.post(
+      isLiked ? 'posts/unlike' : 'posts/like',
+      data: {
+        'post_id': postId,
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result.success && result.data is Map) {
+      final res = result.data as Map<String, dynamic>;
+      setState(() {
+        final idx = posts.indexWhere((p) => _toInt(p['id']) == postId);
+        if (idx >= 0) {
+          posts[idx]['is_liked'] = res['is_liked'] == true;
+          posts[idx]['like_count'] = _toInt(res['like_count']);
+        }
+      });
+    } else {
+      _toast(result.message);
+    }
+  }
+
+  void _startReply(Map<String, dynamic> post) {
+    final author = post['author'];
+    final nickname =
+        (author is Map ? author['nickname']?.toString() : null) ?? '用户';
+
+    setState(() {
+      _replyTo = post;
+    });
+
+    commentController.text = '回复@$nickname：';
+    commentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: commentController.text.length),
+    );
+    commentFocus.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyTo = null;
+    });
+    commentController.clear();
+  }
+
   Future<void> _sendComment() async {
     final content = commentController.text.trim();
 
@@ -190,11 +246,14 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
       return;
     }
 
+    final parentId = _replyTo != null ? _toInt(_replyTo!['id']) : 0;
+
     final result = await ApiClient.instance.post(
       'posts/create',
       data: {
         'thread_id': widget.threadId,
         'content': content,
+        if (parentId > 0) 'parent_id': parentId,
       },
     );
 
@@ -202,6 +261,9 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
 
     if (result.success) {
       commentController.clear();
+      setState(() {
+        _replyTo = null;
+      });
       await _load();
     } else {
       _toast(result.message);
@@ -418,6 +480,8 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                           }
                         }
                       },
+                      onLike: () => _togglePostLike(post),
+                      onReply: () => _startReply(post),
                     ),
                 ],
               ),
@@ -425,7 +489,10 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
           ),
           _BottomActionBar(
             controller: commentController,
+            focusNode: commentFocus,
             thread: data,
+            replyTo: _replyTo,
+            onCancelReply: _cancelReply,
             onLike: _toggleLike,
             onFavorite: _toggleFavorite,
             onShare: _shareThread,
@@ -576,16 +643,28 @@ class _CommentHeader extends StatelessWidget {
 class _CommentItem extends StatelessWidget {
   final Map<String, dynamic> post;
   final VoidCallback onUserTap;
+  final VoidCallback onLike;
+  final VoidCallback onReply;
 
   const _CommentItem({
     required this.post,
     required this.onUserTap,
+    required this.onLike,
+    required this.onReply,
   });
+
+  int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
     final author = post['author'];
     final authorMap = author is Map ? author : {};
+    final isLiked = post['is_liked'] == true;
+    final likeCount = _toInt(post['like_count']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -634,12 +713,84 @@ class _CommentItem extends StatelessWidget {
                   content: post['content']?.toString() ?? '',
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${post['floor'] ?? 1}楼 · ${post['created_at'] ?? ''}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 11,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      '${post['floor'] ?? 1}楼 · ${post['created_at'] ?? ''}',
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const Spacer(),
+                    // 回复按钮
+                    GestureDetector(
+                      onTap: onReply,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '回复',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 点赞按钮
+                    GestureDetector(
+                      onTap: onLike,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isLiked
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 14,
+                              color: isLiked
+                                  ? const Color(0xFFFB7299)
+                                  : Colors.grey.shade500,
+                            ),
+                            if (likeCount > 0) ...[
+                              const SizedBox(width: 3),
+                              Text(
+                                '$likeCount',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isLiked
+                                      ? const Color(0xFFFB7299)
+                                      : Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -652,7 +803,10 @@ class _CommentItem extends StatelessWidget {
 
 class _BottomActionBar extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
   final Map<String, dynamic> thread;
+  final Map<String, dynamic>? replyTo;
+  final VoidCallback? onCancelReply;
   final VoidCallback onLike;
   final VoidCallback onFavorite;
   final VoidCallback onShare;
@@ -660,7 +814,10 @@ class _BottomActionBar extends StatelessWidget {
 
   const _BottomActionBar({
     required this.controller,
+    required this.focusNode,
     required this.thread,
+    this.replyTo,
+    this.onCancelReply,
     required this.onLike,
     required this.onFavorite,
     required this.onShare,
@@ -677,72 +834,108 @@ class _BottomActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final liked = thread['is_liked'] == true;
     final favorited = thread['is_favorited'] == true;
+    final hasReply = replyTo != null;
 
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: '说点什么...',
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 回复指示条
+          if (hasReply)
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+              color: Colors.grey.shade100,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '回复 @${replyTo!['author']?['nickname'] ?? '用户'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
+                  GestureDetector(
+                    onTap: onCancelReply,
+                    child: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-            IconButton(
-              onPressed: onSend,
-              icon: const Icon(Icons.send_rounded),
-              color: const Color(0xFFFB7299),
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
             ),
-            _ActionIcon(
-              icon: liked
-                  ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
-              color: liked ? const Color(0xFFFB7299) : Colors.grey.shade700,
-              text: '${_toInt(thread['like_count'])}',
-              onTap: onLike,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: hasReply ? '回复评论...' : '说点什么...',
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: onSend,
+                  icon: const Icon(Icons.send_rounded),
+                  color: const Color(0xFFFB7299),
+                ),
+                _ActionIcon(
+                  icon: liked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: liked ? const Color(0xFFFB7299) : Colors.grey.shade700,
+                  text: '${_toInt(thread['like_count'])}',
+                  onTap: onLike,
+                ),
+                _ActionIcon(
+                  icon: favorited
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
+                  color: favorited ? Colors.orange : Colors.grey.shade700,
+                  text: '${_toInt(thread['favorite_count'])}',
+                  onTap: onFavorite,
+                ),
+                _ActionIcon(
+                  icon: Icons.ios_share_rounded,
+                  color: Colors.grey.shade700,
+                  text: '${_toInt(thread['share_count'])}',
+                  onTap: onShare,
+                ),
+              ],
             ),
-            _ActionIcon(
-              icon: favorited
-                  ? Icons.star_rounded
-                  : Icons.star_border_rounded,
-              color: favorited ? Colors.orange : Colors.grey.shade700,
-              text: '${_toInt(thread['favorite_count'])}',
-              onTap: onFavorite,
-            ),
-            _ActionIcon(
-              icon: Icons.ios_share_rounded,
-              color: Colors.grey.shade700,
-              text: '${_toInt(thread['share_count'])}',
-              onTap: onShare,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -42,6 +42,7 @@ class PostController
         $user = \Auth::requireLogin();
 
         $threadId = \Request::int('thread_id');
+        $parentId = \Request::int('parent_id');
         $content = \Request::input('content', '');
 
         if ($threadId <= 0) {
@@ -62,12 +63,25 @@ class PostController
         $posts = \Database::table('posts');
 
         $thread = \Database::fetch(
-            "SELECT id, user_id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, user_id, title FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
         if (!$thread) {
             \Response::json(404, '帖子不存在');
+        }
+
+        // 如果是回复某条评论，验证父评论存在
+        $parentPost = null;
+        if ($parentId > 0) {
+            $parentPost = \Database::fetch(
+                "SELECT p.id, p.user_id, u.nickname
+                 FROM {$posts} p
+                 LEFT JOIN " . \Database::table('users') . " u ON u.id = p.user_id
+                 WHERE p.id = ? AND p.thread_id = ? AND p.status = 1
+                 LIMIT 1",
+                [$parentId, $threadId]
+            );
         }
 
         \Database::begin();
@@ -82,11 +96,12 @@ class PostController
 
             \Database::execute(
                 "INSERT INTO {$posts}
-                (`thread_id`, `user_id`, `content`, `floor`, `like_count`, `status`, `created_at`, `updated_at`)
-                VALUES (?, ?, ?, ?, 0, 1, ?, ?)",
+                (`thread_id`, `user_id`, `parent_id`, `content`, `floor`, `like_count`, `status`, `created_at`, `updated_at`)
+                VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)",
                 [
                     $threadId,
                     $user['id'],
+                    $parentId > 0 ? $parentId : null,
                     $content,
                     $floor,
                     now(),
@@ -115,20 +130,31 @@ class PostController
                 1
             );
 
-            // 创建回复通知
-            if ((int)$user['id'] !== (int)$thread['user_id']) {
-                $threads2 = \Database::table('threads');
-                $threadInfo = \Database::fetch(
-                    "SELECT title FROM {$threads2} WHERE id = ? LIMIT 1",
-                    [$threadId]
-                );
-                $threadTitle = $threadInfo['title'] ?? '帖子';
+            $threadTitle = $thread['title'] ?? '帖子';
 
+            // 通知帖子作者（如果评论者不是帖子作者）
+            if ((int)$user['id'] !== (int)$thread['user_id']) {
                 \App\Controllers\NotificationController::create(
                     (int)$thread['user_id'],
                     'reply',
                     '回复了我的帖子',
-                    $user['nickname'] ?? '用户' . ' 回复了「' . $threadTitle . '」',
+                    ($user['nickname'] ?? '用户') . ' 回复了「' . $threadTitle . '」',
+                    [
+                        'thread_id' => $threadId,
+                        'post_id' => $postId,
+                        'from_user_id' => (int)$user['id'],
+                    ]
+                );
+            }
+
+            // 通知被回复的评论作者（如果回复了某条评论，且评论者不是该评论作者）
+            if ($parentPost && (int)$user['id'] !== (int)$parentPost['user_id']) {
+                $parentNickname = $parentPost['nickname'] ?? '用户';
+                \App\Controllers\NotificationController::create(
+                    (int)$parentPost['user_id'],
+                    'reply',
+                    '回复了我的评论',
+                    ($user['nickname'] ?? '用户') . ' 在「' . $threadTitle . '」中回复了你的评论',
                     [
                         'thread_id' => $threadId,
                         'post_id' => $postId,
@@ -158,6 +184,115 @@ class PostController
             log_error($e->getMessage());
 
             \Response::json(500, '评论失败');
+        }
+    }
+
+    public static function like()
+    {
+        self::togglePostLike(true);
+    }
+
+    public static function unlike()
+    {
+        self::togglePostLike(false);
+    }
+
+    private static function togglePostLike($like)
+    {
+        $user = \Auth::requireLogin();
+        $postId = \Request::int('post_id');
+
+        if ($postId <= 0) {
+            \Response::json(422, '评论 ID 错误');
+        }
+
+        $posts = \Database::table('posts');
+        $likes = \Database::table('likes');
+
+        $post = \Database::fetch(
+            "SELECT id, user_id, thread_id FROM {$posts} WHERE id = ? AND status = 1 LIMIT 1",
+            [$postId]
+        );
+
+        if (!$post) {
+            \Response::json(404, '评论不存在');
+        }
+
+        \Database::begin();
+
+        try {
+            $exists = \Database::fetch(
+                "SELECT id FROM {$likes}
+                 WHERE user_id = ? AND object_type = 'post' AND object_id = ?
+                 LIMIT 1",
+                [$user['id'], $postId]
+            );
+
+            if ($like) {
+                if (!$exists) {
+                    \Database::execute(
+                        "INSERT INTO {$likes}
+                        (`user_id`, `object_type`, `object_id`, `created_at`)
+                         VALUES (?, 'post', ?, ?)",
+                        [$user['id'], $postId, now()]
+                    );
+
+                    \Database::execute(
+                        "UPDATE {$posts} SET like_count = like_count + 1 WHERE id = ?",
+                        [$postId]
+                    );
+
+                    // 通知评论作者
+                    if ((int)$user['id'] !== (int)$post['user_id']) {
+                        \App\Controllers\NotificationController::create(
+                            (int)$post['user_id'],
+                            'like',
+                            '赞了我的评论',
+                            ($user['nickname'] ?? '用户') . ' 赞了你的评论',
+                            [
+                                'thread_id' => (int)$post['thread_id'],
+                                'post_id' => $postId,
+                                'from_user_id' => (int)$user['id'],
+                            ]
+                        );
+                    }
+                }
+
+                $message = '点赞成功';
+            } else {
+                if ($exists) {
+                    \Database::execute(
+                        "DELETE FROM {$likes}
+                         WHERE user_id = ? AND object_type = 'post' AND object_id = ?",
+                        [$user['id'], $postId]
+                    );
+
+                    \Database::execute(
+                        "UPDATE {$posts} SET like_count = GREATEST(like_count - 1, 0) WHERE id = ?",
+                        [$postId]
+                    );
+                }
+
+                $message = '已取消点赞';
+            }
+
+            $countRow = \Database::fetch(
+                "SELECT like_count FROM {$posts} WHERE id = ? LIMIT 1",
+                [$postId]
+            );
+
+            \Database::commit();
+
+            \Response::success([
+                'is_liked' => $like,
+                'like_count' => (int)($countRow['like_count'] ?? 0),
+            ], $message);
+
+        } catch (\Throwable $e) {
+            \Database::rollback();
+            log_error($e->getMessage());
+
+            \Response::json(500, $like ? '点赞失败' : '取消点赞失败');
         }
     }
 }
