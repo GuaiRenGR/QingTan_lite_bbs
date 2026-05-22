@@ -208,6 +208,10 @@ try {
             App\Controllers\ThreadManageController::report();
             break;
 
+        case 'threads/toggle-digest':
+            App\Controllers\ThreadManageController::toggleDigest();
+            break;
+
         case 'profile/get':
             App\Controllers\ProfileController::get();
             break;

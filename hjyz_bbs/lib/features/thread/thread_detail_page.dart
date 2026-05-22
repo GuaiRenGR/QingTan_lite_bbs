@@ -377,6 +377,27 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     );
   }
 
+  Future<void> _toggleDigest() async {
+    final result = await ApiClient.instance.post(
+      'threads/toggle-digest',
+      data: {
+        'thread_id': widget.threadId,
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result.success && result.data is Map) {
+      final res = result.data as Map<String, dynamic>;
+      setState(() {
+        thread!['is_digest'] = res['is_digest'];
+      });
+      _toast(result.message);
+    } else {
+      _toast(result.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -427,21 +448,32 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                 _deleteThread();
               } else if (value == 'report') {
                 _reportThread();
+              } else if (value == 'digest') {
+                _toggleDigest();
               }
             },
             itemBuilder: (context) {
               final isOwner = data['is_owner'] == true;
+              final isAdmin = data['is_admin'] == true;
+              final canEdit = isOwner || isAdmin;
 
               return [
-                if (isOwner)
+                if (canEdit)
                   const PopupMenuItem(
                     value: 'edit',
                     child: Text('编辑'),
                   ),
-                if (isOwner)
+                if (canEdit)
                   const PopupMenuItem(
                     value: 'delete',
                     child: Text('删除'),
+                  ),
+                if (isAdmin)
+                  PopupMenuItem(
+                    value: 'digest',
+                    child: Text(
+                      data['is_digest'] == 1 ? '取消精华' : '设为精华',
+                    ),
                   ),
                 const PopupMenuItem(
                   value: 'report',

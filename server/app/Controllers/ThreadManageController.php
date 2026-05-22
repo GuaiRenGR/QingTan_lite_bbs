@@ -55,7 +55,9 @@ class ThreadManageController
             \Response::json(404, '帖子不存在');
         }
 
-        if ((int)$thread['user_id'] !== (int)$user['id']) {
+        $isAdmin = (int)($user['group_id'] ?? 0) === 99;
+
+        if (!$isAdmin && (int)$thread['user_id'] !== (int)$user['id']) {
             \Response::json(403, '无权编辑该帖子');
         }
 
@@ -135,7 +137,9 @@ class ThreadManageController
             \Response::json(404, '帖子不存在');
         }
 
-        if ((int)$thread['user_id'] !== (int)$user['id']) {
+        $isAdmin = (int)($user['group_id'] ?? 0) === 99;
+
+        if (!$isAdmin && (int)$thread['user_id'] !== (int)$user['id']) {
             \Response::json(403, '无权删除该帖子');
         }
 
@@ -213,6 +217,43 @@ class ThreadManageController
         } catch (\Throwable $e) {
             log_error('清理帖子附件失败 [thread=' . $threadId . ']: ' . $e->getMessage());
         }
+    }
+
+    public static function toggleDigest()
+    {
+        $user = \Auth::requireLogin();
+
+        if ((int)($user['group_id'] ?? 0) !== 99) {
+            \Response::json(403, '无权操作');
+        }
+
+        $threadId = \Request::int('thread_id');
+
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+
+        $thread = \Database::fetch(
+            "SELECT id, is_digest FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        $newVal = (int)$thread['is_digest'] === 1 ? 0 : 1;
+
+        \Database::execute(
+            "UPDATE {$threads} SET is_digest = ? WHERE id = ?",
+            [$newVal, $threadId]
+        );
+
+        \Response::success([
+            'is_digest' => $newVal,
+        ], $newVal ? '已设为精华' : '已取消精华');
     }
 
     public static function report()

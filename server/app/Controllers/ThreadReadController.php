@@ -162,6 +162,7 @@ class ThreadReadController
                 'is_liked' => $isLiked,
                 'is_favorited' => $isFavorited,
                 'is_owner' => $viewerId > 0 && $viewerId === (int)$thread['user_id'],
+                'is_admin' => $viewerId > 0 && (int)($viewer['group_id'] ?? 0) === 99,
                 'can_view_hidden' => $canViewHidden,
                 'tags' => get_thread_tags($thread['id']),
                 'created_at' => $thread['created_at'],
