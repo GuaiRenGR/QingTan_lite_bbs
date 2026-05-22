@@ -55,6 +55,7 @@ class ProfileController
     {
         $user = \Auth::requireLogin();
 
+        $avatar = trim(\Request::input('avatar', ''));
         $nickname = trim(\Request::input('nickname', ''));
         $bio = trim(\Request::input('bio', ''));
         $gender = trim(\Request::input('gender', ''));
@@ -92,7 +93,8 @@ class ProfileController
 
         \Database::execute(
             "UPDATE {$users}
-             SET nickname = ?,
+             SET avatar = ?,
+                 nickname = ?,
                  bio = ?,
                  gender = ?,
                  birthday = ?,
@@ -102,6 +104,7 @@ class ProfileController
                  profile_visibility_json = ?
              WHERE id = ?",
             [
+                $avatar,
                 $nickname,
                 $bio,
                 $gender,

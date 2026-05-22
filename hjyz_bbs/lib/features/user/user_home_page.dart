@@ -98,9 +98,13 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
     final isSelf = data['is_self'] == true;
 
     if (isSelf) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('编辑资料功能开发中')),
-      );
+      final updated = await context.push<bool>('/profile/edit');
+      if (updated == true) {
+        await _loadProfile();
+        if (mounted) {
+          ref.read(authControllerProvider.notifier).init();
+        }
+      }
       return;
     }
 

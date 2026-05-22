@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/widgets/loading_view.dart';
+import '../../core/widgets/safe_network_image.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -13,6 +17,10 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   bool loading = true;
   bool saving = false;
+  bool uploadingAvatar = false;
+
+  String avatarUrl = '';
+  File? avatarFile;
 
   final nicknameController = TextEditingController();
   final bioController = TextEditingController();
@@ -56,6 +64,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (result.success && result.data is Map<String, dynamic>) {
       final data = result.data as Map<String, dynamic>;
 
+      avatarUrl = data['avatar']?.toString() ?? '';
       nicknameController.text = data['nickname']?.toString() ?? '';
       bioController.text = data['bio']?.toString() ?? '';
       genderController.text = data['gender']?.toString() ?? '';
@@ -82,6 +91,55 @@ class _EditProfilePageState extends State<EditProfilePage> {
     });
   }
 
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      avatarFile = File(picked.path);
+    });
+
+    await _uploadAvatar();
+  }
+
+  Future<void> _uploadAvatar() async {
+    if (avatarFile == null) return;
+
+    setState(() {
+      uploadingAvatar = true;
+    });
+
+    final result = await ApiClient.instance.uploadFile(
+      'upload/media',
+      file: avatarFile!,
+      fields: {'type': 'image'},
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      uploadingAvatar = false;
+    });
+
+    if (result.success && result.data is Map<String, dynamic>) {
+      final data = result.data as Map<String, dynamic>;
+      setState(() {
+        avatarUrl = data['url']?.toString() ?? '';
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('头像上传失败：${result.message}')),
+      );
+    }
+  }
+
   Future<void> _save() async {
     setState(() {
       saving = true;
@@ -90,6 +148,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final result = await ApiClient.instance.post(
       'profile/update',
       data: {
+        'avatar': avatarUrl,
         'nickname': nicknameController.text.trim(),
         'bio': bioController.text.trim(),
         'gender': genderController.text.trim(),
@@ -114,6 +173,74 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (result.success) {
       Navigator.of(context).pop(true);
     }
+  }
+
+  Widget _buildAvatarSection() {
+    return Center(
+      child: GestureDetector(
+        onTap: uploadingAvatar ? null : _pickAvatar,
+        child: Stack(
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey.shade200,
+                  width: 2,
+                ),
+              ),
+              child: ClipOval(
+                child: avatarFile != null
+                    ? Image.file(
+                        avatarFile!,
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                      )
+                    : SafeNetworkImage(
+                        url: avatarUrl,
+                        width: 96,
+                        height: 96,
+                        errorWidget: CircleAvatar(
+                          radius: 48,
+                          backgroundColor: Colors.pink.shade50,
+                          child: const Icon(Icons.person, size: 40),
+                        ),
+                      ),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFB7299),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: uploadingAvatar
+                    ? const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.camera_alt,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _field(
@@ -174,6 +301,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildAvatarSection(),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              '点击更换头像',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
           _field('昵称', nicknameController),
           _field('简介', bioController, maxLines: 3),
           _field('性别', genderController),

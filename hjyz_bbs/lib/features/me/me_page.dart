@@ -157,13 +157,6 @@ class MePage extends ConsumerWidget {
             },
           ),
           _MenuItem(
-            icon: Icons.edit_outlined,
-            text: '编辑资料',
-            onTap: () {
-              context.push('/profile/edit');
-            },
-          ),
-          _MenuItem(
             icon: Icons.dashboard_customize_outlined,
             text: '创作中心',
             onTap: () {
