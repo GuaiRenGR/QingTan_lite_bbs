@@ -103,7 +103,7 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         fontFamily: null,
         textTheme: ThemeData.light().textTheme.apply(
-              fontFamilyFallback: fontFallback,
+              fontFamilyFallback: ForumXApp.fontFallback,
             ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
@@ -118,7 +118,7 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
         brightness: Brightness.dark,
         fontFamily: null,
         textTheme: ThemeData.dark().textTheme.apply(
-              fontFamilyFallback: fontFallback,
+              fontFamilyFallback: ForumXApp.fontFallback,
             ),
       ),
     );

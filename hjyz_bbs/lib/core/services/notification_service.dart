@@ -31,16 +31,8 @@ class NotificationService {
     // Android 初始化
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // Windows 初始化
-    const windowsSettings = WindowsInitializationSettings(
-      appName: '轻坛',
-      appUserModelId: 'com.qingtan.hjyzbbs',
-      guid: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    );
-
     final settings = InitializationSettings(
       android: androidSettings,
-      windows: windowsSettings,
     );
 
     await _plugin.initialize(
@@ -216,11 +208,8 @@ class NotificationService {
       styleInformation: BigTextStyleInformation(body),
     );
 
-    const windowsDetails = WindowsNotificationDetails();
-
     final details = NotificationDetails(
       android: androidDetails,
-      windows: windowsDetails,
     );
 
     await _plugin.show(id, title, body, details, payload: payload);
