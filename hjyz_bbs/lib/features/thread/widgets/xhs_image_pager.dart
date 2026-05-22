@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/aspect_ratio_network_image.dart';
+import '../../../core/widgets/image_viewer.dart';
 
 class XhsImagePager extends StatefulWidget {
   final List<String> images;
@@ -126,10 +127,17 @@ class _XhsImagePagerState extends State<XhsImagePager> {
                   });
                 },
                 itemBuilder: (context, i) {
-                  return AspectRatioNetworkImage(
-                    url: widget.images[i],
-                    width: maxWidth,
-                    containMode: true,
+                  return GestureDetector(
+                    onTap: () => ImageViewer.open(
+                      context,
+                      widget.images,
+                      initialIndex: i,
+                    ),
+                    child: AspectRatioNetworkImage(
+                      url: widget.images[i],
+                      width: maxWidth,
+                      containMode: true,
+                    ),
                   );
                 },
               ),

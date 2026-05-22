@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import 'forum_video_player.dart';
 
@@ -21,16 +22,20 @@ class ForumContentView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = _parse(content);
+    final allImages = parts
+        .where((p) => p.type == _ContentPartType.image)
+        .map((p) => p.value)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final part in parts) _buildPart(context, part),
+        for (final part in parts) _buildPart(context, part, allImages),
       ],
     );
   }
 
-  Widget _buildPart(BuildContext context, _ContentPart part) {
+  Widget _buildPart(BuildContext context, _ContentPart part, List<String> allImages) {
     switch (part.type) {
       case _ContentPartType.text:
         if (part.value.trim().isEmpty) {
@@ -50,14 +55,22 @@ class ForumContentView extends StatelessWidget {
         );
 
       case _ContentPartType.image:
+        final imgIndex = allImages.indexOf(part.value);
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SafeNetworkImage(
-              url: part.value,
-              width: double.infinity,
-              fit: BoxFit.cover,
+          child: GestureDetector(
+            onTap: () => ImageViewer.open(
+              context,
+              allImages,
+              initialIndex: imgIndex >= 0 ? imgIndex : 0,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SafeNetworkImage(
+                url: part.value,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
         );
