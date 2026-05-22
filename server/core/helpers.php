@@ -40,7 +40,18 @@ function strip_dangerous_html($html)
 
 function make_summary($content, $length = 120)
 {
-    $text = trim(strip_tags($content));
+    $text = (string)$content;
+
+    // 移除 BBCode 标签：[img=...] [video=...] [music=...] [url=...]...[/url] [hide]...[/hide]
+    $text = preg_replace('/\[img=[^\]]*\]/i', '', $text);
+    $text = preg_replace('/\[video=[^\]]*\]/i', '', $text);
+    $text = preg_replace('/\[music=[^\]]*\]/i', '', $text);
+    $text = preg_replace('/\[url=[^\]]*\][\s\S]*?\[\/url\]/i', '', $text);
+    $text = preg_replace('/\[hide\][\s\S]*?\[\/hide\]/i', '', $text);
+    $text = preg_replace('/\[\/?[a-zA-Z]+[^\]]*\]/', '', $text);
+
+    $text = trim(strip_tags($text));
+
     if (function_exists('mb_substr')) {
         return mb_substr($text, 0, $length, 'UTF-8');
     }
