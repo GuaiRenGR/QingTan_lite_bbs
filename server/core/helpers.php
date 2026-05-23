@@ -418,3 +418,79 @@ if (!function_exists('get_thread_tags')) {
         }, $rows);
     }
 }
+
+if (!function_exists('generate_thumbnail')) {
+    function generate_thumbnail($imageUrl, $userId, $targetWidth = 480)
+    {
+        $imageData = @file_get_contents($imageUrl);
+        if ($imageData === false) {
+            return null;
+        }
+
+        $src = @imagecreatefromstring($imageData);
+        if (!$src) {
+            return null;
+        }
+
+        $srcW = imagesx($src);
+        $srcH = imagesy($src);
+
+        if ($srcW <= 0 || $srcH <= 0) {
+            imagedestroy($src);
+            return null;
+        }
+
+        $ratio = $srcH / $srcW;
+        $newW = $targetWidth;
+        $newH = (int)round($targetWidth * $ratio);
+
+        $dst = imagecreatetruecolor($newW, $newH);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $srcW, $srcH);
+        imagedestroy($src);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'thumb_');
+        imagejpeg($dst, $tmpFile, 85);
+        imagedestroy($dst);
+
+        try {
+            $service = new OneDriveService();
+            $result = $service->upload($tmpFile, 'thumbnail.jpg', 'images', 'image/jpeg');
+        } catch (\Throwable $e) {
+            @unlink($tmpFile);
+            log_error('缩略图上传失败: ' . $e->getMessage());
+            return null;
+        }
+
+        $attachments = Database::table('attachments');
+
+        Database::execute(
+            "INSERT INTO {$attachments}
+            (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`)
+            VALUES (?,NULL,NULL,?,?,?,?,?,?,1,?)",
+            [
+                $userId,
+                'thumbnail.jpg',
+                $result['path'],
+                '',
+                'image/jpeg',
+                filesize($tmpFile),
+                $result['item_id'],
+                now(),
+            ]
+        );
+
+        $attachmentId = (int)Database::lastInsertId();
+
+        @unlink($tmpFile);
+
+        $baseUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $thumbUrl = $baseUrl . '/index.php?route=file/resolve&id=' . $attachmentId;
+
+        return [
+            'attachment_id' => $attachmentId,
+            'url' => $thumbUrl,
+        ];
+    }
+}

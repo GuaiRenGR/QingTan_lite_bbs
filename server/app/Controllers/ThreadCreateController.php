@@ -55,7 +55,8 @@ class ThreadCreateController
         $cover = '';
 
         if (!empty($allImages[0])) {
-            $cover = $allImages[0];
+            $thumb = generate_thumbnail($allImages[0], $user['id']);
+            $cover = $thumb ? $thumb['url'] : $allImages[0];
         }
 
         if ($musicUrl !== '' && !validate_remote_url($musicUrl)) {

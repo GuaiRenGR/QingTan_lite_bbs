@@ -78,7 +78,14 @@ class ThreadManageController
         }
 
         $allImages = array_values(array_unique(array_merge($imageUrls, $remoteImages)));
-        $cover = !empty($allImages[0]) ? $allImages[0] : '';
+        $cover = '';
+
+        if (!empty($allImages[0])) {
+            self::deleteOldCoverThumb($threadId);
+
+            $thumb = generate_thumbnail($allImages[0], $user['id']);
+            $cover = $thumb ? $thumb['url'] : $allImages[0];
+        }
 
         $summary = mb_substr(strip_tags(preg_replace('/\[[^\]]+\]/', '', $content)), 0, 120);
 
@@ -144,6 +151,7 @@ class ThreadManageController
         }
 
         self::cleanupOneDriveFiles($threadId, $thread);
+        self::deleteOldCoverThumb($threadId);
 
         \Database::execute(
             "UPDATE {$threads}
@@ -216,6 +224,47 @@ class ThreadManageController
 
         } catch (\Throwable $e) {
             log_error('清理帖子附件失败 [thread=' . $threadId . ']: ' . $e->getMessage());
+        }
+    }
+
+    private static function deleteOldCoverThumb($threadId)
+    {
+        $threads = \Database::table('threads');
+        $attachments = \Database::table('attachments');
+
+        $old = \Database::fetch(
+            "SELECT cover FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$old || empty($old['cover'])) {
+            return;
+        }
+
+        $coverUrl = $old['cover'];
+        if (preg_match('/[?&]id=(\d+)/', $coverUrl, $m)) {
+            $attachmentId = (int)$m[1];
+
+            $att = \Database::fetch(
+                "SELECT id, onedrive_item_id FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
+                [$attachmentId]
+            );
+
+            if ($att) {
+                if (!empty($att['onedrive_item_id'])) {
+                    try {
+                        $service = new \OneDriveService();
+                        $service->deleteFile($att['onedrive_item_id']);
+                    } catch (\Throwable $e) {
+                        log_error('删除旧缩略图失败 [' . $att['onedrive_item_id'] . ']: ' . $e->getMessage());
+                    }
+                }
+
+                \Database::execute(
+                    "UPDATE {$attachments} SET status = 0 WHERE id = ?",
+                    [$attachmentId]
+                );
+            }
         }
     }
 
