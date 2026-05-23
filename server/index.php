@@ -100,6 +100,10 @@ try {
             App\Controllers\UploadController::media();
             break;
 
+        case 'upload/delete':
+            App\Controllers\AttachmentController::delete();
+            break;
+
         case 'threads/detail':
             App\Controllers\ThreadReadController::detail();
             break;

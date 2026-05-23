@@ -826,6 +826,38 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
     }
   }
 
+  Future<void> _deleteImage(int index) async {
+    if (index < 0 || index >= imageUrls.length) return;
+
+    final url = imageUrls[index];
+    final attachmentId = index < attachmentIds.length ? attachmentIds[index] : 0;
+
+    setState(() {
+      imageUrls.removeAt(index);
+      if (index < attachmentIds.length) {
+        attachmentIds.removeAt(index);
+      }
+    });
+
+    final imgTag = '[img=$url]';
+    final content = contentController.text;
+    if (content.contains(imgTag)) {
+      contentController.text = content.replaceAll(imgTag, '');
+    }
+
+    if (attachmentId > 0) {
+      await ApiClient.instance.post(
+        'upload/delete',
+        data: {'id': attachmentId},
+      );
+    } else {
+      await ApiClient.instance.post(
+        'upload/delete',
+        data: {'url': url},
+      );
+    }
+  }
+
   int _toInt(dynamic value) {
     if (value is int) return value;
     if (value is double) return value.toInt();
@@ -923,7 +955,11 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
             ),
           ),
           const SizedBox(height: 12),
-          if (isImageMode) _ImageModePanel(imageUrls: imageUrls),
+          if (isImageMode)
+            _ImageModePanel(
+              imageUrls: imageUrls,
+              onDelete: (index) => _deleteImage(index),
+            ),
           if (isImageMode) const SizedBox(height: 12),
           TextField(
             controller: contentController,
@@ -1026,6 +1062,21 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
               ),
             ],
           ),
+          if (imageUrls.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ImageManagerPanel(
+              imageUrls: imageUrls,
+              onInsert: (url) {
+                final old = contentController.text;
+                final insert = '\n[img=$url]\n';
+                contentController.text = old + insert;
+                contentController.selection = TextSelection.fromPosition(
+                  TextPosition(offset: contentController.text.length),
+                );
+              },
+              onDelete: (index) => _deleteImage(index),
+            ),
+          ],
           const SizedBox(height: 14),
           _HelpCard(isImageMode: isImageMode),
         ],
@@ -1071,9 +1122,11 @@ class _ModeSwitch extends StatelessWidget {
 
 class _ImageModePanel extends StatelessWidget {
   final List<String> imageUrls;
+  final ValueChanged<int> onDelete;
 
   const _ImageModePanel({
     required this.imageUrls,
+    required this.onDelete,
   });
 
   @override
@@ -1105,12 +1158,35 @@ class _ImageModePanel extends StatelessWidget {
         itemCount: imageUrls.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          return SafeNetworkImage(
-            url: imageUrls[index],
-            width: 120,
-            height: 150,
-            borderRadius: BorderRadius.circular(14),
-            fit: BoxFit.cover,
+          return Stack(
+            children: [
+              SafeNetworkImage(
+                url: imageUrls[index],
+                width: 120,
+                height: 150,
+                borderRadius: BorderRadius.circular(14),
+                fit: BoxFit.cover,
+              ),
+              Positioned(
+                top: 6,
+                right: 6,
+                child: GestureDetector(
+                  onTap: () => onDelete(index),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -1171,6 +1247,125 @@ class _HelpCard extends StatelessWidget {
           height: 1.5,
         ),
       ),
+    );
+  }
+}
+
+class _ImageManagerPanel extends StatelessWidget {
+  final List<String> imageUrls;
+  final ValueChanged<String> onInsert;
+  final ValueChanged<int> onDelete;
+
+  const _ImageManagerPanel({
+    required this.imageUrls,
+    required this.onInsert,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '已上传图片',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (int i = 0; i < imageUrls.length; i++)
+                _ImageItem(
+                  url: imageUrls[i],
+                  onInsert: () => onInsert(imageUrls[i]),
+                  onDelete: () => onDelete(i),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImageItem extends StatelessWidget {
+  final String url;
+  final VoidCallback onInsert;
+  final VoidCallback onDelete;
+
+  const _ImageItem({
+    required this.url,
+    required this.onInsert,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Column(
+          children: [
+            SafeNetworkImage(
+              url: url,
+              width: 80,
+              height: 80,
+              borderRadius: BorderRadius.circular(8),
+              fit: BoxFit.cover,
+            ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: onInsert,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFB7299),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  '插入',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: GestureDetector(
+            onTap: onDelete,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.close,
+                size: 14,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
