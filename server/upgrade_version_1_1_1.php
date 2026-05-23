@@ -16,7 +16,7 @@ try {
 
     $existing = Database::fetch(
         "SELECT id FROM {$table} WHERE version = ? AND build_number = ? LIMIT 1",
-        ['1.1.1', 6]
+        ['1.1.1', 2006]
     );
 
     if (!$existing) {
@@ -27,7 +27,7 @@ try {
             [
                 'all',
                 '1.1.1',
-                6,
+                2006,
                 0,
                 '版本 1.1.1',
                 implode("\n", [
