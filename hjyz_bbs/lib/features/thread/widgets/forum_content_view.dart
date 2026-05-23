@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import 'forum_video_player.dart';
@@ -479,10 +480,14 @@ class _AttachmentCardState extends State<_AttachmentCard> {
   Map<String, dynamic>? _info;
   bool _loading = true;
   bool _failed = false;
+  late final String _downloadUrl;
 
   @override
   void initState() {
     super.initState();
+    final id = int.tryParse(widget.attachmentId) ?? 0;
+    final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
+    _downloadUrl = '${apiBase}index.php?route=file/resolve&id=$id';
     _loadInfo();
   }
 
@@ -634,15 +639,13 @@ class _AttachmentCardState extends State<_AttachmentCard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: url.isNotEmpty
-              ? () async {
-                  final uri = Uri.tryParse(url);
-                  if (uri != null) {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
-                  }
+          onTap: () async {
+                final uri = Uri.tryParse(_downloadUrl);
+                if (uri != null) {
+                  await launchUrl(uri,
+                      mode: LaunchMode.externalApplication);
                 }
-              : null,
+              },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
