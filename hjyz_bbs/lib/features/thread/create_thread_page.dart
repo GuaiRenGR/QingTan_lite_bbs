@@ -269,13 +269,13 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       mode = thread['mode']?.toString() == 'image' ? 'image' : 'article';
       selectedForumId = int.tryParse(thread['forum_id']?.toString() ?? '') ?? 0;
 
+      final allImages = thread['images'] is List
+          ? (thread['images'] as List).map((e) => e.toString()).toList()
+          : <String>[];
+
       imageUrls
         ..clear()
-        ..addAll(
-          thread['images'] is List
-              ? (thread['images'] as List).map((e) => e.toString())
-              : [],
-        );
+        ..addAll(allImages.where((url) => _isLocalUpload(url)));
 
       tags
         ..clear()
@@ -929,6 +929,12 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         data: {'url': url},
       );
     }
+  }
+
+  bool _isLocalUpload(String url) {
+    return url.contains('route=file/resolve') ||
+        url.contains('route=upload/') ||
+        url.contains('index.php?id=');
   }
 
   int _toInt(dynamic value) {
