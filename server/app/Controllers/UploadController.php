@@ -118,15 +118,17 @@ class UploadController
                 ]
             );
 
-            $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . \Database::lastInsertId();
+            $attachmentId = (int)\Database::lastInsertId();
+
+            $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . $attachmentId;
 
             \Database::execute(
                 "UPDATE {$attachments} SET file_url = ? WHERE id = ?",
-                [$fileUrl, \Database::lastInsertId()]
+                [$fileUrl, $attachmentId]
             );
 
             \Response::success([
-                'id' => (int)\Database::lastInsertId(),
+                'id' => $attachmentId,
                 'type' => $type,
                 'url' => $fileUrl,
                 'share_url' => $result['share_url'],

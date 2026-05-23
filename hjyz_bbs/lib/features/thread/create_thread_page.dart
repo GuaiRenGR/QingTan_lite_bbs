@@ -520,9 +520,17 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           );
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('附件上传成功')),
+            SnackBar(content: Text('附件上传成功，ID: $id')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('附件上传返回ID异常: id=$id, data=$data')),
           );
         }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('附件响应格式异常: ${result.data?.runtimeType}')),
+        );
       }
     } finally {
       if (mounted) {
