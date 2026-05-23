@@ -4,15 +4,17 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/widgets/safe_network_image.dart';
+import '../auth/auth_controller.dart';
 import 'widgets/forum_content_view.dart';
 
-class CreateThreadPage extends StatefulWidget {
+class CreateThreadPage extends ConsumerStatefulWidget {
   final int forumId;
   final int? editThreadId;
 
@@ -25,10 +27,10 @@ class CreateThreadPage extends StatefulWidget {
   bool get isEdit => editThreadId != null && editThreadId! > 0;
 
   @override
-  State<CreateThreadPage> createState() => _CreateThreadPageState();
+  ConsumerState<CreateThreadPage> createState() => _CreateThreadPageState();
 }
 
-class _CreateThreadPageState extends State<CreateThreadPage> {
+class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   final titleController = TextEditingController();
   final contentController = TextEditingController();
 
@@ -40,6 +42,7 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   bool uploadingImage = false;
   bool uploadingMusic = false;
   bool uploadingVideo = false;
+  bool uploadingAttachment = false;
 
   final List<String> imageUrls = [];
   final List<int> attachmentIds = [];
@@ -54,6 +57,12 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   Timer? draftTimer;
 
   String get _draftKey => 'create_thread_draft_forum_${widget.forumId}';
+
+  bool get _isAdmin {
+    final user = ref.read(authControllerProvider).user;
+    if (user == null) return false;
+    return (user['group_id'] ?? 0) == 99;
+  }
 
   @override
   void initState() {
@@ -459,6 +468,70 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
   }
 
   // Insert methods
+
+  Future<void> _pickAndUploadAttachment() async {
+    if (uploadingAttachment) return;
+
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+    );
+
+    if (picked == null || picked.files.isEmpty) return;
+
+    final file = picked.files.single;
+    final path = file.path;
+
+    if (path == null || path.isEmpty) return;
+
+    setState(() {
+      uploadingAttachment = true;
+    });
+
+    try {
+      final result = await ApiClient.instance.uploadFile(
+        'upload/media',
+        file: File(path),
+        fields: {
+          'type': 'attachment',
+        },
+      );
+
+      if (!mounted) return;
+
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+        return;
+      }
+
+      final data = result.data;
+
+      if (data is Map<String, dynamic>) {
+        final id = _toInt(data['id']);
+
+        if (id > 0) {
+          final old = contentController.text;
+          final insert = '\n[attach=$id]\n';
+
+          contentController.text = old + insert;
+          contentController.selection = TextSelection.fromPosition(
+            TextPosition(offset: contentController.text.length),
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('附件上传成功')),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          uploadingAttachment = false;
+        });
+      }
+    }
+  }
 
   void _insertMarkdownBlock() {
     final selection = contentController.selection;
@@ -1060,6 +1133,12 @@ class _CreateThreadPageState extends State<CreateThreadPage> {
                 text: uploadingMusic ? '上传中...' : '上传音乐',
                 onTap: uploadingMusic ? null : _pickAndUploadMusic,
               ),
+              if (_isAdmin)
+                _ToolButton(
+                  icon: Icons.attach_file_rounded,
+                  text: uploadingAttachment ? '上传中...' : '插入附件',
+                  onTap: uploadingAttachment ? null : _pickAndUploadAttachment,
+                ),
             ],
           ),
           if (imageUrls.isNotEmpty) ...[

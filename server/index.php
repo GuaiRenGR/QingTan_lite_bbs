@@ -104,6 +104,10 @@ try {
             App\Controllers\AttachmentController::delete();
             break;
 
+        case 'upload/info':
+            App\Controllers\AttachmentController::info();
+            break;
+
         case 'threads/detail':
             App\Controllers\ThreadReadController::detail();
             break;

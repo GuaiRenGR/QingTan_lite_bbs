@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import 'forum_video_player.dart';
@@ -226,6 +227,12 @@ class ForumContentView extends StatelessWidget {
             ),
           ),
         );
+
+      case _ContentPartType.attachment:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _AttachmentCard(attachmentId: part.value),
+        );
     }
   }
 
@@ -238,7 +245,8 @@ class ForumContentView extends StatelessWidget {
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
       r'|(\[music=(https?:\/\/[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
-      r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])',
+      r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
+      r'|(\[attach=(\d+)\])',
       caseSensitive: false,
     );
 
@@ -263,6 +271,7 @@ class ForumContentView extends StatelessWidget {
       final hidden = match.group(10);
       final linkUrl = match.group(12);
       final linkText = match.group(13);
+      final attachment = match.group(15);
 
       if (markdown != null) {
         result.add(
@@ -309,6 +318,13 @@ class ForumContentView extends StatelessWidget {
             extra: linkUrl.trim(),
           ),
         );
+      } else if (attachment != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.attachment,
+            value: attachment.trim(),
+          ),
+        );
       }
 
       last = match.end;
@@ -335,6 +351,7 @@ enum _ContentPartType {
   markdown,
   link,
   hidden,
+  attachment,
 }
 
 class _ContentPart {
@@ -436,6 +453,265 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentCard extends StatefulWidget {
+  final String attachmentId;
+
+  const _AttachmentCard({required this.attachmentId});
+
+  @override
+  State<_AttachmentCard> createState() => _AttachmentCardState();
+}
+
+class _AttachmentCardState extends State<_AttachmentCard> {
+  Map<String, dynamic>? _info;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInfo();
+  }
+
+  Future<void> _loadInfo() async {
+    final id = int.tryParse(widget.attachmentId) ?? 0;
+    if (id <= 0) {
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+      return;
+    }
+
+    try {
+      final result = await ApiClient.instance.get(
+        'upload/info',
+        query: {'id': id},
+      );
+
+      if (!mounted) return;
+
+      if (result.success && result.data is Map<String, dynamic>) {
+        setState(() {
+          _info = result.data as Map<String, dynamic>;
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
+  }
+
+  IconData _getFileIcon(String? mimeType) {
+    if (mimeType == null) return Icons.insert_drive_file_outlined;
+
+    if (mimeType.startsWith('image/')) return Icons.image_outlined;
+    if (mimeType.startsWith('video/')) return Icons.video_file_outlined;
+    if (mimeType.startsWith('audio/')) return Icons.audio_file_outlined;
+    if (mimeType.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    if (mimeType.contains('zip') ||
+        mimeType.contains('rar') ||
+        mimeType.contains('7z')) {
+      return Icons.folder_zip_outlined;
+    }
+    if (mimeType.contains('word') || mimeType.contains('document')) {
+      return Icons.description_outlined;
+    }
+    if (mimeType.contains('excel') || mimeType.contains('spreadsheet')) {
+      return Icons.table_chart_outlined;
+    }
+    if (mimeType.contains('powerpoint') ||
+        mimeType.contains('presentation')) {
+      return Icons.slideshow_outlined;
+    }
+    if (mimeType.contains('text')) return Icons.text_snippet_outlined;
+
+    return Icons.insert_drive_file_outlined;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text(
+              '加载附件信息...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_failed || _info == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              color: Colors.grey.shade400,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '附件加载失败',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final name = _info!['name']?.toString() ?? '未知文件';
+    final size = _info!['size'] is int ? _info!['size'] as int : 0;
+    final mimeType = _info!['type']?.toString();
+    final url = _info!['url']?.toString() ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: url.isNotEmpty
+              ? () async {
+                  final uri = Uri.tryParse(url);
+                  if (uri != null) {
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
+                  }
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFB7299).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _getFileIcon(mimeType),
+                    color: const Color(0xFFFB7299),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF222222),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatFileSize(size),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFB7299),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.download_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        '下载',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -9,7 +9,7 @@ class UploadController
         $user = \Auth::requireLogin();
 
         $type = \Request::str('type', 'image');
-        if (!in_array($type, ['image', 'music', 'video'], true)) {
+        if (!in_array($type, ['image', 'music', 'video', 'attachment'], true)) {
             $type = 'image';
         }
 
@@ -35,6 +35,8 @@ class UploadController
             if ($size > intval($config['max_video_size'])) {
                 \Response::json(422, '视频不能超过 ' . intval($config['max_video_size'] / 1024 / 1024) . 'MB');
             }
+        } elseif ($type === 'attachment') {
+            // 管理员上传附件不限制大小
         } else {
             if ($size > intval($config['max_music_size'])) {
                 \Response::json(422, '音乐不能超过 ' . intval($config['max_music_size'] / 1024 / 1024) . 'MB');
@@ -56,6 +58,8 @@ class UploadController
                 \Response::json(422, '不支持的图片格式');
             }
         }
+
+        // 附件类型不做 MIME 检查
 
         if ($type === 'music') {
             if (!in_array($mime, [
@@ -87,7 +91,7 @@ class UploadController
         try {
             $service = new \OneDriveService();
 
-            $uploadType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : 'music');
+            $uploadType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : ($type === 'attachment' ? 'attachments' : 'music'));
 
             $result = $service->upload(
                 $tmp,
@@ -114,7 +118,7 @@ class UploadController
                 ]
             );
 
-            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $baseUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
             $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . \Database::lastInsertId();
 
             \Response::success([

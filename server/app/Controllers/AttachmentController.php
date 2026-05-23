@@ -49,4 +49,32 @@ class AttachmentController
 
         \Response::success(null, '已删除');
     }
+
+    public static function info()
+    {
+        $id = \Request::int('id');
+
+        if ($id <= 0) {
+            \Response::json(422, '参数错误');
+        }
+
+        $attachments = \Database::table('attachments');
+
+        $row = \Database::fetch(
+            "SELECT id, file_name, file_size, file_type, file_url FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
+            [$id]
+        );
+
+        if (!$row) {
+            \Response::json(404, '附件不存在');
+        }
+
+        \Response::success([
+            'id' => (int)$row['id'],
+            'name' => $row['file_name'],
+            'size' => (int)$row['file_size'],
+            'type' => $row['file_type'],
+            'url' => $row['file_url'],
+        ]);
+    }
 }
