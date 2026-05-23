@@ -102,6 +102,8 @@ class UploadController
 
             $attachments = \Database::table('attachments');
 
+            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+
             \Database::execute(
                 "INSERT INTO {$attachments}
                 (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`)
@@ -118,8 +120,12 @@ class UploadController
                 ]
             );
 
-            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
             $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . \Database::lastInsertId();
+
+            \Database::execute(
+                "UPDATE {$attachments} SET file_url = ? WHERE id = ?",
+                [$fileUrl, \Database::lastInsertId()]
+            );
 
             \Response::success([
                 'id' => (int)\Database::lastInsertId(),

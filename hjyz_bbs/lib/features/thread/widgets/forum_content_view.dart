@@ -256,12 +256,15 @@ class ForumContentView extends StatelessWidget {
 
     for (final match in matches) {
       if (match.start > last) {
-        result.add(
-          _ContentPart(
-            type: _ContentPartType.text,
-            value: input.substring(last, match.start),
-          ),
-        );
+        final text = input.substring(last, match.start);
+        if (text.trim().isNotEmpty) {
+          result.add(
+            _ContentPart(
+              type: _ContentPartType.text,
+              value: text,
+            ),
+          );
+        }
       }
 
       final markdown = match.group(2);
@@ -331,12 +334,15 @@ class ForumContentView extends StatelessWidget {
     }
 
     if (last < input.length) {
-      result.add(
-        _ContentPart(
-          type: _ContentPartType.text,
-          value: input.substring(last),
-        ),
-      );
+      final text = input.substring(last);
+      if (text.trim().isNotEmpty) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.text,
+            value: text,
+          ),
+        );
+      }
     }
 
     return result;
