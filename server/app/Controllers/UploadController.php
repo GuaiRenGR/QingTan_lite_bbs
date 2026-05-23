@@ -8,7 +8,11 @@ class UploadController
     {
         $user = \Auth::requireLogin();
 
-        $type = \Request::str('type', 'image');
+        $type = $_POST['type'] ?? $_GET['type'] ?? \Request::str('type', 'image');
+        if (!is_string($type)) {
+            $type = 'image';
+        }
+        $type = trim($type);
         if (!in_array($type, ['image', 'music', 'video', 'attachment'], true)) {
             $type = 'image';
         }
@@ -57,11 +61,7 @@ class UploadController
             ], true)) {
                 \Response::json(422, '不支持的图片格式');
             }
-        }
-
-        // 附件类型不做 MIME 检查
-
-        if ($type === 'music') {
+        } elseif ($type === 'music') {
             if (!in_array($mime, [
                 'audio/mpeg',
                 'audio/mp4',
@@ -73,9 +73,7 @@ class UploadController
             ], true)) {
                 \Response::json(422, '不支持的音乐格式');
             }
-        }
-
-        if ($type === 'video') {
+        } elseif ($type === 'video') {
             if (!in_array($mime, [
                 'video/mp4',
                 'video/webm',
