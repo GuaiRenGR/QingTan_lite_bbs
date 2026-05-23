@@ -21,7 +21,7 @@ class OneDriveService
             throw new Exception('上传临时文件不存在');
         }
 
-        $type = in_array($type, ['music', 'video'], true) ? $type : 'images';
+        $type = in_array($type, ['music', 'video', 'attachments'], true) ? $type : 'images';
 
         $ext = $this->guessExt($originalName, $mime, $type);
 
@@ -342,6 +342,11 @@ class OneDriveService
             if ($mime === 'video/x-matroska') return 'mkv';
 
             throw new Exception('不支持的视频格式');
+        }
+
+        // attachments: 允许任意扩展名
+        if ($ext !== '') {
+            return $ext;
         }
 
         throw new Exception('未知文件类型');
