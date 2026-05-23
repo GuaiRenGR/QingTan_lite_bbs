@@ -68,7 +68,10 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       applicationName: '轻坛',
       applicationVersion: appVersion.isNotEmpty ? appVersion : '1.0.4',
-      applicationIcon: const FlutterLogo(size: 42),
+      applicationIcon: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.asset('icon.png', width: 48, height: 48),
+      ),
       children: [
         Text(content),
       ],
