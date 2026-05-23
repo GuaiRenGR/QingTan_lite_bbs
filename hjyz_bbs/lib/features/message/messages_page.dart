@@ -183,25 +183,37 @@ class _MessagesPageState extends State<MessagesPage> {
                     icon: Icons.chat_bubble_outline,
                     label: '回复我的',
                     count: unreadCounts['reply'] ?? 0,
-                    onTap: () => context.push('/notifications?type=reply'),
+                    onTap: () async {
+                      await context.push('/notifications?type=reply');
+                      if (mounted) _loadUnreadCounts();
+                    },
                   ),
                   _NotificationEntry(
                     icon: Icons.alternate_email,
                     label: '@我',
                     count: unreadCounts['mention'] ?? 0,
-                    onTap: () => context.push('/notifications?type=mention'),
+                    onTap: () async {
+                      await context.push('/notifications?type=mention');
+                      if (mounted) _loadUnreadCounts();
+                    },
                   ),
                   _NotificationEntry(
                     icon: Icons.favorite_border,
                     label: '收到的赞',
                     count: unreadCounts['like'] ?? 0,
-                    onTap: () => context.push('/notifications?type=like'),
+                    onTap: () async {
+                      await context.push('/notifications?type=like');
+                      if (mounted) _loadUnreadCounts();
+                    },
                   ),
                   _NotificationEntry(
                     icon: Icons.notifications_none,
                     label: '系统通知',
                     count: unreadCounts['system'] ?? 0,
-                    onTap: () => context.push('/notifications?type=system'),
+                    onTap: () async {
+                      await context.push('/notifications?type=system');
+                      if (mounted) _loadUnreadCounts();
+                    },
                   ),
                 ],
               ),
@@ -268,14 +280,18 @@ class _MessagesPageState extends State<MessagesPage> {
               ...conversations.map((conv) => _ConversationItem(
                     conversation: conv,
                     formatTime: _formatTime,
-                    onTap: () {
+                    onTap: () async {
                       final otherUser = conv['other_user'] as Map? ?? {};
                       final convId = conv['id'] ?? 0;
                       final userId = otherUser['id'] ?? 0;
                       final nickname = otherUser['nickname'] ?? '用户';
-                      context.push(
+                      await context.push(
                         '/chat?conv_id=$convId&user_id=$userId&nickname=${Uri.encodeComponent(nickname.toString())}',
                       );
+                      if (mounted) {
+                        _loadUnreadCounts();
+                        _loadConversations(refresh: true);
+                      }
                     },
                   )),
 
