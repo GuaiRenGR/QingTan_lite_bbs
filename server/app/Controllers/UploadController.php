@@ -118,7 +118,7 @@ class UploadController
                 ]
             );
 
-            $baseUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
             $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . \Database::lastInsertId();
 
             \Response::success([

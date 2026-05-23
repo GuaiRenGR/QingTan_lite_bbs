@@ -485,7 +485,7 @@ if (!function_exists('generate_thumbnail')) {
 
         @unlink($tmpFile);
 
-        $baseUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
         $thumbUrl = $baseUrl . '/index.php?route=file/resolve&id=' . $attachmentId;
 
         return [
