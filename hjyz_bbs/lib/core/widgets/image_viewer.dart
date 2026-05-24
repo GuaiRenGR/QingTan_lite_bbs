@@ -17,11 +17,11 @@ class ImageViewer extends StatefulWidget {
       PageRouteBuilder(
         opaque: false,
         barrierDismissible: false,
-        pageBuilder: (_, __, ___) => ImageViewer(
+        pageBuilder: (_, _, _) => ImageViewer(
           images: images,
           initialIndex: initialIndex,
         ),
-        transitionsBuilder: (_, animation, __, child) {
+        transitionsBuilder: (_, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
         },
       ),
@@ -68,7 +68,7 @@ class _ImageViewerState extends State<ImageViewer> {
                   child: CachedNetworkImage(
                     imageUrl: widget.images[i],
                     fit: BoxFit.contain,
-                    placeholder: (_, __) => const Center(
+                    placeholder: (_, _) => const Center(
                       child: SizedBox(
                         width: 24,
                         height: 24,
@@ -78,7 +78,7 @@ class _ImageViewerState extends State<ImageViewer> {
                         ),
                       ),
                     ),
-                    errorWidget: (_, __, ___) => const Center(
+                    errorWidget: (_, _, _) => const Center(
                       child: Icon(
                         Icons.broken_image_outlined,
                         color: Colors.white38,
