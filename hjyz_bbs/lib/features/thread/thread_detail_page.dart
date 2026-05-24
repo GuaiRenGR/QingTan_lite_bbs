@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -838,7 +839,7 @@ class _CommentItem extends StatelessWidget {
   }
 }
 
-class _BottomActionBar extends StatelessWidget {
+class _BottomActionBar extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final Map<String, dynamic> thread;
@@ -861,17 +862,44 @@ class _BottomActionBar extends StatelessWidget {
     required this.onSend,
   });
 
+  @override
+  State<_BottomActionBar> createState() => _BottomActionBarState();
+}
+
+class _BottomActionBarState extends State<_BottomActionBar> {
+  bool _showEmojiPicker = false;
+
   int _toInt(dynamic value) {
     if (value is int) return value;
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
 
+  void _toggleEmojiPicker() {
+    setState(() {
+      _showEmojiPicker = !_showEmojiPicker;
+    });
+    if (_showEmojiPicker) {
+      widget.focusNode.unfocus();
+    } else {
+      widget.focusNode.requestFocus();
+    }
+  }
+
+  void _onEmojiSelected(String char) {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    final text = controller.text;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    controller.text = text.substring(0, start) + char + text.substring(selection.end >= 0 ? selection.end : text.length);
+    controller.selection = TextSelection.collapsed(offset: start + char.length);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final liked = thread['is_liked'] == true;
-    final favorited = thread['is_favorited'] == true;
-    final hasReply = replyTo != null;
+    final liked = widget.thread['is_liked'] == true;
+    final favorited = widget.thread['is_favorited'] == true;
+    final hasReply = widget.replyTo != null;
 
     return SafeArea(
       top: false,
@@ -887,7 +915,7 @@ class _BottomActionBar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '回复 @${replyTo!['author']?['nickname'] ?? '用户'}',
+                      '回复 @${widget.replyTo!['author']?['nickname'] ?? '用户'}',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade700,
@@ -897,7 +925,7 @@ class _BottomActionBar extends StatelessWidget {
                     ),
                   ),
                   GestureDetector(
-                    onTap: onCancelReply,
+                    onTap: widget.onCancelReply,
                     child: Icon(
                       Icons.close,
                       size: 18,
@@ -921,29 +949,57 @@ class _BottomActionBar extends StatelessWidget {
             ),
             child: Row(
               children: [
+                GestureDetector(
+                  onTap: _toggleEmojiPicker,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      _showEmojiPicker
+                          ? Icons.keyboard_rounded
+                          : Icons.emoji_emotions_outlined,
+                      color: _showEmojiPicker
+                          ? const Color(0xFFFB7299)
+                          : Colors.grey.shade600,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Expanded(
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: hasReply ? '回复评论...' : '说点什么...',
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(22),
-                        borderSide: BorderSide.none,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_showEmojiPicker) {
+                        setState(() => _showEmojiPicker = false);
+                      }
+                    },
+                    child: TextField(
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      minLines: 1,
+                      maxLines: 3,
+                      onTap: () {
+                        if (_showEmojiPicker) {
+                          setState(() => _showEmojiPicker = false);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: hasReply ? '回复评论...' : '说点什么...',
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
                     ),
                   ),
                 ),
                 IconButton(
-                  onPressed: onSend,
+                  onPressed: widget.onSend,
                   icon: const Icon(Icons.send_rounded),
                   color: const Color(0xFFFB7299),
                 ),
@@ -952,26 +1008,28 @@ class _BottomActionBar extends StatelessWidget {
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
                   color: liked ? const Color(0xFFFB7299) : Colors.grey.shade700,
-                  text: '${_toInt(thread['like_count'])}',
-                  onTap: onLike,
+                  text: '${_toInt(widget.thread['like_count'])}',
+                  onTap: widget.onLike,
                 ),
                 _ActionIcon(
                   icon: favorited
                       ? Icons.star_rounded
                       : Icons.star_border_rounded,
                   color: favorited ? Colors.orange : Colors.grey.shade700,
-                  text: '${_toInt(thread['favorite_count'])}',
-                  onTap: onFavorite,
+                  text: '${_toInt(widget.thread['favorite_count'])}',
+                  onTap: widget.onFavorite,
                 ),
                 _ActionIcon(
                   icon: Icons.ios_share_rounded,
                   color: Colors.grey.shade700,
-                  text: '${_toInt(thread['share_count'])}',
-                  onTap: onShare,
+                  text: '${_toInt(widget.thread['share_count'])}',
+                  onTap: widget.onShare,
                 ),
               ],
             ),
           ),
+          if (_showEmojiPicker)
+            EmojiPicker(onEmojiSelected: _onEmojiSelected),
         ],
       ),
     );

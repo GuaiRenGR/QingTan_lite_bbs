@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/emoji/emoji_data.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import 'forum_video_player.dart';
@@ -46,14 +47,7 @@ class ForumContentView extends StatelessWidget {
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: Text(
-            part.value,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.65,
-              color: Color(0xFF222222),
-            ),
-          ),
+          child: _buildTextWithEmoji(part.value),
         );
 
       case _ContentPartType.image:
@@ -235,6 +229,70 @@ class ForumContentView extends StatelessWidget {
           child: _AttachmentCard(attachmentId: part.value),
         );
     }
+  }
+
+  Widget _buildTextWithEmoji(String text) {
+    // Check if text contains any PUA emoji characters
+    bool hasEmoji = false;
+    for (int i = 0; i < text.length; i++) {
+      if (EmojiData.isEmojiCodepoint(text.codeUnitAt(i))) {
+        hasEmoji = true;
+        break;
+      }
+    }
+
+    if (!hasEmoji) {
+      return Text(
+        text,
+        style: const TextStyle(
+          fontSize: 15,
+          height: 1.65,
+          color: Color(0xFF222222),
+        ),
+      );
+    }
+
+    final spans = <InlineSpan>[];
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < text.length; i++) {
+      final codeUnit = text.codeUnitAt(i);
+      if (EmojiData.isEmojiCodepoint(codeUnit)) {
+        if (buffer.isNotEmpty) {
+          spans.add(TextSpan(text: buffer.toString()));
+          buffer.clear();
+        }
+        final emoji = EmojiData.findByCodepoint(codeUnit);
+        if (emoji != null) {
+          spans.add(WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Image.asset(
+              emoji.assetPath,
+              width: 22,
+              height: 22,
+              fit: BoxFit.contain,
+            ),
+          ));
+        }
+      } else {
+        buffer.write(text[i]);
+      }
+    }
+
+    if (buffer.isNotEmpty) {
+      spans.add(TextSpan(text: buffer.toString()));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          fontSize: 15,
+          height: 1.65,
+          color: Color(0xFF222222),
+        ),
+        children: spans,
+      ),
+    );
   }
 
   List<_ContentPart> _parse(String input) {
