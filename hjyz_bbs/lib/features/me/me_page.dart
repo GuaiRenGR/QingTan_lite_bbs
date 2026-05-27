@@ -178,6 +178,14 @@ class MePage extends ConsumerWidget {
               context.push('/history');
             },
           ),
+          if ((user['group_id'] ?? 0) == 99)
+            _MenuItem(
+              icon: Icons.admin_panel_settings_outlined,
+              text: '管理中心',
+              onTap: () {
+                context.push('/admin');
+              },
+            ),
           _MenuItem(
             icon: Icons.settings_outlined,
             text: '设置',

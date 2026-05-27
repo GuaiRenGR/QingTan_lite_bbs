@@ -15,6 +15,7 @@ import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
 import 'features/profile/edit_profile_page.dart';
+import 'features/admin/admin_users_page.dart';
 import 'features/user/user_home_page.dart';
 
 final router = GoRouter(
@@ -110,6 +111,10 @@ final router = GoRouter(
     GoRoute(
       path: '/creator',
       builder: (_, _) => const CreatorCenterPage(),
+    ),
+    GoRoute(
+      path: '/admin',
+      builder: (_, _) => const AdminUsersPage(),
     ),
   ],
   errorBuilder: (_, _) {

@@ -163,6 +163,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
 
     final isSelf = data['is_self'] == true;
     final isFollowing = data['is_following'] == true;
+    final status = _toInt(data['status']);
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
@@ -192,6 +193,37 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
                       },
               ),
             ),
+            if (status == 0)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.block, color: Colors.red.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '该用户已被封禁',
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             SliverPersistentHeader(
               pinned: true,
               delegate: _TabHeaderDelegate(

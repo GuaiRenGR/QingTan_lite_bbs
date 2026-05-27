@@ -272,6 +272,26 @@ try {
             App\Controllers\MessageController::markRead();
             break;
 
+        case 'admin/users':
+            App\Controllers\AdminController::users();
+            break;
+
+        case 'admin/user/ban':
+            App\Controllers\AdminController::ban();
+            break;
+
+        case 'admin/user/unban':
+            App\Controllers\AdminController::unban();
+            break;
+
+        case 'admin/user/delete':
+            App\Controllers\AdminController::delete();
+            break;
+
+        case 'admin/user/create':
+            App\Controllers\AdminController::create();
+            break;
+
         default:
             Response::json(404, '接口不存在');
     }

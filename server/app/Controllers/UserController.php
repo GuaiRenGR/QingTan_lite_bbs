@@ -32,7 +32,7 @@ class UserController
                 status,
                 created_at
              FROM {$users}
-             WHERE id = ? AND status = 1
+             WHERE id = ?
              LIMIT 1",
             [$userId]
         );
@@ -90,6 +90,7 @@ class UserController
             'bio' => $user['bio'] ?: '',
             'level' => (int)$user['level'],
             'score' => (int)$user['score'],
+            'status' => (int)$user['status'],
             'created_at' => $user['created_at'],
             'thread_count' => (int)($threadCount['c'] ?? 0),
             'post_count' => (int)($postCount['c'] ?? 0),
