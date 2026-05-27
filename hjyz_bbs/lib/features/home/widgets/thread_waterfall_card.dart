@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../thread/thread_model.dart';
 
@@ -18,10 +19,10 @@ class ThreadWaterfallCard extends StatelessWidget {
       onTap: thread.id > 0 ? () => context.push('/thread/${thread.id}') : null,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.card(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.grey.shade100,
+            color: AppColors.border(context),
             width: 0.5,
           ),
         ),

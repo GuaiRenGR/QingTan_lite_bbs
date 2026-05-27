@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/safe_network_image.dart';
 
 class MessagesPage extends StatefulWidget {
@@ -155,7 +156,7 @@ class _MessagesPageState extends State<MessagesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: const Text('消息'),
         actions: [
@@ -174,7 +175,7 @@ class _MessagesPageState extends State<MessagesPage> {
             Container(
               margin: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.card(context),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -396,10 +397,10 @@ class _ConversationItem extends StatelessWidget {
     final unread = conversation['unread_count'] ?? 0;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.card(context),
         border: Border(
-          bottom: BorderSide(color: Color(0xFFF0F0F0), width: 0.5),
+          bottom: BorderSide(color: AppColors.border(context), width: 0.5),
         ),
       ),
       child: ListTile(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/safe_network_image.dart';
 
@@ -109,7 +110,7 @@ class ThreadWaterfallCard extends StatelessWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.card(context),
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(

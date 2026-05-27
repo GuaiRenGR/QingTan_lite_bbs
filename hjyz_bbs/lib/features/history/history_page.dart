@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/loading_view.dart';
 import '../../core/widgets/safe_network_image.dart';
 
@@ -163,7 +164,7 @@ class _HistoryItem extends StatelessWidget {
       ),
       child: Card(
         elevation: 0,
-        color: Colors.white,
+        color: AppColors.card(context),
         margin: const EdgeInsets.only(bottom: 10),
         child: ListTile(
           onTap: onTap,

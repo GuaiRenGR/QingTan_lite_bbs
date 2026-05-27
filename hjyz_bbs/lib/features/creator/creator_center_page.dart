@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/loading_view.dart';
 
 class CreatorCenterPage extends StatefulWidget {
@@ -113,7 +114,7 @@ class _StatsGrid extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Wrap(
@@ -172,7 +173,7 @@ class _ThreadStatItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

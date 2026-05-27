@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -261,9 +262,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           // 输入区域
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card(context),
               border: Border(
-                top: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                top: BorderSide(color: AppColors.border(context), width: 0.5),
               ),
             ),
             padding: EdgeInsets.only(
@@ -378,7 +379,7 @@ class _MessageBubble extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isMine
                         ? const Color(0xFFFB7299)
-                        : Colors.white,
+                        : AppColors.card(context),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
@@ -390,7 +391,7 @@ class _MessageBubble extends StatelessWidget {
                     content,
                     style: TextStyle(
                       fontSize: 15,
-                      color: isMine ? Colors.white : Colors.black87,
+                      color: isMine ? Colors.white : AppColors.text(context),
                       height: 1.4,
                     ),
                   ),

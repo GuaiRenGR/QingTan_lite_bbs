@@ -97,9 +97,11 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
       title: '获嘉一中论坛',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFFFB7299),
+        brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         fontFamily: null,
         textTheme: ThemeData.light().textTheme.apply(

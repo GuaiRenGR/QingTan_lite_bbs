@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 import '../auth/login_page.dart';
@@ -93,7 +94,7 @@ class MePage extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.card(context),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -212,7 +213,7 @@ class _MenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: AppColors.card(context),
       child: ListTile(
         leading: Icon(icon),
         title: Text(text),

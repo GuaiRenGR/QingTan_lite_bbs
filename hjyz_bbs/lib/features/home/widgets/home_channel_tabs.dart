@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+
 class HomeChannel {
   final String label;
   final String value;
@@ -34,7 +36,7 @@ class HomeChannelTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 44,
-      color: Colors.white,
+      color: AppColors.card(context),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
+
 class DiscoverPage extends StatelessWidget {
   const DiscoverPage({super.key});
 
@@ -30,7 +32,7 @@ class DiscoverPage extends StatelessWidget {
         itemBuilder: (_, index) {
           return Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card(context),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(

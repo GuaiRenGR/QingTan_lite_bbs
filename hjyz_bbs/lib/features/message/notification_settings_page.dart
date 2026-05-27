@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -87,7 +88,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: const Text('消息设置'),
       ),
@@ -98,7 +99,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.card(context),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(

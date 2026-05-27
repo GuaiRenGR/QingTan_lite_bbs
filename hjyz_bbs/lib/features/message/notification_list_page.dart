@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/safe_network_image.dart';
 
 class NotificationListPage extends StatefulWidget {
@@ -165,7 +166,7 @@ class _NotificationListPageState extends State<NotificationListPage> {
     final title = _typeTitles[widget.type] ?? '通知';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(title),
         actions: [
@@ -261,7 +262,9 @@ class _NotificationItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        color: isRead ? Colors.white : const Color(0xFFFFF8FA),
+        color: isRead
+            ? AppColors.card(context)
+            : Theme.of(context).colorScheme.primaryContainer,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

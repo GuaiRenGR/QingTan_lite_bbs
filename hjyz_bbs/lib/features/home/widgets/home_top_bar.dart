@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../auth/auth_controller.dart';
 
@@ -24,7 +25,7 @@ class HomeTopBar extends ConsumerWidget {
     final avatar = auth.user?['avatar']?.toString() ?? '';
 
     return Container(
-      color: Colors.white,
+      color: AppColors.card(context),
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 6,
         left: 12,
@@ -58,7 +59,7 @@ class HomeTopBar extends ConsumerWidget {
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F4F4),
+                  color: AppColors.inputFill(context),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(

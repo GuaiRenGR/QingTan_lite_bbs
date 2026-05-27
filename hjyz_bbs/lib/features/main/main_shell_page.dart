@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/update_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
 import '../discover/discover_page.dart';
 import '../dynamic/dynamic_page.dart';
@@ -81,7 +82,7 @@ class _ForumBottomNavBar extends StatelessWidget {
         bottom: MediaQuery.of(context).padding.bottom,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         border: Border(
           top: BorderSide(
             color: Colors.grey.shade200,

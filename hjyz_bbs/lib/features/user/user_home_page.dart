@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -164,7 +165,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
     final isFollowing = data['is_following'] == true;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.scaffoldBg(context),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
@@ -315,7 +316,7 @@ class _UserHeader extends StatelessWidget {
           ],
         ),
         Container(
-          color: Colors.white,
+          color: AppColors.card(context),
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           child: Column(
             children: [
@@ -516,7 +517,7 @@ class _TabHeaderDelegate extends SliverPersistentHeaderDelegate {
   ) {
     return Container(
       height: 46,
-      color: Colors.white,
+      color: AppColors.card(context),
       child: tabBar,
     );
   }
@@ -548,7 +549,7 @@ class _UserHomeTab extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.card(context),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
@@ -576,7 +577,7 @@ class _UserHomeTab extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.card(context),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
@@ -867,7 +868,7 @@ class _UserThreadItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.card(context),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(

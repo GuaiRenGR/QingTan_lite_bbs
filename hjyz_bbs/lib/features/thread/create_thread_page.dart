@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/forum_content_view.dart';
@@ -729,7 +730,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.card(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(20),
@@ -1033,7 +1034,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
             decoration: InputDecoration(
               hintText: isImageMode ? '给图片笔记起个标题' : '请输入标题',
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppColors.inputFill(context),
               counterText: '',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1057,7 +1058,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   ? '分享这组图片背后的故事...'
                   : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
@@ -1077,10 +1078,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               Expanded(
                 child: TextField(
                   controller: tagController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '输入标签，例如 校园',
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.inputFill(context),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(14)),
                       borderSide: BorderSide.none,
@@ -1174,7 +1175,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           _HelpCard(isImageMode: isImageMode),
         ],
       ),
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.scaffoldBg(context),
     );
   }
 }
@@ -1229,7 +1230,7 @@ class _ImageModePanel extends StatelessWidget {
         height: 150,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.card(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: Colors.grey.shade200,
@@ -1305,8 +1306,8 @@ class _ToolButton extends StatelessWidget {
       icon: Icon(icon, size: 18),
       label: Text(text),
       style: OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF333333),
+        backgroundColor: AppColors.card(context),
+        foregroundColor: AppColors.text(context),
         side: BorderSide(
           color: Colors.grey.shade200,
         ),
@@ -1327,7 +1328,7 @@ class _HelpCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
@@ -1360,7 +1361,7 @@ class _ImageManagerPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

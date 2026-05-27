@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/emoji/emoji_data.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import 'forum_video_player.dart';
@@ -47,7 +48,7 @@ class ForumContentView extends StatelessWidget {
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: _buildTextWithEmoji(part.value),
+          child: _buildTextWithEmoji(context, part.value),
         );
 
       case _ContentPartType.image:
@@ -92,22 +93,22 @@ class ForumContentView extends StatelessWidget {
               await launchUrl(uri, mode: LaunchMode.externalApplication);
             },
             styleSheet: MarkdownStyleSheet(
-              p: const TextStyle(
+              p: TextStyle(
                 fontSize: 15,
                 height: 1.65,
-                color: Color(0xFF222222),
+                color: AppColors.text(context),
               ),
               code: TextStyle(
-                backgroundColor: Colors.grey.shade100,
+                backgroundColor: AppColors.inputFill(context),
                 color: Colors.deepPurple,
                 fontSize: 13,
               ),
               codeblockDecoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppColors.inputFill(context),
                 borderRadius: BorderRadius.circular(10),
               ),
               blockquoteDecoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppColors.inputFill(context),
                 border: Border(
                   left: BorderSide(
                     color: Colors.grey.shade400,
@@ -150,10 +151,10 @@ class ForumContentView extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     part.value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       height: 1.65,
-                      color: Color(0xFF222222),
+                      color: AppColors.text(context),
                     ),
                   ),
                 ],
@@ -169,7 +170,7 @@ class ForumContentView extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppColors.inputFill(context),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -231,7 +232,7 @@ class ForumContentView extends StatelessWidget {
     }
   }
 
-  Widget _buildTextWithEmoji(String text) {
+  Widget _buildTextWithEmoji(BuildContext context, String text) {
     // Check if text contains any PUA emoji characters
     bool hasEmoji = false;
     for (int i = 0; i < text.length; i++) {
@@ -244,10 +245,10 @@ class ForumContentView extends StatelessWidget {
     if (!hasEmoji) {
       return Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           height: 1.65,
-          color: Color(0xFF222222),
+          color: AppColors.text(context),
         ),
       );
     }
@@ -285,10 +286,10 @@ class ForumContentView extends StatelessWidget {
 
     return RichText(
       text: TextSpan(
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           height: 1.65,
-          color: Color(0xFF222222),
+          color: AppColors.text(context),
         ),
         children: spans,
       ),
@@ -490,7 +491,7 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF2F6),
+            color: AppColors.inputFill(context),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -630,9 +631,9 @@ class _AttachmentCardState extends State<_AttachmentCard> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: AppColors.inputFill(context),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppColors.border(context)),
         ),
         child: const Row(
           children: [
@@ -658,9 +659,9 @@ class _AttachmentCardState extends State<_AttachmentCard> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: AppColors.inputFill(context),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppColors.border(context)),
         ),
         child: Row(
           children: [
@@ -730,10 +731,10 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                         name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF222222),
+                          color: AppColors.text(context),
                         ),
                       ),
                       const SizedBox(height: 4),

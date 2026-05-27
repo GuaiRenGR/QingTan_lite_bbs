@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
@@ -586,7 +587,7 @@ class _ThreadMainCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -708,7 +709,7 @@ class _CommentItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -910,7 +911,7 @@ class _BottomActionBarState extends State<_BottomActionBar> {
           if (hasReply)
             Container(
               padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
-              color: Colors.grey.shade100,
+              color: AppColors.inputFill(context),
               child: Row(
                 children: [
                   Expanded(
@@ -938,7 +939,7 @@ class _BottomActionBarState extends State<_BottomActionBar> {
           Container(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.card(context),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.06),
@@ -985,7 +986,7 @@ class _BottomActionBarState extends State<_BottomActionBar> {
                       decoration: InputDecoration(
                         hintText: hasReply ? '回复评论...' : '说点什么...',
                         filled: true,
-                        fillColor: Colors.grey.shade100,
+                        fillColor: AppColors.inputFill(context),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 8,
