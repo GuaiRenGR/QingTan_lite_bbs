@@ -90,6 +90,79 @@ class _ImageViewerState extends State<ImageViewer> {
               );
             },
           ),
+          // 底部翻页栏
+          if (widget.images.length > 1)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.fromLTRB(
+                  8,
+                  8,
+                  8,
+                  MediaQuery.of(context).padding.bottom + 8,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.6),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_index > 0)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.chevron_left,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        onPressed: () {
+                          _pageController.animateToPage(
+                            _index - 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      )
+                    else
+                      const SizedBox(width: 48),
+                    const SizedBox(width: 16),
+                    Text(
+                      '${_index + 1} / ${widget.images.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    if (_index < widget.images.length - 1)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        onPressed: () {
+                          _pageController.animateToPage(
+                            _index + 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      )
+                    else
+                      const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+            ),
           // 顶部栏
           Positioned(
             top: 0,
