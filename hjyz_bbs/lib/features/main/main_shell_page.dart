@@ -20,6 +20,8 @@ class MainShellPage extends ConsumerStatefulWidget {
 }
 
 class _MainShellPageState extends ConsumerState<MainShellPage> {
+  final _homeKey = GlobalKey<HomePageState>();
+
   @override
   void initState() {
     super.initState();
@@ -32,12 +34,12 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(mainTabIndexProvider);
 
-    const pages = [
-      HomePage(),
-      DynamicPage(),
-      CreatePostPage(),
-      DiscoverPage(),
-      MePage(),
+    final pages = [
+      HomePage(key: _homeKey),
+      const DynamicPage(),
+      const CreatePostPage(),
+      const DiscoverPage(),
+      const MePage(),
     ];
 
     return Scaffold(
@@ -48,7 +50,11 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
       bottomNavigationBar: _ForumBottomNavBar(
         currentIndex: currentIndex,
         onTap: (index) {
+          final prev = ref.read(mainTabIndexProvider);
           ref.read(mainTabIndexProvider.notifier).state = index;
+          if (index == 0 && prev != 0) {
+            _homeKey.currentState?.refreshCurrentFeed();
+          }
         },
         onCreateThread: () {
           final auth = ref.read(authControllerProvider);

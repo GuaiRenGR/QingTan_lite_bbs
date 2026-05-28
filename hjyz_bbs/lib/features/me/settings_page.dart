@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/url_helper.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -19,6 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool showImagesOnMobile = true;
   bool nativeNotifications = true;
   bool autoCheckUpdate = true;
+  bool useHttps = false;
   String appVersion = '';
 
   @override
@@ -37,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
         autoPlayVideo = prefs.getBool('auto_play_video') ?? true;
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
+        useHttps = prefs.getBool('use_https') ?? false;
       });
     } catch (_) {}
 
@@ -138,6 +141,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     showImagesOnMobile = value;
                   });
                   _saveBool('show_images_on_mobile', value);
+                },
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.lock_outlined),
+                title: const Text('使用HTTPS连接（实验性）'),
+                subtitle: const Text('将本站链接转为HTTPS'),
+                value: useHttps,
+                onChanged: (value) {
+                  setState(() {
+                    useHttps = value;
+                  });
+                  _saveBool('use_https', value);
+                  UrlHelper.setEnabled(value);
                 },
               ),
             ],

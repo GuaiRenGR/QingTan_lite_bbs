@@ -1,0 +1,4 @@
+RewriteEngine On
+RewriteRule (^|/)config/ - [F]
+RewriteRule (^|/)runtime/ - [F]
+RewriteRule (^|/)\. - [F]

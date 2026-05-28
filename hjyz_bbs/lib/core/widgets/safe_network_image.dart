@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/url_helper.dart';
+
 class SafeNetworkImage extends StatelessWidget {
   final String? url;
   final double? width;
@@ -23,7 +25,7 @@ class SafeNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = url ?? '';
+    final imageUrl = UrlHelper.fix(url ?? '');
 
     final child = imageUrl.isEmpty
         ? _buildError()

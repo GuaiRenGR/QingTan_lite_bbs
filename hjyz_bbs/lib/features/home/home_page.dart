@@ -10,10 +10,10 @@ class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  ConsumerState<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => HomePageState();
 }
 
-class _HomePageState extends ConsumerState<HomePage>
+class HomePageState extends ConsumerState<HomePage>
     with SingleTickerProviderStateMixin {
   late final TabController tabController;
 
@@ -23,6 +23,8 @@ class _HomePageState extends ConsumerState<HomePage>
     _HomeTab('精华', 'digest'),
     _HomeTab('最新', 'latest'),
   ];
+
+  final _feedRefreshCallbacks = <VoidCallback>[];
 
   @override
   void initState() {
@@ -38,6 +40,13 @@ class _HomePageState extends ConsumerState<HomePage>
   void dispose() {
     tabController.dispose();
     super.dispose();
+  }
+
+  void refreshCurrentFeed() {
+    final index = tabController.index;
+    if (index < _feedRefreshCallbacks.length) {
+      _feedRefreshCallbacks[index]();
+    }
   }
 
   @override
@@ -84,10 +93,17 @@ class _HomePageState extends ConsumerState<HomePage>
             child: TabBarView(
               controller: tabController,
               children: [
-                for (final tab in tabs)
+                for (int i = 0; i < tabs.length; i++)
                   HomeFeedPage(
-                    key: PageStorageKey('home-feed-${tab.type}'),
-                    type: tab.type,
+                    key: PageStorageKey('home-feed-${tabs[i].type}'),
+                    type: tabs[i].type,
+                    onRefreshReady: (callback) {
+                      if (i < _feedRefreshCallbacks.length) {
+                        _feedRefreshCallbacks[i] = callback;
+                      } else {
+                        _feedRefreshCallbacks.add(callback);
+                      }
+                    },
                   ),
               ],
             ),

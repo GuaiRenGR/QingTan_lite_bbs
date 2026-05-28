@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../utils/url_helper.dart';
+
 /// 全屏图片查看器，支持双指缩放、左右滑动切换
 class ImageViewer extends StatefulWidget {
   final List<String> images;
@@ -66,7 +68,7 @@ class _ImageViewerState extends State<ImageViewer> {
                 maxScale: 5.0,
                 child: Center(
                   child: CachedNetworkImage(
-                    imageUrl: widget.images[i],
+                    imageUrl: UrlHelper.fix(widget.images[i]),
                     fit: BoxFit.contain,
                     placeholder: (_, _) => const Center(
                       child: SizedBox(

@@ -7,10 +7,12 @@ import '../../thread/widgets/thread_waterfall_grid.dart';
 
 class HomeFeedPage extends StatefulWidget {
   final String type;
+  final ValueChanged<VoidCallback>? onRefreshReady;
 
   const HomeFeedPage({
     super.key,
     required this.type,
+    this.onRefreshReady,
   });
 
   @override
@@ -35,6 +37,7 @@ class _HomeFeedPageState extends State<HomeFeedPage>
   void initState() {
     super.initState();
     _refresh();
+    widget.onRefreshReady?.call(silentRefresh);
   }
 
   String get endpoint {
@@ -85,6 +88,36 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       setState(() {
         loading = false;
         error = result.message;
+      });
+    }
+  }
+
+  Future<void> silentRefresh() async {
+    final result = await ApiClient.instance.get(
+      endpoint,
+      query: queryForPage(1),
+    );
+
+    if (!mounted) return;
+
+    if (result.success && result.data is Map<String, dynamic>) {
+      final data = result.data as Map<String, dynamic>;
+      final raw = data['list'];
+
+      setState(() {
+        page = 1;
+        hasMore = data['has_more'] == true;
+        threads
+          ..clear()
+          ..addAll(
+            raw is List
+                ? raw
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList()
+                : [],
+          );
+        error = null;
       });
     }
   }

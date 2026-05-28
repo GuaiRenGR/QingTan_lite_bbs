@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
+import '../utils/url_helper.dart';
 import 'api_result.dart';
 
 class ApiClient {
@@ -30,6 +31,7 @@ class ApiClient {
   )..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          options.baseUrl = UrlHelper.fix(options.baseUrl);
           final token = await TokenStorage.instance.getToken();
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
