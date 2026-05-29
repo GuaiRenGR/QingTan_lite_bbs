@@ -99,7 +99,8 @@ class _SearchPageState extends State<SearchPage> {
             decoration: InputDecoration(
               hintText: '搜索帖子、标签',
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               suffixIcon: controller.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear, size: 20),

@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/emoji_input_field.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
@@ -973,11 +974,12 @@ class _BottomActionBarState extends State<_BottomActionBar> {
                         setState(() => _showEmojiPicker = false);
                       }
                     },
-                    child: TextField(
+                    child: EmojiInputField(
                       controller: widget.controller,
                       focusNode: widget.focusNode,
                       minLines: 1,
                       maxLines: 3,
+                      hintText: hasReply ? '回复评论...' : '说点什么...',
                       onTap: () {
                         if (_showEmojiPicker) {
                           setState(() => _showEmojiPicker = false);

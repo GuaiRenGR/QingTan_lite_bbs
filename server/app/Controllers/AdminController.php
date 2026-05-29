@@ -15,6 +15,38 @@ class AdminController
         return $user;
     }
 
+    public static function stats()
+    {
+        self::requireAdmin();
+
+        $users = \Database::table('users');
+        $threads = \Database::table('threads');
+        $posts = \Database::table('posts');
+        $today = date('Y-m-d');
+
+        $userCount = \Database::fetch("SELECT COUNT(*) AS c FROM {$users}");
+        $threadCount = \Database::fetch("SELECT COUNT(*) AS c FROM {$threads}");
+        $postCount = \Database::fetch("SELECT COUNT(*) AS c FROM {$posts}");
+        $bannedCount = \Database::fetch("SELECT COUNT(*) AS c FROM {$users} WHERE status = 0");
+        $todayThreads = \Database::fetch(
+            "SELECT COUNT(*) AS c FROM {$threads} WHERE DATE(created_at) = ?",
+            [$today]
+        );
+        $todayUsers = \Database::fetch(
+            "SELECT COUNT(*) AS c FROM {$users} WHERE DATE(created_at) = ?",
+            [$today]
+        );
+
+        \Response::success([
+            'user_count' => (int)($userCount['c'] ?? 0),
+            'thread_count' => (int)($threadCount['c'] ?? 0),
+            'post_count' => (int)($postCount['c'] ?? 0),
+            'banned_count' => (int)($bannedCount['c'] ?? 0),
+            'today_threads' => (int)($todayThreads['c'] ?? 0),
+            'today_users' => (int)($todayUsers['c'] ?? 0),
+        ]);
+    }
+
     public static function users()
     {
         self::requireAdmin();

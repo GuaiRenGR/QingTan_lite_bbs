@@ -997,37 +997,6 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
             },
           ),
           const SizedBox(height: 12),
-          const Text(
-            '选择分区',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 42,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: forums.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final forum = forums[index];
-                final id = int.tryParse(forum['id']?.toString() ?? '') ?? 0;
-                final selected = selectedForumId == id;
-
-                return ChoiceChip(
-                  label: Text(forum['name']?.toString() ?? ''),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() {
-                      selectedForumId = id;
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
           TextField(
             controller: titleController,
             maxLength: 80,
@@ -1171,8 +1140,6 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               onDelete: (index) => _deleteImage(index),
             ),
           ],
-          const SizedBox(height: 14),
-          _HelpCard(isImageMode: isImageMode),
         ],
       ),
       backgroundColor: AppColors.scaffoldBg(context),
@@ -1310,35 +1277,6 @@ class _ToolButton extends StatelessWidget {
         foregroundColor: AppColors.text(context),
         side: BorderSide(
           color: Colors.grey.shade200,
-        ),
-      ),
-    );
-  }
-}
-
-class _HelpCard extends StatelessWidget {
-  final bool isImageMode;
-
-  const _HelpCard({
-    required this.isImageMode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.card(context),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        isImageMode
-            ? '图片模式类似小红书：上方展示图片轮播，下方展示文字。上传图片后会保存在 OneDrive，不占用虚拟主机空间。'
-            : '图文模式支持：\n1. 图片标签：[img=图片链接]\n2. 视频标签：[video=视频链接]\n3. 音乐标签：[music=音乐链接]\n4. Markdown 代码块必须放在 [markdown][/markdown] 中\n5. 上传图片/视频/音乐会自动插入对应标签\n6. 链接标签：[url=链接]文字[/url]',
-        style: TextStyle(
-          color: Colors.grey.shade600,
-          fontSize: 13,
-          height: 1.5,
         ),
       ),
     );

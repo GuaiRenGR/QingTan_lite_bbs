@@ -42,12 +42,19 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
       const MePage(),
     ];
 
-    return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: pages,
-      ),
-      bottomNavigationBar: _ForumBottomNavBar(
+    return PopScope(
+      canPop: currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && currentIndex != 0) {
+          ref.read(mainTabIndexProvider.notifier).state = 0;
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: currentIndex,
+          children: pages,
+        ),
+        bottomNavigationBar: _ForumBottomNavBar(
         currentIndex: currentIndex,
         onTap: (index) {
           final prev = ref.read(mainTabIndexProvider);
@@ -65,6 +72,7 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
           context.push('/thread/create');
         },
       ),
+    ),
     );
   }
 }

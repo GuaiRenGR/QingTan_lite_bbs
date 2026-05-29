@@ -272,6 +272,10 @@ try {
             App\Controllers\MessageController::markRead();
             break;
 
+        case 'admin/stats':
+            App\Controllers\AdminController::stats();
+            break;
+
         case 'admin/users':
             App\Controllers\AdminController::users();
             break;
