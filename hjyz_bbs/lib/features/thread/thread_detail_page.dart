@@ -584,6 +584,7 @@ class _ThreadMainCard extends StatelessWidget {
 
     final title = thread['title']?.toString() ?? '';
     final content = thread['content']?.toString() ?? '';
+    final visibility = thread['visibility']?.toString() ?? 'public';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -633,13 +634,24 @@ class _ThreadMainCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              height: 1.35,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              if (visibility != 'public') ...[
+                const SizedBox(width: 8),
+                _VisibilityBadge(visibility: visibility),
+              ],
+            ],
           ),
           const SizedBox(height: 12),
           ForumContentView(
@@ -1075,6 +1087,41 @@ class _ActionIcon extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VisibilityBadge extends StatelessWidget {
+  final String visibility;
+
+  const _VisibilityBadge({required this.visibility});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (visibility) {
+      'pending' => ('待审核', Colors.orange),
+      'private' => ('私有', Colors.grey),
+      'locked' => ('已锁定', Colors.red),
+      _ => ('', Colors.grey),
+    };
+
+    if (label.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

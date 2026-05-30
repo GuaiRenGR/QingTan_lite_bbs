@@ -14,11 +14,12 @@ class AdminCenterPage extends StatefulWidget {
 class _AdminCenterPageState extends State<AdminCenterPage> {
   bool loading = true;
   Map<String, dynamic> stats = {};
+  bool requireReview = false;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _loadAll();
   }
 
   int _toInt(dynamic v) {
@@ -26,6 +27,47 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     if (v is double) return v.toInt();
     if (v is String) return int.tryParse(v) ?? 0;
     return 0;
+  }
+
+  Future<void> _loadAll() async {
+    await Future.wait([_loadStats(), _loadSettings()]);
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _loadSettings() async {
+    final result = await ApiClient.instance.get('admin/settings/get');
+    if (result.success && result.data is Map) {
+      final data = result.data as Map;
+      if (mounted) {
+        setState(() {
+          requireReview = data['require_review'] == '1';
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleReview(bool value) async {
+    final result = await ApiClient.instance.post(
+      'admin/settings/update',
+      data: {
+        'settings': {
+          'require_review': value ? '1' : '0',
+        },
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() => requireReview = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(value ? '已开启审核功能' : '已关闭审核功能')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
   }
 
   Future<void> _loadStats() async {
@@ -36,10 +78,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     if (result.success && result.data is Map) {
       setState(() {
         stats = Map<String, dynamic>.from(result.data as Map);
-        loading = false;
       });
-    } else {
-      setState(() => loading = false);
     }
   }
 
@@ -76,12 +115,8 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 _AdminEntry(
                   icon: Icons.fact_check_outlined,
                   title: '内容审核',
-                  subtitle: '审核待处理的帖子和评论',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('内容审核开发中')),
-                    );
-                  },
+                  subtitle: '审核待处理的帖子',
+                  onTap: () => context.push('/admin/review'),
                 ),
                 _AdminEntry(
                   icon: Icons.forum_outlined,
@@ -96,10 +131,33 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 _AdminEntry(
                   icon: Icons.settings_outlined,
                   title: '系统设置',
-                  subtitle: '站点配置、公告管理',
+                  subtitle: '审核开关、站点配置',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('系统设置开发中')),
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('系统设置'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SwitchListTile(
+                              title: const Text('发帖审核'),
+                              subtitle: const Text('开启后普通用户发帖需审核'),
+                              value: requireReview,
+                              onChanged: (v) {
+                                _toggleReview(v);
+                                Navigator.pop(ctx);
+                              },
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('关闭'),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),

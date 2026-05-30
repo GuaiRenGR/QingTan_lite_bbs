@@ -19,6 +19,7 @@ class ThreadCreateController
         $imageUrls = parse_json_array_input(\Request::input('image_urls', []));
         $attachmentIds = parse_json_array_input(\Request::input('attachment_ids', []));
         $tagNames = \Request::input('tags', []);
+        $requestedVisibility = \Request::str('visibility', 'public');
 
         if (!in_array($mode, ['article', 'image'], true)) {
             $mode = 'article';
@@ -67,6 +68,14 @@ class ThreadCreateController
         $summarySource = preg_replace('/\[img=https?:\/\/[^\]\s]+\]/i', '', $summarySource);
         $summary = make_summary($summarySource, 120);
 
+        // 确定帖子可见性
+        $visibility = 'public';
+        if ($requestedVisibility === 'private' && \SiteSetting::isAdmin($user)) {
+            $visibility = 'private';
+        } elseif (\SiteSetting::isReviewRequired() && !\SiteSetting::isReviewer($user)) {
+            $visibility = 'pending';
+        }
+
         $threads = \Database::table('threads');
         $attachments = \Database::table('attachments');
 
@@ -78,9 +87,9 @@ class ThreadCreateController
                 (`forum_id`, `user_id`, `title`, `content`, `summary`, `cover`,
                  `mode`, `images_json`, `music_url`, `music_name`,
                  `view_count`, `reply_count`, `like_count`, `favorite_count`, `share_count`,
-                 `is_top`, `is_digest`, `status`, `created_at`, `updated_at`)
+                 `is_top`, `is_digest`, `status`, `visibility`, `created_at`, `updated_at`)
                 VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?)",
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?, ?)",
                 [
                     $forumId,
                     $user['id'],
@@ -92,6 +101,7 @@ class ThreadCreateController
                     json_encode($allImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                     $musicUrl,
                     $musicName,
+                    $visibility,
                     now(),
                     now(),
                 ]

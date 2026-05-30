@@ -230,4 +230,169 @@ class AdminController
 
         \Response::success(null, '用户创建成功');
     }
+
+    // ========== 审核 ==========
+
+    private static function requireReviewer()
+    {
+        $user = \Auth::requireLogin();
+
+        if (!\SiteSetting::isReviewer($user)) {
+            \Response::json(403, '无审核权限');
+        }
+
+        return $user;
+    }
+
+    public static function reviewList()
+    {
+        self::requireReviewer();
+
+        $page = max(1, \Request::int('page', 1));
+        $pageSize = min(50, max(1, \Request::int('page_size', 20)));
+        $offset = ($page - 1) * $pageSize;
+
+        $threads = \Database::table('threads');
+        $users = \Database::table('users');
+
+        $countRow = \Database::fetch(
+            "SELECT COUNT(*) AS c FROM {$threads} WHERE status = 1 AND visibility = 'pending'"
+        );
+        $total = (int)($countRow['c'] ?? 0);
+
+        $rows = \Database::fetchAll(
+            "SELECT t.id, t.title, t.summary, t.cover, t.mode, t.visibility, t.created_at,
+                    u.id AS author_id, u.nickname AS author_name, u.avatar AS author_avatar
+             FROM {$threads} t
+             LEFT JOIN {$users} u ON u.id = t.user_id
+             WHERE t.status = 1 AND t.visibility = 'pending'
+             ORDER BY t.created_at DESC
+             LIMIT {$pageSize} OFFSET {$offset}"
+        );
+
+        $list = array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'title' => $row['title'],
+                'summary' => $row['summary'] ?? '',
+                'cover' => $row['cover'] ?? '',
+                'mode' => $row['mode'] ?? 'article',
+                'visibility' => $row['visibility'],
+                'created_at' => $row['created_at'],
+                'author' => [
+                    'id' => (int)$row['author_id'],
+                    'nickname' => $row['author_name'] ?: '用户',
+                    'avatar' => $row['author_avatar'] ?: '',
+                ],
+            ];
+        }, $rows);
+
+        \Response::success([
+            'list' => $list,
+            'total' => $total,
+            'page' => $page,
+            'page_size' => $pageSize,
+        ]);
+    }
+
+    public static function reviewApprove()
+    {
+        $user = self::requireReviewer();
+
+        $threadId = \Request::int('thread_id');
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id, visibility FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        \Database::execute(
+            "UPDATE {$threads} SET visibility = 'public', updated_at = ? WHERE id = ?",
+            [now(), $threadId]
+        );
+
+        // 记录审核日志
+        $auditLog = \Database::table('audit_log');
+        \Database::execute(
+            "INSERT INTO {$audit_log} (`thread_id`, `action`, `reviewer_id`, `remark`, `created_at`) VALUES (?, 'approve', ?, ?, ?)",
+            [$threadId, $user['id'], \Request::str('remark', ''), now()]
+        );
+
+        \Response::success(null, '已通过审核');
+    }
+
+    public static function reviewReject()
+    {
+        $user = self::requireReviewer();
+
+        $threadId = \Request::int('thread_id');
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id, visibility FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        \Database::execute(
+            "UPDATE {$threads} SET visibility = 'locked', updated_at = ? WHERE id = ?",
+            [now(), $threadId]
+        );
+
+        // 记录审核日志
+        $auditLog = \Database::table('audit_log');
+        \Database::execute(
+            "INSERT INTO {$audit_log} (`thread_id`, `action`, `reviewer_id`, `remark`, `created_at`) VALUES (?, 'reject', ?, ?, ?)",
+            [$threadId, $user['id'], \Request::str('remark', ''), now()]
+        );
+
+        \Response::success(null, '已拒绝');
+    }
+
+    // ========== 设置 ==========
+
+    public static function settingsGet()
+    {
+        self::requireAdmin();
+
+        $table = \Database::table('site_settings');
+        $rows = \Database::fetchAll("SELECT `key`, `value` FROM {$table}");
+
+        $settings = [];
+        foreach ($rows as $row) {
+            $settings[$row['key']] = $row['value'];
+        }
+
+        \Response::success($settings);
+    }
+
+    public static function settingsUpdate()
+    {
+        self::requireAdmin();
+
+        $settings = \Request::input('settings', []);
+        if (!is_array($settings)) {
+            \Response::json(422, '参数错误');
+        }
+
+        foreach ($settings as $key => $value) {
+            \SiteSetting::set($key, (string)$value);
+        }
+
+        \Response::success(null, '设置已更新');
+    }
 }

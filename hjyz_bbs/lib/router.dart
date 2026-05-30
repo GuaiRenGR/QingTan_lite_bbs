@@ -16,6 +16,7 @@ import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
 import 'features/profile/edit_profile_page.dart';
 import 'features/admin/admin_center_page.dart';
+import 'features/admin/admin_review_page.dart';
 import 'features/admin/admin_users_page.dart';
 import 'features/user/user_home_page.dart';
 
@@ -120,6 +121,10 @@ final router = GoRouter(
     GoRoute(
       path: '/admin/users',
       builder: (_, _) => const AdminUsersPage(),
+    ),
+    GoRoute(
+      path: '/admin/review',
+      builder: (_, _) => const AdminReviewPage(),
     ),
   ],
   errorBuilder: (_, _) {

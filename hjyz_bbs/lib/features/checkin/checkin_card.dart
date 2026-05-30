@@ -11,7 +11,7 @@ class CheckinCard extends StatefulWidget {
 
 class _CheckinCardState extends State<CheckinCard> {
   bool checkedIn = false;
-  int checkinDays = 0;
+  int continuousDays = 0;
   int points = 0;
   bool loading = false;
 
@@ -27,8 +27,8 @@ class _CheckinCardState extends State<CheckinCard> {
     if (result.success && result.data is Map<String, dynamic>) {
       final data = result.data as Map<String, dynamic>;
       setState(() {
-        checkedIn = data['checked_in'] == true;
-        checkinDays = _toInt(data['checkin_days']);
+        checkedIn = data['checked_today'] == true;
+        continuousDays = _toInt(data['continuous_days']);
         points = _toInt(data['points']);
       });
     }
@@ -46,12 +46,12 @@ class _CheckinCardState extends State<CheckinCard> {
       final data = result.data as Map<String, dynamic>;
       setState(() {
         checkedIn = true;
-        checkinDays = _toInt(data['checkin_days']);
-        points = _toInt(data['points']);
+        continuousDays = _toInt(data['continuous_days']);
+        points = _toInt(data['score']);
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('签到成功！已连续签到 $checkinDays 天')),
+          SnackBar(content: Text('签到成功！已连续签到 $continuousDays 天')),
         );
       }
     } else {
@@ -95,7 +95,7 @@ class _CheckinCardState extends State<CheckinCard> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '连续 $checkinDays 天 · 积分 $points',
+                  '连续 $continuousDays 天 · 积分 $points',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,

@@ -9,6 +9,7 @@ class CheckinController
         $user = \Auth::requireLogin();
 
         $checkins = \Database::table('checkins');
+        $users = \Database::table('users');
 
         $today = today();
 
@@ -22,9 +23,15 @@ class CheckinController
             [$user['id']]
         );
 
+        $userRow = \Database::fetch(
+            "SELECT score FROM {$users} WHERE id = ? LIMIT 1",
+            [$user['id']]
+        );
+
         \Response::success([
             'checked_today' => $todayRecord ? true : false,
             'continuous_days' => $latest ? (int)$latest['continuous_days'] : 0,
+            'points' => $userRow ? (int)$userRow['score'] : 0,
             'today_reward' => self::reward(($latest ? (int)$latest['continuous_days'] : 0) + 1),
         ]);
     }

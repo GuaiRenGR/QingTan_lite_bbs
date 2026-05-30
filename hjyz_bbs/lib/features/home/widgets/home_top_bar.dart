@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../auth/auth_controller.dart';
 
-class HomeTopBar extends ConsumerWidget {
+class HomeTopBar extends ConsumerStatefulWidget {
   final VoidCallback? onAvatarTap;
   final VoidCallback? onSearchTap;
   final VoidCallback? onMessageTap;
@@ -19,7 +20,37 @@ class HomeTopBar extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeTopBar> createState() => _HomeTopBarState();
+}
+
+class _HomeTopBarState extends ConsumerState<HomeTopBar> {
+  int unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnread();
+  }
+
+  Future<void> refreshUnread() async {
+    await _loadUnread();
+  }
+
+  Future<void> _loadUnread() async {
+    final result = await ApiClient.instance.get('messages/unread');
+    if (!mounted || !result.success) return;
+    if (result.data is Map) {
+      final count = (result.data as Map)['unread_count'];
+      if (mounted) {
+        setState(() {
+          unreadCount = count is int ? count : (int.tryParse('$count') ?? 0);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
 
     final avatar = auth.user?['avatar']?.toString() ?? '';
@@ -35,7 +66,7 @@ class HomeTopBar extends ConsumerWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: onAvatarTap,
+            onTap: widget.onAvatarTap,
             child: SafeNetworkImage(
               url: avatar.isNotEmpty ? avatar : AppConfig.defaultAvatar,
               width: 36,
@@ -54,7 +85,7 @@ class HomeTopBar extends ConsumerWidget {
           const SizedBox(width: 10),
           Expanded(
             child: GestureDetector(
-              onTap: onSearchTap,
+              onTap: widget.onSearchTap,
               child: Container(
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -84,7 +115,7 @@ class HomeTopBar extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: onMessageTap,
+            onTap: widget.onMessageTap,
             child: SizedBox(
               width: 36,
               height: 36,
@@ -96,16 +127,31 @@ class HomeTopBar extends ConsumerWidget {
                     color: Colors.grey.shade800,
                     size: 25,
                   ),
-                  if (auth.loggedIn)
+                  if (auth.loggedIn && unreadCount > 0)
                     Positioned(
-                      right: 5,
-                      top: 6,
+                      right: 2,
+                      top: 4,
                       child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFB7299),
-                          shape: BoxShape.circle,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFB7299),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        child: Text(
+                          unreadCount > 99 ? '99+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),

@@ -188,6 +188,12 @@ class UserController
 
         $threads = \Database::table('threads');
 
+        $viewer = \Auth::user();
+        $viewerId = $viewer ? (int)$viewer['id'] : 0;
+        $isSelf = $viewerId === $userId;
+
+        $visibilityWhere = $isSelf ? '' : " AND visibility = 'public'";
+
         $rows = \Database::fetchAll(
             "SELECT
                 id,
@@ -203,9 +209,10 @@ class UserController
                 favorite_count,
                 is_top,
                 is_digest,
+                visibility,
                 created_at
              FROM {$threads}
-             WHERE user_id = ? AND status = 1
+             WHERE user_id = ? AND status = 1 {$visibilityWhere}
              ORDER BY created_at DESC
              LIMIT {$offset}, {$pageSize}",
             [$userId]

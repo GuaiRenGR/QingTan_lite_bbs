@@ -15,7 +15,7 @@ class HomeController
         $users = \Database::table('users');
         $forums = \Database::table('forums');
 
-        $where = "t.status = 1";
+        $where = "t.status = 1 AND t.visibility = 'public'";
         $params = [];
 
         if ($channel === 'digest') {

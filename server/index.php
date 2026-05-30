@@ -7,6 +7,7 @@ require_once FX_ROOT . '/core/Response.php';
 require_once FX_ROOT . '/core/Request.php';
 require_once FX_ROOT . '/core/Database.php';
 require_once FX_ROOT . '/core/Auth.php';
+require_once FX_ROOT . '/core/SiteSetting.php';
 require_once FX_ROOT . '/core/OneDriveService.php';
 
 spl_autoload_register(function ($class) {
@@ -294,6 +295,26 @@ try {
 
         case 'admin/user/create':
             App\Controllers\AdminController::create();
+            break;
+
+        case 'admin/review/list':
+            App\Controllers\AdminController::reviewList();
+            break;
+
+        case 'admin/review/approve':
+            App\Controllers\AdminController::reviewApprove();
+            break;
+
+        case 'admin/review/reject':
+            App\Controllers\AdminController::reviewReject();
+            break;
+
+        case 'admin/settings/get':
+            App\Controllers\AdminController::settingsGet();
+            break;
+
+        case 'admin/settings/update':
+            App\Controllers\AdminController::settingsUpdate();
             break;
 
         default:

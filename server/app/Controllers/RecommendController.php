@@ -47,7 +47,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1
+             WHERE t.status = 1 AND t.visibility = 'public'
              ORDER BY t.is_top DESC, t.created_at DESC
              LIMIT {$offset}, {$pageSize}"
         );
@@ -65,7 +65,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1
+             WHERE t.status = 1 AND t.visibility = 'public'
              ORDER BY t.is_top DESC,
                (t.view_count + t.like_count * 5 + t.reply_count * 3) DESC,
                t.created_at DESC
@@ -85,7 +85,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1 AND t.is_digest = 1
+             WHERE t.status = 1 AND t.visibility = 'public' AND t.is_digest = 1
              ORDER BY t.is_top DESC, t.created_at DESC
              LIMIT {$offset}, {$pageSize}"
         );
@@ -122,7 +122,7 @@ class RecommendController
                    ON h.user_id = ?
                   AND h.object_type = 'thread'
                   AND h.object_id = t.id
-                 WHERE t.status = 1
+                 WHERE t.status = 1 AND t.visibility = 'public'
                  GROUP BY t.id
                  ORDER BY
                    t.is_top DESC,
@@ -159,7 +159,7 @@ class RecommendController
                    ON s.object_type = 'thread'
                   AND s.object_id = t.id
                   AND s.stat_date >= ?
-                 WHERE t.status = 1
+                 WHERE t.status = 1 AND t.visibility = 'public'
                  GROUP BY t.id
                  ORDER BY
                    t.is_top DESC,

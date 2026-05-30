@@ -44,6 +44,24 @@ class ThreadReadController
         $viewer = \Auth::user();
         $viewerId = $viewer ? (int)$viewer['id'] : 0;
 
+        // 可见性检查
+        $visibility = $thread['visibility'] ?? 'public';
+        $isOwner = $viewerId > 0 && $viewerId === (int)$thread['user_id'];
+        $isViewerReviewer = $viewer && \SiteSetting::isReviewer($viewer);
+        $isViewerAdmin = $viewer && \SiteSetting::isAdmin($viewer);
+
+        if ($visibility === 'private' && !$isOwner && !$isViewerAdmin) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        if ($visibility === 'pending' && !$isOwner && !$isViewerReviewer) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        if ($visibility === 'locked' && !$isOwner && !$isViewerReviewer) {
+            \Response::json(404, '帖子不存在');
+        }
+
         $isLiked = false;
         $isFavorited = false;
 
@@ -161,8 +179,9 @@ class ThreadReadController
                 'share_count' => (int)($thread['share_count'] ?? 0),
                 'is_liked' => $isLiked,
                 'is_favorited' => $isFavorited,
-                'is_owner' => $viewerId > 0 && $viewerId === (int)$thread['user_id'],
-                'is_admin' => $viewerId > 0 && (int)($viewer['group_id'] ?? 0) === 99,
+                'is_owner' => $isOwner,
+                'is_admin' => $isViewerAdmin,
+                'visibility' => $visibility,
                 'can_view_hidden' => $canViewHidden,
                 'tags' => get_thread_tags($thread['id']),
                 'created_at' => $thread['created_at'],
@@ -227,7 +246,7 @@ class ThreadReadController
              INNER JOIN {$follows} f ON f.following_id = t.user_id
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE f.follower_id = ?
-               AND t.status = 1
+               AND t.status = 1 AND t.visibility = 'public'
              ORDER BY t.created_at DESC
              LIMIT {$offset}, {$pageSize}",
             [

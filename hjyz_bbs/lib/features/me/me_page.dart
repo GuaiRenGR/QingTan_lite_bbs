@@ -178,6 +178,14 @@ class MePage extends ConsumerWidget {
               context.push('/history');
             },
           ),
+          if ((user['group_id'] ?? 0) >= 50)
+            _MenuItem(
+              icon: Icons.fact_check_outlined,
+              text: '内容审核',
+              onTap: () {
+                context.push('/admin/review');
+              },
+            ),
           if ((user['group_id'] ?? 0) == 99)
             _MenuItem(
               icon: Icons.admin_panel_settings_outlined,
