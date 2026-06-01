@@ -19,6 +19,7 @@ import 'features/profile/edit_profile_page.dart';
 import 'features/admin/admin_center_page.dart';
 import 'features/admin/admin_review_page.dart';
 import 'features/admin/admin_users_page.dart';
+import 'features/download/download_page.dart';
 import 'features/user/user_home_page.dart';
 
 final router = GoRouter(
@@ -126,6 +127,10 @@ final router = GoRouter(
     GoRoute(
       path: '/admin/review',
       builder: (_, _) => const AdminReviewPage(),
+    ),
+    GoRoute(
+      path: '/downloads',
+      builder: (_, _) => const DownloadPage(),
     ),
     GoRoute(
       path: '/dv/:code',

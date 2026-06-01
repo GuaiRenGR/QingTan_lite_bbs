@@ -898,8 +898,12 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       if (!mounted) return;
 
       if (!result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message.isEmpty ? '操作失败' : result.message)),
+        _showDebugDialog(
+          title: '发布失败',
+          message: result.message,
+          code: result.code,
+          endpoint: endpoint,
+          body: body,
         );
         return;
       }
@@ -946,6 +950,45 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         });
       }
     }
+  }
+
+  void _showDebugDialog({
+    required String title,
+    required String message,
+    int? code,
+    String? endpoint,
+    Map<String, dynamic>? body,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln('错误信息: $message');
+    if (code != null) buffer.writeln('错误码: $code');
+    if (endpoint != null) buffer.writeln('接口: $endpoint');
+    if (body != null) {
+      buffer.writeln('请求体:');
+      body.forEach((key, value) {
+        final v = value.toString();
+        buffer.writeln('  $key: ${v.length > 200 ? '${v.substring(0, 200)}...' : v}');
+      });
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            buffer.toString(),
+            style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _clearDraftSafely() async {

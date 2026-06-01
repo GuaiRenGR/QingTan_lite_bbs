@@ -143,9 +143,9 @@ class ThreadCreateController
 
         } catch (\Throwable $e) {
             \Database::rollback();
-            log_error($e->getMessage());
+            log_error('[ThreadCreate] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
 
-            \Response::json(500, '发布失败');
+            \Response::json(500, '发布失败: ' . $e->getMessage());
         }
     }
 }

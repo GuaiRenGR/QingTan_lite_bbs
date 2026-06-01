@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -169,6 +170,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   });
                   _saveBool('use_builtin_downloader', value);
                 },
+              ),
+              _SettingTile(
+                icon: Icons.folder_open_outlined,
+                title: '下载管理',
+                subtitle: '查看和管理下载任务',
+                onTap: () => context.push('/downloads'),
               ),
             ],
           ),

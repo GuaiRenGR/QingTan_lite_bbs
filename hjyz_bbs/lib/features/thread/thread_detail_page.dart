@@ -594,6 +594,7 @@ class _ThreadMainCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
@@ -758,6 +759,7 @@ class _CommentItem extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 GestureDetector(

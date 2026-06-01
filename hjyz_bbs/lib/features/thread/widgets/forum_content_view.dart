@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -35,6 +34,7 @@ class ForumContentView extends StatelessWidget {
         .toList();
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final part in parts) _buildPart(context, part, allImages),
@@ -232,12 +232,6 @@ class ForumContentView extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 12),
           child: _AttachmentCard(attachmentId: part.value),
         );
-
-      case _ContentPartType.thread:
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _ThreadLinkCard(dvCode: part.value),
-        );
     }
   }
 
@@ -315,8 +309,7 @@ class ForumContentView extends StatelessWidget {
       r'|(\[music=(https?:\/\/[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
-      r'|(\[attach=(\d+)\])'
-      r'|(\[thread=([A-Za-z0-9]+)\])',
+      r'|(\[attach=(\d+)\])',
       caseSensitive: false,
     );
 
@@ -345,7 +338,6 @@ class ForumContentView extends StatelessWidget {
       final linkUrl = match.group(12);
       final linkText = match.group(13);
       final attachment = match.group(15);
-      final threadDv = match.group(18);
 
       if (markdown != null) {
         result.add(
@@ -399,13 +391,6 @@ class ForumContentView extends StatelessWidget {
             value: attachment.trim(),
           ),
         );
-      } else if (threadDv != null) {
-        result.add(
-          _ContentPart(
-            type: _ContentPartType.thread,
-            value: threadDv.trim(),
-          ),
-        );
       }
 
       last = match.end;
@@ -436,7 +421,6 @@ enum _ContentPartType {
   link,
   hidden,
   attachment,
-  thread,
 }
 
 class _ContentPart {
@@ -567,59 +551,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
     _downloadUrl = '${apiBase}index.php?route=file/resolve&id=$id';
     _loadInfo();
-  }
-
-  Future<void> _handleTap() async {
-    final useBuiltin = await _isBuiltinDownloaderEnabled();
-    if (!useBuiltin) {
-      final uri = Uri.tryParse(_downloadUrl);
-      if (uri != null) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-      return;
-    }
-
-    final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
-    final service = DownloadService.instance;
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('开始下载: $name')),
-      );
-    }
-
-    final task = await service.download(
-      url: _downloadUrl,
-      fileName: name,
-      taskId: 'att_${widget.attachmentId}',
-    );
-
-    if (mounted) {
-      if (task.status == DownloadStatus.completed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('下载完成: $name'),
-            action: SnackBarAction(
-              label: '打开',
-              onPressed: () => service.openFile(task.id),
-            ),
-          ),
-        );
-      } else if (task.status == DownloadStatus.failed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载失败: ${task.error ?? "未知错误"}')),
-        );
-      }
-    }
-  }
-
-  Future<bool> _isBuiltinDownloaderEnabled() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('use_builtin_downloader') ?? true;
-    } catch (_) {
-      return true;
-    }
   }
 
   Future<void> _loadInfo() async {
@@ -758,6 +689,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final name = _info!['name']?.toString() ?? '未知文件';
     final size = _info!['size'] is int ? _info!['size'] as int : 0;
     final mimeType = _info!['type']?.toString();
+    final url = _info!['url']?.toString() ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -769,7 +701,28 @@ class _AttachmentCardState extends State<_AttachmentCard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: _handleTap,
+          onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                if (!mounted) return;
+                final useBuiltin = prefs.getBool('use_builtin_downloader') ?? true;
+                if (useBuiltin) {
+                  final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
+                  final service = DownloadService.instance;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('开始下载: $name')),
+                  );
+                  service.download(
+                    url: _downloadUrl,
+                    fileName: name,
+                    taskId: 'att_${widget.attachmentId}',
+                  );
+                } else {
+                  final uri = Uri.tryParse(_downloadUrl);
+                  if (uri != null) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                }
+              },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -846,207 +799,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 帖子链接卡片 — 通过 DV 号获取帖子信息并渲染为横向卡片
-class _ThreadLinkCard extends StatefulWidget {
-  final String dvCode;
-
-  const _ThreadLinkCard({required this.dvCode});
-
-  @override
-  State<_ThreadLinkCard> createState() => _ThreadLinkCardState();
-}
-
-class _ThreadLinkCardState extends State<_ThreadLinkCard> {
-  Map<String, dynamic>? _thread;
-  bool _loading = true;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadThread();
-  }
-
-  Future<void> _loadThread() async {
-    try {
-      final result = await ApiClient.instance.get(
-        'threads/detail-by-dv',
-        query: {'dv_code': widget.dvCode},
-      );
-
-      if (!mounted) return;
-
-      if (result.success && result.data is Map<String, dynamic>) {
-        final data = result.data as Map<String, dynamic>;
-        final thread = data['thread'];
-        if (thread is Map<String, dynamic>) {
-          setState(() {
-            _thread = thread;
-            _loading = false;
-          });
-          return;
-        }
-      }
-      setState(() {
-        _loading = false;
-        _failed = true;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _failed = true;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.inputFill(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border(context)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '加载帖子 ${widget.dvCode}...',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_failed || _thread == null) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.inputFill(context),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.link_off, size: 20, color: Colors.grey.shade400),
-            const SizedBox(width: 10),
-            Text(
-              '帖子 ${widget.dvCode}',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final title = _thread!['title']?.toString() ?? '无标题';
-    final cover = _thread!['cover']?.toString() ?? '';
-    final summary = _thread!['summary']?.toString() ?? '';
-    final threadId = (_thread!['id'] as int?) ?? 0;
-
-    return GestureDetector(
-      onTap: threadId > 0
-          ? () => context.push('/thread/$threadId')
-          : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.inputFill(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border(context)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (cover.isNotEmpty)
-              SafeNetworkImage(
-                url: cover,
-                width: 100,
-                height: 80,
-                fit: BoxFit.cover,
-              ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.link_rounded,
-                          size: 14,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          widget.dvCode,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade400,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text(context),
-                      ),
-                    ),
-                    if (summary.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: Colors.grey.shade400,
-              ),
-            ),
-          ],
         ),
       ),
     );
