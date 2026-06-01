@@ -514,6 +514,7 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 _failed
@@ -731,7 +732,8 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border(context)),
         ),
-        child: const Row(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
               width: 20,
@@ -760,6 +762,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           border: Border.all(color: AppColors.border(context)),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.error_outline_rounded,
@@ -802,6 +805,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 44,
@@ -968,6 +972,7 @@ class _ThreadLinkCardState extends State<_ThreadLinkCard> {
           border: Border.all(color: AppColors.border(context)),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(
               width: 18,
@@ -995,6 +1000,7 @@ class _ThreadLinkCardState extends State<_ThreadLinkCard> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.link_off, size: 20, color: Colors.grey.shade400),
             const SizedBox(width: 10),
@@ -1027,6 +1033,7 @@ class _ThreadLinkCardState extends State<_ThreadLinkCard> {
         ),
         clipBehavior: Clip.antiAlias,
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (cover.isNotEmpty)
               SafeNetworkImage(
