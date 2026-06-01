@@ -559,8 +559,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
   bool _loading = true;
   bool _failed = false;
   late final String _downloadUrl;
-  double _downloadProgress = -1;
-  DownloadTask? _task;
 
   @override
   void initState() {
@@ -569,21 +567,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
     _downloadUrl = '${apiBase}index.php?route=file/resolve&id=$id';
     _loadInfo();
-  }
-
-  @override
-  void dispose() {
-    _task?.progressStream.listen(null).cancel();
-    super.dispose();
-  }
-
-  Future<bool> _isBuiltinDownloaderEnabled() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('use_builtin_downloader') ?? true;
-    } catch (_) {
-      return true;
-    }
   }
 
   Future<void> _handleTap() async {
@@ -595,39 +578,24 @@ class _AttachmentCardState extends State<_AttachmentCard> {
       }
       return;
     }
-    await _startDownload();
-  }
 
-  Future<void> _startDownload() async {
     final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
     final service = DownloadService.instance;
 
-    final hasPermission = await service.requestPermission();
-    if (!hasPermission) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('需要存储权限才能下载文件')),
-        );
-      }
-      return;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('开始下载: $name')),
+      );
     }
-
-    setState(() => _downloadProgress = 0);
 
     final task = await service.download(
       url: _downloadUrl,
       fileName: name,
       taskId: 'att_${widget.attachmentId}',
-      onProgress: (p) {
-        if (mounted) setState(() => _downloadProgress = p);
-      },
     );
-
-    _task = task;
 
     if (mounted) {
       if (task.status == DownloadStatus.completed) {
-        setState(() => _downloadProgress = 1.0);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('下载完成: $name'),
@@ -638,11 +606,19 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           ),
         );
       } else if (task.status == DownloadStatus.failed) {
-        setState(() => _downloadProgress = -1);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('下载失败: ${task.error ?? "未知错误"}')),
         );
       }
+    }
+  }
+
+  Future<bool> _isBuiltinDownloaderEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('use_builtin_downloader') ?? true;
+    } catch (_) {
+      return true;
     }
   }
 
@@ -731,8 +707,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border(context)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: const Row(
           children: [
             SizedBox(
               width: 20,
@@ -761,7 +736,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           border: Border.all(color: AppColors.border(context)),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.error_outline_rounded,
@@ -795,12 +769,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: _downloadProgress >= 0 && _downloadProgress < 1
-              ? null
-              : _downloadProgress >= 1
-                  ? () => DownloadService.instance
-                      .openFile('att_${widget.attachmentId}')
-                  : _handleTap,
+          onTap: _handleTap,
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -834,24 +803,13 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (_downloadProgress >= 0 && _downloadProgress < 1)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: _downloadProgress,
-                            minHeight: 6,
-                            backgroundColor: Colors.grey.shade200,
-                            color: const Color(0xFFFB7299),
-                          ),
-                        )
-                      else
-                        Text(
-                          _formatFileSize(size),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
+                      Text(
+                        _formatFileSize(size),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -862,31 +820,21 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: _downloadProgress >= 1
-                        ? Colors.green
-                        : const Color(0xFFFB7299),
+                    color: const Color(0xFFFB7299),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _downloadProgress >= 1
-                            ? Icons.open_in_new_rounded
-                            : _downloadProgress >= 0
-                                ? Icons.downloading_rounded
-                                : Icons.download_rounded,
+                        Icons.download_rounded,
                         color: Colors.white,
                         size: 18,
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text(
-                        _downloadProgress >= 1
-                            ? '打开'
-                            : _downloadProgress >= 0
-                                ? '${(_downloadProgress * 100).toInt()}%'
-                                : '下载',
-                        style: const TextStyle(
+                        '下载',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
