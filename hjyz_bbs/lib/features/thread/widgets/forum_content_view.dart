@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/api_client.dart';
@@ -576,6 +577,27 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     super.dispose();
   }
 
+  Future<bool> _isBuiltinDownloaderEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('use_builtin_downloader') ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _handleTap() async {
+    final useBuiltin = await _isBuiltinDownloaderEnabled();
+    if (!useBuiltin) {
+      final uri = Uri.tryParse(_downloadUrl);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
+    await _startDownload();
+  }
+
   Future<void> _startDownload() async {
     final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
     final service = DownloadService.instance;
@@ -776,7 +798,7 @@ class _AttachmentCardState extends State<_AttachmentCard> {
               : _downloadProgress >= 1
                   ? () => DownloadService.instance
                       .openFile('att_${widget.attachmentId}')
-                  : _startDownload,
+                  : _handleTap,
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
