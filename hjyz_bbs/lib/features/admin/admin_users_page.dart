@@ -132,6 +132,15 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                   ),
                 ),
               ),
+              ListTile(
+                leading: const Icon(Icons.badge_outlined, color: Color(0xFFFB7299)),
+                title: const Text('编辑资料'),
+                subtitle: const Text('铭牌、认证标志'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showEditUserDialog(user);
+                },
+              ),
               if (!isAdmin) ...[
                 ListTile(
                   leading: Icon(
@@ -167,6 +176,129 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
         );
       },
     );
+  }
+
+  void _showEditUserDialog(Map<String, dynamic> user) {
+    final userId = _toInt(user['id']);
+    final badgeNameCtrl = TextEditingController(
+      text: user['badge_name']?.toString() ?? '',
+    );
+    final badgeColorCtrl = TextEditingController(
+      text: user['badge_color']?.toString() ?? '#FB7299',
+    );
+    int verifyLevel = _toInt(user['verify_level']);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('编辑 ${user['nickname'] ?? ''}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('铭牌', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: badgeNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: '铭牌文字',
+                  hintText: '2-5字，留空则清除铭牌',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: badgeColorCtrl,
+                decoration: const InputDecoration(
+                  labelText: '铭牌颜色',
+                  hintText: '#FB7299',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('认证标志', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _VerifyChip(
+                    label: '无',
+                    color: Colors.grey,
+                    selected: verifyLevel == 0,
+                    onTap: () => setDialogState(() => verifyLevel = 0),
+                  ),
+                  _VerifyChip(
+                    label: '已认证',
+                    color: const Color(0xFF4CAF50),
+                    selected: verifyLevel == 1,
+                    onTap: () => setDialogState(() => verifyLevel = 1),
+                  ),
+                  _VerifyChip(
+                    label: '官方',
+                    color: const Color(0xFF2196F3),
+                    selected: verifyLevel == 2,
+                    onTap: () => setDialogState(() => verifyLevel = 2),
+                  ),
+                  _VerifyChip(
+                    label: '知名人物',
+                    color: const Color(0xFFFFB300),
+                    selected: verifyLevel == 3,
+                    onTap: () => setDialogState(() => verifyLevel = 3),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateUser(userId, badgeNameCtrl.text.trim(),
+                    badgeColorCtrl.text.trim(), verifyLevel);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateUser(
+    int userId,
+    String badgeName,
+    String badgeColor,
+    int verifyLevel,
+  ) async {
+    final result = await ApiClient.instance.post(
+      'admin/user/update',
+      data: {
+        'user_id': userId,
+        'badge_name': badgeName,
+        'badge_color': badgeColor,
+        'verify_level': verifyLevel,
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已更新')),
+      );
+      _load(refresh: true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
   }
 
   Future<void> _banUser(int userId) async {
@@ -557,6 +689,68 @@ class _UserRow extends StatelessWidget {
         ),
       ),
       trailing: const Icon(Icons.chevron_right, size: 20),
+    );
+  }
+}
+
+class _VerifyChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _VerifyChip({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.15) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? color : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(Icons.check, size: 14, color: color),
+              ),
+            if (color != Colors.grey && label != '无')
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text(
+                  'V',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: selected ? color : Colors.grey.shade700,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

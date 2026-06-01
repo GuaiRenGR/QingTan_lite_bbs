@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/avatar_with_verify.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
 import '../../core/widgets/safe_network_image.dart';
+import '../../core/widgets/user_badge.dart';
 import '../auth/auth_controller.dart';
 
 class UserHomePage extends ConsumerStatefulWidget {
@@ -154,6 +156,9 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
     final avatar = data['avatar']?.toString() ?? '';
     final bio = data['bio']?.toString() ?? '这个人还没有填写简介';
     final cover = data['space_cover']?.toString() ?? '';
+    final badgeName = data['badge_name']?.toString() ?? '';
+    final badgeColor = data['badge_color']?.toString() ?? '';
+    final verifyLevel = _toInt(data['verify_level']);
 
     final followers = _toInt(data['followers_count']);
     final following = _toInt(data['following_count']);
@@ -191,6 +196,9 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
                           '/chat?conv_id=0&user_id=${widget.userId}&nickname=${Uri.encodeComponent(nickname)}',
                         );
                       },
+                badgeName: badgeName,
+                badgeColor: badgeColor,
+                verifyLevel: verifyLevel,
               ),
             ),
             if (status == 0)
@@ -284,6 +292,9 @@ class _UserHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onFollowTap;
   final VoidCallback? onMessageTap;
+  final String badgeName;
+  final String badgeColor;
+  final int verifyLevel;
 
   const _UserHeader({
     required this.nickname,
@@ -299,6 +310,9 @@ class _UserHeader extends StatelessWidget {
     required this.onBack,
     required this.onFollowTap,
     this.onMessageTap,
+    this.badgeName = '',
+    this.badgeColor = '',
+    this.verifyLevel = 0,
   });
 
   @override
@@ -363,20 +377,10 @@ class _UserHeader extends StatelessWidget {
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: SafeNetworkImage(
-                        url: avatar,
-                        width: 82,
-                        height: 82,
-                        borderRadius: BorderRadius.circular(41),
-                        errorWidget: CircleAvatar(
-                          radius: 41,
-                          backgroundColor: Colors.grey.shade200,
-                          child: Icon(
-                            Icons.person,
-                            size: 42,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
+                      child: AvatarWithVerify(
+                        avatarUrl: avatar,
+                        size: 82,
+                        verifyLevel: verifyLevel,
                       ),
                     ),
                     const SizedBox(width: 18),
@@ -412,7 +416,7 @@ class _UserHeader extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(
+                        Flexible(
                           child: Text(
                             nickname,
                             maxLines: 1,
@@ -423,6 +427,8 @@ class _UserHeader extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (badgeName.isNotEmpty)
+                          UserBadge(name: badgeName, color: badgeColor),
                         if (!isSelf)
                           IconButton(
                             onPressed: onMessageTap,

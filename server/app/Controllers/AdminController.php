@@ -395,4 +395,79 @@ class AdminController
 
         \Response::success(null, '设置已更新');
     }
+
+    // ========== 用户资料编辑 ==========
+
+    public static function updateUser()
+    {
+        self::requireAdmin();
+
+        $userId = \Request::int('user_id');
+        if ($userId <= 0) {
+            \Response::json(422, '用户 ID 错误');
+        }
+
+        $users = \Database::table('users');
+        $target = \Database::fetch(
+            "SELECT id, group_id FROM {$users} WHERE id = ? LIMIT 1",
+            [$userId]
+        );
+
+        if (!$target) {
+            \Response::json(404, '用户不存在');
+        }
+
+        $fields = [];
+        $params = [];
+
+        // 铭牌
+        $badgeName = \Request::input('badge_name');
+        if ($badgeName !== null) {
+            $badgeName = trim((string)$badgeName);
+            if ($badgeName === '') {
+                $fields[] = '`badge_name` = NULL';
+                $fields[] = '`badge_color` = NULL';
+            } else {
+                $len = mb_strlen($badgeName);
+                if ($len < 2 || $len > 5) {
+                    \Response::json(422, '铭牌需为 2-5 个字符');
+                }
+                $fields[] = '`badge_name` = ?';
+                $params[] = $badgeName;
+
+                $badgeColor = trim(\Request::str('badge_color', '#FB7299'));
+                if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $badgeColor)) {
+                    $badgeColor = '#FB7299';
+                }
+                $fields[] = '`badge_color` = ?';
+                $params[] = $badgeColor;
+            }
+        }
+
+        // 认证等级
+        $verifyLevel = \Request::input('verify_level');
+        if ($verifyLevel !== null) {
+            $level = (int)$verifyLevel;
+            if ($level < 0 || $level > 3) {
+                \Response::json(422, '认证等级需为 0-3');
+            }
+            $fields[] = '`verify_level` = ?';
+            $params[] = $level;
+        }
+
+        if (empty($fields)) {
+            \Response::json(422, '没有需要更新的字段');
+        }
+
+        $fields[] = '`updated_at` = ?';
+        $params[] = now();
+        $params[] = $userId;
+
+        \Database::execute(
+            "UPDATE {$users} SET " . implode(', ', $fields) . " WHERE id = ?",
+            $params
+        );
+
+        \Response::success(null, '用户资料已更新');
+    }
 }

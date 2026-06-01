@@ -321,6 +321,10 @@ try {
             App\Controllers\AdminController::settingsUpdate();
             break;
 
+        case 'admin/user/update':
+            App\Controllers\AdminController::updateUser();
+            break;
+
         default:
             Response::json(404, '接口不存在');
     }

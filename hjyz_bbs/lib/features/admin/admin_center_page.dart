@@ -15,6 +15,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   bool loading = true;
   Map<String, dynamic> stats = {};
   bool requireReview = false;
+  Map<String, String> downloadLinks = {};
 
   @override
   void initState() {
@@ -41,6 +42,9 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
       if (mounted) {
         setState(() {
           requireReview = data['require_review'] == '1';
+          for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
+            downloadLinks[key] = (data['dl_$key'] ?? '').toString();
+          }
         });
       }
     }
@@ -79,6 +83,103 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
       setState(() {
         stats = Map<String, dynamic>.from(result.data as Map);
       });
+    }
+  }
+
+  void _showSettingsDialog() {
+    final dlCtrls = <String, TextEditingController>{};
+    for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
+      dlCtrls[key] = TextEditingController(text: downloadLinks[key] ?? '');
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('系统设置'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  title: const Text('发帖审核'),
+                  subtitle: const Text('开启后普通用户发帖需审核'),
+                  value: requireReview,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) {
+                    _toggleReview(v);
+                    setDialogState(() {});
+                  },
+                ),
+                const Divider(height: 24),
+                const Text(
+                  '下载链接',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '配置后 download.php?os=xxx 将跳转到对应链接',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 12),
+                _DownloadField(label: 'Android', controller: dlCtrls['android']!),
+                const SizedBox(height: 8),
+                _DownloadField(label: 'iOS', controller: dlCtrls['ios']!),
+                const SizedBox(height: 8),
+                _DownloadField(label: 'Windows', controller: dlCtrls['windows']!),
+                const SizedBox(height: 8),
+                _DownloadField(label: 'macOS', controller: dlCtrls['macos']!),
+                const SizedBox(height: 8),
+                _DownloadField(label: 'Linux', controller: dlCtrls['linux']!),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _saveDownloadLinks(dlCtrls);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveDownloadLinks(
+      Map<String, TextEditingController> ctrls) async {
+    final settings = <String, String>{};
+    for (final entry in ctrls.entries) {
+      settings['dl_${entry.key}'] = entry.value.text.trim();
+    }
+
+    final result = await ApiClient.instance.post(
+      'admin/settings/update',
+      data: {'settings': settings},
+    );
+
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        for (final entry in settings.entries) {
+          downloadLinks[entry.key.replaceFirst('dl_', '')] = entry.value;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('下载链接已保存')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
     }
   }
 
@@ -131,35 +232,8 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 _AdminEntry(
                   icon: Icons.settings_outlined,
                   title: '系统设置',
-                  subtitle: '审核开关、站点配置',
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('系统设置'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SwitchListTile(
-                              title: const Text('发帖审核'),
-                              subtitle: const Text('开启后普通用户发帖需审核'),
-                              value: requireReview,
-                              onChanged: (v) {
-                                _toggleReview(v);
-                                Navigator.pop(ctx);
-                              },
-                            ),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('关闭'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  subtitle: '审核开关、下载链接配置',
+                  onTap: () => _showSettingsDialog(),
                 ),
               ],
             ),
@@ -321,6 +395,28 @@ class _AdminEntry extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _DownloadField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+
+  const _DownloadField({required this.label, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: 'https://...',
+        border: const OutlineInputBorder(),
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
   }

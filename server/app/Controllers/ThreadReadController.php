@@ -29,7 +29,10 @@ class ThreadReadController
                 u.id AS author_id,
                 u.nickname AS author_name,
                 u.username AS author_username,
-                u.avatar AS author_avatar
+                u.avatar AS author_avatar,
+                u.badge_name AS author_badge_name,
+                u.badge_color AS author_badge_color,
+                u.verify_level AS author_verify_level
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE t.id = ? AND t.status = 1
@@ -123,7 +126,10 @@ class ThreadReadController
             "SELECT
                 p.*,
                 u.nickname AS author_name,
-                u.avatar AS author_avatar
+                u.avatar AS author_avatar,
+                u.badge_name AS author_badge_name,
+                u.badge_color AS author_badge_color,
+                u.verify_level AS author_verify_level
              FROM {$posts} p
              LEFT JOIN {$users} u ON u.id = p.user_id
              WHERE p.thread_id = ? AND p.status = 1
@@ -191,6 +197,9 @@ class ThreadReadController
                     'nickname' => $thread['author_name'] ?: '用户',
                     'username' => $thread['author_username'] ?: '',
                     'avatar' => $thread['author_avatar'] ?: '',
+                    'badge_name' => $thread['author_badge_name'] ?: '',
+                    'badge_color' => $thread['author_badge_color'] ?: '',
+                    'verify_level' => (int)($thread['author_verify_level'] ?? 0),
                 ],
             ],
             'posts' => array_map(function ($row) use ($likedPostIds) {
@@ -208,6 +217,9 @@ class ThreadReadController
                         'id' => (int)$row['user_id'],
                         'nickname' => $row['author_name'] ?: '用户',
                         'avatar' => $row['author_avatar'] ?: '',
+                        'badge_name' => $row['author_badge_name'] ?: '',
+                        'badge_color' => $row['author_badge_color'] ?: '',
+                        'verify_level' => (int)($row['author_verify_level'] ?? 0),
                     ],
                 ];
             }, $commentRows),

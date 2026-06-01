@@ -4,11 +4,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/avatar_with_verify.dart';
 import '../../core/widgets/emoji_input_field.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
-import '../../core/widgets/safe_network_image.dart';
+import '../../core/widgets/user_badge.dart';
 import 'widgets/forum_content_view.dart';
 import 'widgets/xhs_image_pager.dart';
 
@@ -600,27 +601,33 @@ class _ThreadMainCard extends StatelessWidget {
             onTap: onAuthorTap,
             child: Row(
               children: [
-                SafeNetworkImage(
-                  url: authorMap['avatar']?.toString() ?? '',
-                  width: 40,
-                  height: 40,
-                  borderRadius: BorderRadius.circular(20),
-                  errorWidget: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.grey.shade200,
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
+                AvatarWithVerify(
+                  avatarUrl: authorMap['avatar']?.toString() ?? '',
+                  size: 40,
+                  verifyLevel: (authorMap['verify_level'] as int?) ?? 0,
+                  onTap: onAuthorTap,
                 ),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    authorMap['nickname']?.toString() ?? '用户',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          authorMap['nickname']?.toString() ?? '用户',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if ((authorMap['badge_name'] ?? '').toString().isNotEmpty)
+                        UserBadge(
+                          name: authorMap['badge_name'].toString(),
+                          color: (authorMap['badge_color'] ?? '').toString(),
+                        ),
+                    ],
                   ),
                 ),
                 Text(
@@ -741,20 +748,11 @@ class _CommentItem extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: onUserTap,
-            child: SafeNetworkImage(
-              url: authorMap['avatar']?.toString() ?? '',
-              width: 34,
-              height: 34,
-              borderRadius: BorderRadius.circular(17),
-              errorWidget: CircleAvatar(
-                radius: 17,
-                backgroundColor: Colors.grey.shade200,
-                child: Icon(
-                  Icons.person,
-                  color: Colors.grey.shade500,
-                  size: 18,
-                ),
-              ),
+            child: AvatarWithVerify(
+              avatarUrl: authorMap['avatar']?.toString() ?? '',
+              size: 34,
+              verifyLevel: (authorMap['verify_level'] as int?) ?? 0,
+              onTap: onUserTap,
             ),
           ),
           const SizedBox(width: 10),
@@ -764,11 +762,25 @@ class _CommentItem extends StatelessWidget {
               children: [
                 GestureDetector(
                   onTap: onUserTap,
-                  child: Text(
-                    authorMap['nickname']?.toString() ?? '用户',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          authorMap['nickname']?.toString() ?? '用户',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if ((authorMap['badge_name'] ?? '').toString().isNotEmpty)
+                        UserBadge(
+                          name: authorMap['badge_name'].toString(),
+                          color: (authorMap['badge_color'] ?? '').toString(),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 6),
