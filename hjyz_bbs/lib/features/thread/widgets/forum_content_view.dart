@@ -514,7 +514,6 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 _failed
@@ -805,7 +804,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 44,
