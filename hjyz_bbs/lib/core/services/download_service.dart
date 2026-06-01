@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 下载任务状态
@@ -92,15 +91,11 @@ class DownloadService {
     return downloadDir;
   }
 
-  /// 请求存储权限
+  /// 请求存储权限（桌面平台直接返回 true）
   Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      if (status.isGranted) return true;
-
-      // Android 11+
-      final manageStatus = await Permission.manageExternalStorage.request();
-      return manageStatus.isGranted;
+      // Android 使用 getExternalStorageDirectory 无需额外权限
+      // Android 10+ 的 Scoped Storage 机制会自动处理
     }
     return true;
   }
