@@ -577,6 +577,54 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     );
   }
 
+  Future<void> _insertThreadLink() async {
+    final dvController = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('插入帖子链接'),
+          content: TextField(
+            controller: dvController,
+            decoration: const InputDecoration(
+              labelText: 'DV 号',
+              hintText: '例如 DV3k7M2x9P',
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(dvController.text.trim());
+              },
+              child: const Text('插入'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    final tag = '[thread=$result]';
+
+    final selection = contentController.selection;
+    final oldText = contentController.text;
+    final start = selection.start < 0 ? oldText.length : selection.start;
+    final end = selection.end < 0 ? oldText.length : selection.end;
+
+    final newText = oldText.replaceRange(start, end, tag);
+    contentController.text = newText;
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: start + tag.length),
+    );
+  }
+
   Future<void> _insertUrlTag() async {
     final urlController = TextEditingController();
     final textController = TextEditingController();
@@ -1106,6 +1154,11 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                 icon: Icons.link_rounded,
                 text: '插入链接',
                 onTap: _insertUrlTag,
+              ),
+              _ToolButton(
+                icon: Icons.forum_outlined,
+                text: '插入帖子',
+                onTap: _insertThreadLink,
               ),
               _ToolButton(
                 icon: Icons.play_circle_outline_rounded,

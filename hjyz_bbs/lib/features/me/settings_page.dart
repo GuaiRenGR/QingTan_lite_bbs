@@ -21,6 +21,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool nativeNotifications = true;
   bool autoCheckUpdate = true;
   bool useHttps = false;
+  bool useBuiltinDownloader = true;
   String appVersion = '';
 
   @override
@@ -40,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
         useHttps = prefs.getBool('use_https') ?? false;
+        useBuiltinDownloader = prefs.getBool('use_builtin_downloader') ?? true;
       });
     } catch (_) {}
 
@@ -154,6 +156,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   });
                   _saveBool('use_https', value);
                   UrlHelper.setEnabled(value);
+                },
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.download_outlined),
+                title: const Text('使用内置下载器'),
+                subtitle: const Text('多线程下载附件，关闭则用浏览器下载'),
+                value: useBuiltinDownloader,
+                onChanged: (value) {
+                  setState(() {
+                    useBuiltinDownloader = value;
+                  });
+                  _saveBool('use_builtin_downloader', value);
                 },
               ),
             ],

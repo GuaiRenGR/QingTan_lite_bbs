@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/emoji/emoji_data.dart';
+import '../../../core/services/download_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
@@ -229,6 +231,12 @@ class ForumContentView extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 12),
           child: _AttachmentCard(attachmentId: part.value),
         );
+
+      case _ContentPartType.thread:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ThreadLinkCard(dvCode: part.value),
+        );
     }
   }
 
@@ -306,7 +314,8 @@ class ForumContentView extends StatelessWidget {
       r'|(\[music=(https?:\/\/[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
-      r'|(\[attach=(\d+)\])',
+      r'|(\[attach=(\d+)\])'
+      r'|(\[thread=([A-Za-z0-9]+)\])',
       caseSensitive: false,
     );
 
@@ -335,6 +344,7 @@ class ForumContentView extends StatelessWidget {
       final linkUrl = match.group(12);
       final linkText = match.group(13);
       final attachment = match.group(15);
+      final threadDv = match.group(18);
 
       if (markdown != null) {
         result.add(
@@ -388,6 +398,13 @@ class ForumContentView extends StatelessWidget {
             value: attachment.trim(),
           ),
         );
+      } else if (threadDv != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.thread,
+            value: threadDv.trim(),
+          ),
+        );
       }
 
       last = match.end;
@@ -418,6 +435,7 @@ enum _ContentPartType {
   link,
   hidden,
   attachment,
+  thread,
 }
 
 class _ContentPart {
@@ -540,6 +558,8 @@ class _AttachmentCardState extends State<_AttachmentCard> {
   bool _loading = true;
   bool _failed = false;
   late final String _downloadUrl;
+  double _downloadProgress = -1;
+  DownloadTask? _task;
 
   @override
   void initState() {
@@ -548,6 +568,60 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
     _downloadUrl = '${apiBase}index.php?route=file/resolve&id=$id';
     _loadInfo();
+  }
+
+  @override
+  void dispose() {
+    _task?.progressStream.listen(null).cancel();
+    super.dispose();
+  }
+
+  Future<void> _startDownload() async {
+    final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
+    final service = DownloadService.instance;
+
+    final hasPermission = await service.requestPermission();
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('需要存储权限才能下载文件')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _downloadProgress = 0);
+
+    final task = await service.download(
+      url: _downloadUrl,
+      fileName: name,
+      taskId: 'att_${widget.attachmentId}',
+      onProgress: (p) {
+        if (mounted) setState(() => _downloadProgress = p);
+      },
+    );
+
+    _task = task;
+
+    if (mounted) {
+      if (task.status == DownloadStatus.completed) {
+        setState(() => _downloadProgress = 1.0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('下载完成: $name'),
+            action: SnackBarAction(
+              label: '打开',
+              onPressed: () => service.openFile(task.id),
+            ),
+          ),
+        );
+      } else if (task.status == DownloadStatus.failed) {
+        setState(() => _downloadProgress = -1);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('下载失败: ${task.error ?? "未知错误"}')),
+        );
+      }
+    }
   }
 
   Future<void> _loadInfo() async {
@@ -686,7 +760,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final name = _info!['name']?.toString() ?? '未知文件';
     final size = _info!['size'] is int ? _info!['size'] as int : 0;
     final mimeType = _info!['type']?.toString();
-    final url = _info!['url']?.toString() ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -698,13 +771,12 @@ class _AttachmentCardState extends State<_AttachmentCard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () async {
-                final uri = Uri.tryParse(_downloadUrl);
-                if (uri != null) {
-                  await launchUrl(uri,
-                      mode: LaunchMode.externalApplication);
-                }
-              },
+          onTap: _downloadProgress >= 0 && _downloadProgress < 1
+              ? null
+              : _downloadProgress >= 1
+                  ? () => DownloadService.instance
+                      .openFile('att_${widget.attachmentId}')
+                  : _startDownload,
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -738,13 +810,24 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _formatFileSize(size),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
+                      if (_downloadProgress >= 0 && _downloadProgress < 1)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: _downloadProgress,
+                            minHeight: 6,
+                            backgroundColor: Colors.grey.shade200,
+                            color: const Color(0xFFFB7299),
+                          ),
+                        )
+                      else
+                        Text(
+                          _formatFileSize(size),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -755,21 +838,31 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFB7299),
+                    color: _downloadProgress >= 1
+                        ? Colors.green
+                        : const Color(0xFFFB7299),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.download_rounded,
+                        _downloadProgress >= 1
+                            ? Icons.open_in_new_rounded
+                            : _downloadProgress >= 0
+                                ? Icons.downloading_rounded
+                                : Icons.download_rounded,
                         color: Colors.white,
                         size: 18,
                       ),
-                      SizedBox(width: 4),
+                      const SizedBox(width: 4),
                       Text(
-                        '下载',
-                        style: TextStyle(
+                        _downloadProgress >= 1
+                            ? '打开'
+                            : _downloadProgress >= 0
+                                ? '${(_downloadProgress * 100).toInt()}%'
+                                : '下载',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -781,6 +874,204 @@ class _AttachmentCardState extends State<_AttachmentCard> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 帖子链接卡片 — 通过 DV 号获取帖子信息并渲染为横向卡片
+class _ThreadLinkCard extends StatefulWidget {
+  final String dvCode;
+
+  const _ThreadLinkCard({required this.dvCode});
+
+  @override
+  State<_ThreadLinkCard> createState() => _ThreadLinkCardState();
+}
+
+class _ThreadLinkCardState extends State<_ThreadLinkCard> {
+  Map<String, dynamic>? _thread;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThread();
+  }
+
+  Future<void> _loadThread() async {
+    try {
+      final result = await ApiClient.instance.get(
+        'threads/detail-by-dv',
+        query: {'dv_code': widget.dvCode},
+      );
+
+      if (!mounted) return;
+
+      if (result.success && result.data is Map<String, dynamic>) {
+        final data = result.data as Map<String, dynamic>;
+        final thread = data['thread'];
+        if (thread is Map<String, dynamic>) {
+          setState(() {
+            _thread = thread;
+            _loading = false;
+          });
+          return;
+        }
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.inputFill(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '加载帖子 ${widget.dvCode}...',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_failed || _thread == null) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.inputFill(context),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.link_off, size: 20, color: Colors.grey.shade400),
+            const SizedBox(width: 10),
+            Text(
+              '帖子 ${widget.dvCode}',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final title = _thread!['title']?.toString() ?? '无标题';
+    final cover = _thread!['cover']?.toString() ?? '';
+    final summary = _thread!['summary']?.toString() ?? '';
+    final threadId = (_thread!['id'] as int?) ?? 0;
+
+    return GestureDetector(
+      onTap: threadId > 0
+          ? () => context.push('/thread/$threadId')
+          : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.inputFill(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            if (cover.isNotEmpty)
+              SafeNetworkImage(
+                url: cover,
+                width: 100,
+                height: 80,
+                fit: BoxFit.cover,
+              ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.link_rounded,
+                          size: 14,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.dvCode,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text(context),
+                      ),
+                    ),
+                    if (summary.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: Colors.grey.shade400,
+              ),
+            ),
+          ],
         ),
       ),
     );
