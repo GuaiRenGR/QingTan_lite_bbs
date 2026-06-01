@@ -199,8 +199,8 @@ class AdminController
         $password = (string)\Request::input('password');
         $nickname = \Request::str('nickname', $username);
 
-        if (!preg_match('/^[\x{4e00}-\x{9fa5}A-Za-z0-9_]{3,20}$/u', $username)) {
-            \Response::json(422, '用户名格式错误（3-20位，中文/字母/数字/下划线）');
+        if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $username)) {
+            \Response::json(422, '用户名格式错误（3-20位，仅允许字母、数字、下划线）');
         }
 
         if (strlen($password) < 8 || strlen($password) > 32) {

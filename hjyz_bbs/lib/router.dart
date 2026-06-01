@@ -14,6 +14,7 @@ import 'features/message/notification_settings_page.dart';
 import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
+import 'features/thread/dv_redirect_page.dart';
 import 'features/profile/edit_profile_page.dart';
 import 'features/admin/admin_center_page.dart';
 import 'features/admin/admin_review_page.dart';
@@ -125,6 +126,13 @@ final router = GoRouter(
     GoRoute(
       path: '/admin/review',
       builder: (_, _) => const AdminReviewPage(),
+    ),
+    GoRoute(
+      path: '/dv/:code',
+      builder: (_, state) {
+        final code = state.pathParameters['code'] ?? '';
+        return DvRedirectPage(dvCode: code);
+      },
     ),
   ],
   errorBuilder: (_, _) {

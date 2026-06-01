@@ -654,6 +654,17 @@ class _ThreadMainCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          if ((thread['dv_code'] ?? '').toString().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '${thread['dv_code']}',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           ForumContentView(
             content: content,
             canViewHidden: canViewHidden,

@@ -162,6 +162,7 @@ class ThreadReadController
             'thread' => [
                 'id' => (int)$thread['id'],
                 'thread_id' => (int)$thread['id'],
+                'dv_code' => $thread['dv_code'] ?? '',
                 'forum_id' => (int)$thread['forum_id'],
                 'user_id' => (int)$thread['user_id'],
                 'title' => $thread['title'],
@@ -211,6 +212,32 @@ class ThreadReadController
                 ];
             }, $commentRows),
         ]);
+    }
+
+    /**
+     * 通过 DV 码获取帖子详情（转发到 detail，设置 id 参数）
+     */
+    public static function detailByDv()
+    {
+        $dvCode = trim(\Request::str('dv_code'));
+
+        if (!\DvCode::isValid($dvCode)) {
+            \Response::json(422, 'DV 码格式错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id FROM {$threads} WHERE dv_code = ? AND status = 1 LIMIT 1",
+            [$dvCode]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        // 复用 detail 逻辑：设置 id 参数后调用 detail
+        $_GET['id'] = $thread['id'];
+        self::detail();
     }
 
     public static function following()

@@ -128,6 +128,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String passwordConfirm,
     required String captchaId,
     required String captcha,
+    String? nickname,
   }) async {
     state = state.copyWith(loading: true, error: null);
 
@@ -135,7 +136,7 @@ class AuthController extends StateNotifier<AuthState> {
       'auth/register',
       data: {
         'username': username,
-        'nickname': username,
+        'nickname': (nickname != null && nickname.isNotEmpty) ? nickname : username,
         'password': password,
         'password_confirm': passwordConfirm,
         'captcha_id': captchaId,

@@ -13,6 +13,7 @@ class RegisterPage extends ConsumerStatefulWidget {
 
 class _RegisterPageState extends ConsumerState<RegisterPage> {
   final usernameController = TextEditingController();
+  final nicknameController = TextEditingController();
   final passwordController = TextEditingController();
   final passwordConfirmController = TextEditingController();
   final captchaController = TextEditingController();
@@ -31,6 +32,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   void dispose() {
     usernameController.dispose();
+    nicknameController.dispose();
     passwordController.dispose();
     passwordConfirmController.dispose();
     captchaController.dispose();
@@ -55,6 +57,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   Future<void> _register() async {
     final username = usernameController.text.trim();
+    final nickname = nicknameController.text.trim();
     final password = passwordController.text;
     final passwordConfirm = passwordConfirmController.text;
     final captcha = captchaController.text.trim();
@@ -75,6 +78,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           passwordConfirm: passwordConfirm,
           captchaId: captchaId,
           captcha: captcha,
+          nickname: nickname.isEmpty ? null : nickname,
         );
 
     if (!mounted) return;
@@ -121,6 +125,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             controller: usernameController,
             decoration: const InputDecoration(
               labelText: '用户名',
+              hintText: '3-20位，字母、数字、下划线',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: nicknameController,
+            decoration: const InputDecoration(
+              labelText: '昵称',
+              hintText: '可选，留空则显示用户名',
               border: OutlineInputBorder(),
             ),
           ),

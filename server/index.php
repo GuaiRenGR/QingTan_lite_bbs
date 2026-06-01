@@ -113,6 +113,10 @@ try {
             App\Controllers\ThreadReadController::detail();
             break;
 
+        case 'threads/detail-by-dv':
+            App\Controllers\ThreadReadController::detailByDv();
+            break;
+
         case 'threads/create':
             App\Controllers\ThreadCreateController::create();
             break;
