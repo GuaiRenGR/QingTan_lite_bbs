@@ -417,19 +417,26 @@ class _UserHeader extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(
-                          child: Text(
-                            nickname,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  nickname,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              if (badgeName.isNotEmpty)
+                                UserBadge(name: badgeName, color: badgeColor),
+                            ],
                           ),
                         ),
-                        if (badgeName.isNotEmpty)
-                          UserBadge(name: badgeName, color: badgeColor),
                         if (!isSelf)
                           IconButton(
                             onPressed: onMessageTap,
