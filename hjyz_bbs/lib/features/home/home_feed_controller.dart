@@ -68,9 +68,13 @@ class HomeFeedController extends StateNotifier<HomeFeedState> {
       error: null,
     );
 
+    // 刷新时传入当前已展示的 ID 列表用于去重
+    final excludeIds = state.items.map((e) => e.id).toList();
+
     final result = await repository.fetchFeed(
       page: 1,
       channel: state.channel,
+      excludeIds: excludeIds,
     );
 
     if (result.success) {

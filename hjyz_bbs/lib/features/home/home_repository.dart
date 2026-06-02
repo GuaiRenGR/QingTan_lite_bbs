@@ -7,6 +7,7 @@ class HomeRepository {
   Future<ApiResult<List<ThreadModel>>> fetchFeed({
     required int page,
     required String channel,
+    List<int> excludeIds = const [],
   }) async {
     final result = await ApiClient.instance.get(
       'threads/recommend',
@@ -14,6 +15,8 @@ class HomeRepository {
         'page': page,
         'page_size': AppConfig.pageSize,
         'channel': channel,
+        if (excludeIds.isNotEmpty && channel == 'recommend')
+          'exclude_ids': excludeIds,
       },
     );
 

@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+; 注册 hyjzbbs:// 协议，双击此文件导入注册表
+; 需要根据实际安装路径修改下面的 @ 值
+
+[HKEY_CLASSES_ROOT\hyjzbbs]
+@="URL:QingTan Protocol"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\hyjzbbs\DefaultIcon]
+@="hjyz_bbs.exe,0"
+
+[HKEY_CLASSES_ROOT\hyjzbbs\shell]
+
+[HKEY_CLASSES_ROOT\hyjzbbs\shell\open]
+
+[HKEY_CLASSES_ROOT\hyjzbbs\shell\open\command]
+@="\"C:\\path\\to\\hjyz_bbs.exe\" \"%1\""

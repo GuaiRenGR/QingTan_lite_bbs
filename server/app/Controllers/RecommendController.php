@@ -11,34 +11,41 @@ class RecommendController
         $page = max(1, \Request::int('page', 1));
         $pageSize = min(30, max(1, \Request::int('page_size', 20)));
         $channel = \Request::input('channel', 'recommend');
-        $offset = ($page - 1) * $pageSize;
 
         $threads = \Database::table('threads');
         $users = \Database::table('users');
 
         $userId = $viewer ? (int)$viewer['id'] : 0;
 
+        // 客户端传来的已展示帖子 ID，用于去重
+        $excludeIds = \Request::input('exclude_ids', []);
+        if (!is_array($excludeIds)) $excludeIds = [];
+        $excludeIds = array_filter(array_map('intval', $excludeIds));
+
         if ($channel === 'latest') {
-            self::latest($threads, $users, $offset, $pageSize);
+            self::latest($threads, $users, $page, $pageSize, $excludeIds);
             return;
         }
 
         if ($channel === 'hot') {
-            self::hot($threads, $users, $offset, $pageSize);
+            self::hot($threads, $users, $page, $pageSize, $excludeIds);
             return;
         }
 
         if ($channel === 'digest') {
-            self::digest($threads, $users, $offset, $pageSize);
+            self::digest($threads, $users, $page, $pageSize, $excludeIds);
             return;
         }
 
         // Default: recommend algorithm
-        self::recommend($threads, $users, $userId, $offset, $pageSize);
+        self::recommend($threads, $users, $userId, $page, $pageSize, $excludeIds);
     }
 
-    private static function latest($threads, $users, $offset, $pageSize)
+    private static function latest($threads, $users, $page, $pageSize, $excludeIds)
     {
+        $offset = ($page - 1) * $pageSize;
+        $exclude = self::buildExcludeClause($excludeIds);
+
         $rows = \Database::fetchAll(
             "SELECT
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
@@ -47,7 +54,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1 AND t.visibility = 'public'
+             WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
              ORDER BY t.is_top DESC, t.created_at DESC
              LIMIT {$offset}, {$pageSize}"
         );
@@ -55,8 +62,11 @@ class RecommendController
         self::respond($rows, $pageSize);
     }
 
-    private static function hot($threads, $users, $offset, $pageSize)
+    private static function hot($threads, $users, $page, $pageSize, $excludeIds)
     {
+        $offset = ($page - 1) * $pageSize;
+        $exclude = self::buildExcludeClause($excludeIds);
+
         $rows = \Database::fetchAll(
             "SELECT
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
@@ -65,7 +75,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1 AND t.visibility = 'public'
+             WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
              ORDER BY t.is_top DESC,
                (t.view_count + t.like_count * 5 + t.reply_count * 3) DESC,
                t.created_at DESC
@@ -75,8 +85,11 @@ class RecommendController
         self::respond($rows, $pageSize);
     }
 
-    private static function digest($threads, $users, $offset, $pageSize)
+    private static function digest($threads, $users, $page, $pageSize, $excludeIds)
     {
+        $offset = ($page - 1) * $pageSize;
+        $exclude = self::buildExcludeClause($excludeIds);
+
         $rows = \Database::fetchAll(
             "SELECT
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
@@ -85,7 +98,7 @@ class RecommendController
                 u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.status = 1 AND t.visibility = 'public' AND t.is_digest = 1
+             WHERE t.status = 1 AND t.visibility = 'public' AND t.is_digest = 1 {$exclude}
              ORDER BY t.is_top DESC, t.created_at DESC
              LIMIT {$offset}, {$pageSize}"
         );
@@ -93,11 +106,19 @@ class RecommendController
         self::respond($rows, $pageSize);
     }
 
-    private static function recommend($threads, $users, $userId, $offset, $pageSize)
+    private static function recommend($threads, $users, $userId, $page, $pageSize, $excludeIds)
     {
         $stats = \Database::table('content_stats_daily');
         $histories = \Database::table('histories');
         $startDate = date('Y-m-d', strtotime('-6 day'));
+        $exclude = self::buildExcludeClause($excludeIds);
+
+        // 取 3 倍候选量
+        $candidateLimit = $pageSize * 3;
+        $offset = ($page - 1) * $candidateLimit;
+
+        // 构建用户兴趣画像
+        $interestMap = $userId > 0 ? self::buildInterestMap($userId) : [];
 
         if ($userId > 0) {
             $rows = \Database::fetchAll(
@@ -122,24 +143,11 @@ class RecommendController
                    ON h.user_id = ?
                   AND h.object_type = 'thread'
                   AND h.object_id = t.id
-                 WHERE t.status = 1 AND t.visibility = 'public'
+                 WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
                  GROUP BY t.id
-                 ORDER BY
-                   t.is_top DESC,
-                   (
-                     COALESCE(SUM(s.view_count), 0) * 1 +
-                     COALESCE(SUM(s.like_count), 0) * 5 +
-                     COALESCE(SUM(s.favorite_count), 0) * 8 +
-                     COALESCE(SUM(s.share_count), 0) * 10 +
-                     COALESCE(SUM(s.reply_count), 0) * 6 +
-                     GREATEST(0, 72 - TIMESTAMPDIFF(HOUR, t.created_at, NOW())) * 0.5
-                   ) * IF(h.id IS NULL, 1, 0.35) DESC,
-                   t.created_at DESC
-                 LIMIT {$offset}, {$pageSize}",
-                [
-                    $startDate,
-                    $userId,
-                ]
+                 ORDER BY t.is_top DESC, t.created_at DESC
+                 LIMIT {$offset}, {$candidateLimit}",
+                [$startDate, $userId]
             );
         } else {
             $rows = \Database::fetchAll(
@@ -148,6 +156,7 @@ class RecommendController
                     t.images_json, t.view_count, t.like_count, t.favorite_count,
                     t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                     u.nickname AS author_name, u.avatar AS author_avatar,
+                    NULL AS history_id,
                     COALESCE(SUM(s.view_count), 0) AS recent_views,
                     COALESCE(SUM(s.like_count), 0) AS recent_likes,
                     COALESCE(SUM(s.favorite_count), 0) AS recent_favorites,
@@ -159,27 +168,139 @@ class RecommendController
                    ON s.object_type = 'thread'
                   AND s.object_id = t.id
                   AND s.stat_date >= ?
-                 WHERE t.status = 1 AND t.visibility = 'public'
+                 WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
                  GROUP BY t.id
-                 ORDER BY
-                   t.is_top DESC,
-                   (
-                     COALESCE(SUM(s.view_count), 0) * 1 +
-                     COALESCE(SUM(s.like_count), 0) * 5 +
-                     COALESCE(SUM(s.favorite_count), 0) * 8 +
-                     COALESCE(SUM(s.share_count), 0) * 10 +
-                     COALESCE(SUM(s.reply_count), 0) * 6 +
-                     GREATEST(0, 72 - TIMESTAMPDIFF(HOUR, t.created_at, NOW())) * 0.5
-                   ) DESC,
-                   t.created_at DESC
-                 LIMIT {$offset}, {$pageSize}",
-                [
-                    $startDate,
-                ]
+                 ORDER BY t.is_top DESC, t.created_at DESC
+                 LIMIT {$offset}, {$candidateLimit}",
+                [$startDate]
             );
         }
 
-        self::respond($rows, $pageSize);
+        // 加权随机抽取
+        $weighted = [];
+        foreach ($rows as $row) {
+            $baseScore =
+                (int)$row['recent_views'] * 1 +
+                (int)$row['recent_likes'] * 5 +
+                (int)$row['recent_favorites'] * 8 +
+                (int)$row['recent_shares'] * 10 +
+                (int)$row['recent_replies'] * 6;
+
+            // 新鲜度：72 小时内帖子有时间衰减加成
+            $hoursOld = (time() - strtotime($row['created_at'])) / 3600;
+            $freshness = max(0, 72 - $hoursOld) * 0.5;
+
+            // 新鲜度随机因子：让新帖子有更多曝光机会
+            $randomFactor = 0.5 + lcg_value() * 1.5; // [0.5, 2.0]
+            $freshnessRandom = $freshness * $randomFactor;
+
+            // 兴趣加成
+            $forumId = (int)$row['forum_id'];
+            $interestBoost = isset($interestMap[$forumId]) ? $interestMap[$forumId] : 1.0;
+
+            // 已浏览降权
+            $viewedPenalty = isset($row['history_id']) ? 0.3 : 1.0;
+
+            $finalWeight = ($baseScore + $freshnessRandom + 1) * $interestBoost * $viewedPenalty;
+
+            $weighted[] = [
+                'row' => $row,
+                'weight' => max(0.01, $finalWeight),
+            ];
+        }
+
+        // 置顶帖单独处理（始终排在最前）
+        $topped = [];
+        $normal = [];
+        foreach ($weighted as $item) {
+            if ((int)$item['row']['is_top'] === 1) {
+                $topped[] = $item;
+            } else {
+                $normal[] = $item;
+            }
+        }
+
+        // 对非置顶帖做加权随机抽取
+        $sampled = self::weightedSample($normal, $pageSize - count($topped));
+        $result = array_merge($topped, $sampled);
+
+        $resultRows = array_map(fn($item) => $item['row'], $result);
+        self::respond($resultRows, $pageSize);
+    }
+
+    /**
+     * 用户兴趣画像：从交互历史中提取 forum 偏好
+     * 返回 forum_id => 权重 (1.0 ~ 2.0)
+     */
+    private static function buildInterestMap(int $userId): array
+    {
+        $threads = \Database::table('threads');
+        $likes = \Database::table('likes');
+        $favorites = \Database::table('favorites');
+        $histories = \Database::table('histories');
+
+        // 统计用户交互过的帖子所属板块
+        $rows = \Database::fetchAll(
+            "SELECT t.forum_id, COUNT(*) AS cnt
+             FROM (
+                 SELECT object_id AS thread_id FROM {$likes} WHERE user_id = ? AND object_type = 'thread'
+                 UNION ALL
+                 SELECT object_id FROM {$favorites} WHERE user_id = ? AND object_type = 'thread'
+                 UNION ALL
+                 SELECT object_id FROM {$histories} WHERE user_id = ? AND object_type = 'thread'
+             ) u
+             INNER JOIN {$threads} t ON t.id = u.thread_id
+             WHERE t.forum_id > 0
+             GROUP BY t.forum_id
+             ORDER BY cnt DESC
+             LIMIT 10",
+            [$userId, $userId, $userId]
+        );
+
+        if (empty($rows)) return [];
+
+        $maxCnt = (int)$rows[0]['cnt'];
+        $map = [];
+
+        foreach ($rows as $row) {
+            $cnt = (int)$row['cnt'];
+            $fid = (int)$row['forum_id'];
+            // 线性映射到 [1.0, 2.0]
+            $map[$fid] = 1.0 + ($cnt / $maxCnt);
+        }
+
+        return $map;
+    }
+
+    /**
+     * 加权随机抽取（指数分布法）
+     * key = -ln(rand) / weight，按 key 升序取前 N 个
+     */
+    private static function weightedSample(array $items, int $n): array
+    {
+        if (count($items) <= $n) return $items;
+
+        foreach ($items as &$item) {
+            $rand = lcg_value();
+            if ($rand < 1e-10) $rand = 1e-10;
+            $item['_key'] = -log($rand) / $item['weight'];
+        }
+        unset($item);
+
+        usort($items, fn($a, $b) => $a['_key'] <=> $b['_key']);
+
+        return array_slice($items, 0, $n);
+    }
+
+    /**
+     * 构建排除已展示帖子的 WHERE 子句
+     */
+    private static function buildExcludeClause(array $excludeIds): string
+    {
+        if (empty($excludeIds)) return '';
+
+        $ids = implode(',', $excludeIds);
+        return " AND t.id NOT IN ({$ids})";
     }
 
     private static function respond($rows, $pageSize)
