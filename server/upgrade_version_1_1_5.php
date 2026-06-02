@@ -16,7 +16,7 @@ $config = require $configFile;
 $prefix = $config['prefix'] ?? '';
 $host = $config['host'] ?? '127.0.0.1';
 $port = $config['port'] ?? 3306;
-$dbname = $config['dbname'] ?? '';
+$dbname = $config['database'] ?? '';
 $user = $config['username'] ?? '';
 $pass = $config['password'] ?? '';
 
