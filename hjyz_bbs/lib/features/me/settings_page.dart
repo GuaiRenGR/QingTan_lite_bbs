@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -55,10 +55,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadVersion() async {
-    final info = await PackageInfo.fromPlatform();
     if (mounted) {
       setState(() {
-        appVersion = info.version;
+        appVersion = AppConfig.appVersion;
       });
     }
   }

@@ -15,6 +15,7 @@ class DownloadTask {
   final String url;
   final String fileName;
   final String savePath;
+  final bool openOnComplete;
   int totalBytes;
   int downloadedBytes;
   DownloadStatus status;
@@ -28,6 +29,7 @@ class DownloadTask {
     required this.url,
     required this.fileName,
     required this.savePath,
+    this.openOnComplete = false,
     this.totalBytes = 0,
     this.downloadedBytes = 0,
     this.status = DownloadStatus.waiting,
@@ -105,6 +107,7 @@ class DownloadService {
     required String url,
     required String fileName,
     String? taskId,
+    bool openOnComplete = false,
     void Function(double progress)? onProgress,
   }) async {
     final id = taskId ?? url.hashCode.toRadixString(16);
@@ -129,6 +132,7 @@ class DownloadService {
       url: url,
       fileName: fileName,
       savePath: savePath,
+      openOnComplete: openOnComplete,
     );
 
     _tasks[id] = task;
@@ -155,6 +159,11 @@ class DownloadService {
       task.status = DownloadStatus.completed;
       task.updateProgress(1.0);
       await _saveHistory(task);
+
+      // 完成后自动打开
+      if (task.openOnComplete) {
+        OpenFile.open(task.savePath);
+      }
     } catch (e) {
       if (e is DioException && e.type == DioExceptionType.cancel) {
         task.status = DownloadStatus.paused;
@@ -289,6 +298,11 @@ class DownloadService {
       task.status = DownloadStatus.completed;
       task.updateProgress(1.0);
       await _saveHistory(task);
+
+      // 完成后自动打开
+      if (task.openOnComplete) {
+        OpenFile.open(task.savePath);
+      }
     } catch (e) {
       if (e is DioException && e.type == DioExceptionType.cancel) {
         task.status = DownloadStatus.paused;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -709,7 +710,13 @@ class _AttachmentCardState extends State<_AttachmentCard> {
                   final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
                   final service = DownloadService.instance;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('开始下载: $name')),
+                    SnackBar(
+                      content: Text('开始下载: $name'),
+                      action: SnackBarAction(
+                        label: '查看下载',
+                        onPressed: () => context.push('/downloads'),
+                      ),
+                    ),
                   );
                   service.download(
                     url: _downloadUrl,

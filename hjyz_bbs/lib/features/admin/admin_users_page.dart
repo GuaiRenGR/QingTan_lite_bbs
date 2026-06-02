@@ -257,7 +257,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                   const SizedBox(height: 8),
                   if (groups.isNotEmpty)
                     DropdownButtonFormField<int>(
-                      value: selectedGroupId,
+                      initialValue: selectedGroupId,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -498,7 +498,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
         'badge_name': badgeName,
         'badge_color': badgeColor,
         'verify_level': verifyLevel,
-        if (groupId != null) 'group_id': groupId,
+        'group_id': ?groupId,
         if (permissions != null && permissions.isNotEmpty)
           'permissions': permissions,
       },

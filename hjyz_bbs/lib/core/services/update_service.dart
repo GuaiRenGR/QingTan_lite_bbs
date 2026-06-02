@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api_client.dart';
+import '../config/app_config.dart';
+import 'download_service.dart';
 
 class UpdateService {
   static const autoCheckKey = 'auto_check_update';
@@ -29,26 +29,36 @@ class UpdateService {
     await check(context, silent: true);
   }
 
+  /// 获取当前平台对应的 os 参数
+  static String get _platformOs {
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isIOS) return 'ios';
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isMacOS) return 'macos';
+    if (Platform.isLinux) return 'linux';
+    return 'android';
+  }
+
+  /// 获取当前平台显示名
+  static String get _platformName {
+    if (Platform.isAndroid) return 'Android';
+    if (Platform.isIOS) return 'iOS';
+    if (Platform.isWindows) return 'Windows';
+    if (Platform.isMacOS) return 'macOS';
+    if (Platform.isLinux) return 'Linux';
+    return 'Android';
+  }
+
   static Future<void> check(
     BuildContext context, {
     bool silent = false,
   }) async {
-    final info = await PackageInfo.fromPlatform();
-
-    final platform = Platform.isAndroid
-        ? 'android'
-        : Platform.isIOS
-            ? 'ios'
-            : 'all';
-
-    final buildNumber = int.tryParse(info.buildNumber) ?? 1;
-
     final result = await ApiClient.instance.get(
       'app/version/check',
       query: {
-        'platform': platform,
-        'version': info.version,
-        'build_number': buildNumber,
+        'platform': _platformOs,
+        'version': AppConfig.appVersion,
+        'build_number': AppConfig.buildNumber,
       },
     );
 
@@ -79,7 +89,9 @@ class UpdateService {
     final title = data['title']?.toString() ?? '发现新版本';
     final content = data['content']?.toString() ?? '';
     final version = data['version']?.toString() ?? '';
-    final downloadUrl = data['download_url']?.toString() ?? '';
+
+    // 使用 download.php?os=xxx 作为下载地址
+    final downloadUrl = '${AppConfig.downloadBase}?os=$_platformOs';
 
     await showDialog<void>(
       context: context,
@@ -88,7 +100,7 @@ class UpdateService {
         return AlertDialog(
           title: Text(title),
           content: Text(
-            '版本：$version\n\n$content',
+            '版本：$version\n平台：$_platformName\n\n$content',
           ),
           actions: [
             if (!forceUpdate)
@@ -100,14 +112,17 @@ class UpdateService {
               ),
             FilledButton(
               onPressed: () async {
-                if (downloadUrl.isEmpty) return;
+                Navigator.of(context).pop();
 
-                final uri = Uri.tryParse(downloadUrl);
-                if (uri == null) return;
+                // 使用内置下载器下载，完成后自动打开
+                final fileName = 'QingTan_${version}_$_platformOs'
+                    '${Platform.isWindows ? ".exe" : Platform.isAndroid ? ".apk" : ""}';
 
-                await launchUrl(
-                  uri,
-                  mode: LaunchMode.externalApplication,
+                DownloadService.instance.download(
+                  url: downloadUrl,
+                  fileName: fileName,
+                  taskId: 'update_$version',
+                  openOnComplete: true,
                 );
               },
               child: const Text('立即更新'),
