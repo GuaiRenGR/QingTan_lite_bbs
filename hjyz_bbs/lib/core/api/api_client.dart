@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
+import '../utils/device_helper.dart';
 import '../utils/url_helper.dart';
 import 'api_result.dart';
 
@@ -36,6 +37,11 @@ class ApiClient {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+          // 注入设备名称，用于服务端记录登录设备
+          try {
+            final deviceName = await DeviceHelper.getDeviceName();
+            options.headers['X-Device-Name'] = deviceName;
+          } catch (_) {}
           handler.next(options);
         },
         onError: (error, handler) {

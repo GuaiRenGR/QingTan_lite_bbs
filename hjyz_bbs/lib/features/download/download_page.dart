@@ -237,6 +237,18 @@ class _DownloadPageState extends State<DownloadPage> {
               },
             ),
             IconButton(
+              icon: const Icon(Icons.folder_open_outlined),
+              tooltip: '打开文件夹',
+              onPressed: () async {
+                final msg = await service.openFolder(task.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(msg)),
+                  );
+                }
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.delete_outline_rounded),
               tooltip: '移除',
               onPressed: () {

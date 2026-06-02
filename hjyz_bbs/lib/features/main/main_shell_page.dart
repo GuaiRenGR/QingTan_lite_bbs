@@ -153,9 +153,9 @@ class _ForumBottomNavBar extends StatelessWidget {
           _NavItem(
             index: 3,
             currentIndex: currentIndex,
-            icon: Icons.explore_outlined,
-            activeIcon: Icons.explore,
-            label: '发现',
+            icon: Icons.build_outlined,
+            activeIcon: Icons.build_rounded,
+            label: '工具',
             onTap: onTap,
           ),
           _NavItem(

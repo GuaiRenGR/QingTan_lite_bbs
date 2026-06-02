@@ -325,6 +325,33 @@ class DownloadService {
     }
   }
 
+  /// 打开文件所在文件夹，返回结果消息
+  Future<String> openFolder(String taskId) async {
+    final task = _tasks[taskId];
+    if (task == null || task.status != DownloadStatus.completed) {
+      return '文件不存在';
+    }
+    try {
+      final file = File(task.savePath);
+      if (!await file.exists()) {
+        return '文件已被删除';
+      }
+      if (Platform.isWindows) {
+        await Process.run('explorer', ['/select,', task.savePath]);
+        return '已打开文件夹';
+      } else if (Platform.isMacOS) {
+        await Process.run('open', ['-R', task.savePath]);
+        return '已打开文件夹';
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [file.parent.path]);
+        return '已打开文件夹';
+      }
+      return '当前平台不支持打开文件夹';
+    } catch (e) {
+      return '打开失败: $e';
+    }
+  }
+
   /// 保存下载历史
   Future<void> _saveHistory(DownloadTask task) async {
     try {

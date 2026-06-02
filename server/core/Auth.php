@@ -46,6 +46,12 @@ class Auth
 
         $table = Database::table('user_tokens');
 
+        // 优先使用客户端发送的设备名称，否则用 User-Agent
+        $deviceName = $_SERVER['HTTP_X_DEVICE_NAME'] ?? '';
+        $userAgent = $deviceName !== ''
+            ? substr($deviceName, 0, 255)
+            : substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+
         Database::execute(
             "INSERT INTO {$table}
             (`user_id`,`token_hash`,`device_id`,`ip`,`user_agent`,`expired_at`,`created_at`)
@@ -55,7 +61,7 @@ class Auth
                 $hash,
                 $_SERVER['HTTP_X_DEVICE_ID'] ?? '',
                 client_ip(),
-                substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
+                $userAgent,
                 date('Y-m-d H:i:s', time() + 86400 * 30),
                 now(),
             ]

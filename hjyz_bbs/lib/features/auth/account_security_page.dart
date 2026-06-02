@@ -157,7 +157,13 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
 
   String _parseUA(String ua) {
     if (ua.isEmpty) return '未知设备';
-    if (ua.contains('Flutter')) return '轻坛 App';
+    // 新版客户端发送真实设备名（如 "Xiaomi 14"、"DESKTOP-ABC"）
+    // 不包含 "Mozilla" 或 "Dart" 等 UA 关键字时，直接作为设备名显示
+    if (!ua.contains('Mozilla') && !ua.contains('Dart/') && ua.length < 80) {
+      return ua;
+    }
+    // 兼容旧版客户端的 UA 字符串
+    if (ua.contains('Flutter') || ua.contains('Dart/')) return '轻坛 App';
     if (ua.contains('Android')) return 'Android 设备';
     if (ua.contains('iPhone') || ua.contains('iPad')) return 'iOS 设备';
     if (ua.contains('Windows')) return 'Windows';
