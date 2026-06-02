@@ -6,8 +6,24 @@
 
 - **账号与安全**：新增独立页面，支持修改密码、查看/撤销登录设备、退出登录
 - **深度链接**：支持 `hyjzbbs://` 协议，可从浏览器直接跳转 App 内帖子（格式 `hyjzbbs://thread/ID`）
-- **下载管理**：独立下载页面，支持新建下载（输入链接）、暂停/继续/取消/打开/重试，显示文件保存路径
+- **下载管理**：独立下载页面，支持新建下载、暂停/继续/取消/打开/重试/打开文件夹，显示文件保存路径
+- **下载 Toast**：开始下载时 Toast 右侧新增「查看下载」按钮，一键跳转下载管理
 - **DV 码**：每个帖子生成唯一 DV 码，可作为帖子标识符分享
+- **工具页**：底部导航「发现」改为「工具」，整合下载管理、热门话题、热帖榜等功能入口
+- **设备名识别**：登录设备列表显示真实设备型号（如 Xiaomi 14、DESKTOP-ABC），需重新登录生效
+- **B 站风格视频播放器**：单击显隐面板、双击 ±10s 快进快退、水平拖动 seek、长按 2 倍速、进度条拖拽预览
+- **推荐算法优化**：加权随机抽取（指数分布法）、用户兴趣画像、新鲜度随机因子、客户端去重
+
+### 管理中心
+
+- **用户权限编辑**：支持切换用户组、单独权限覆盖（发帖/评论/删除等 8 项权限，允许/禁止/继承）
+- **帖子管理**：新增独立页面，支持搜索、按状态筛选（公开/待审核/私密/锁定）、置顶、锁定、删除
+
+### 变更
+
+- 底部导航「发现」改为「工具」，图标更换
+- 版本号与构建号硬编码在 `AppConfig` 中，移除 `package_info_plus` 运行时依赖
+- 检查更新自动适配平台（`download.php?os=xxx`），使用内置下载器下载，完成后自动打开安装包
 
 ### Bug 修复
 
@@ -18,8 +34,12 @@
 ### 服务端
 
 - `AuthController` 新增 `changePassword`、`sessions`、`revokeSession` 接口
+- `Auth::createToken` 优先使用 `X-Device-Name` 存储设备名称
+- `AdminController` 新增 `groupList`、`threads`、`threadDelete`、`threadToggleSticky`、`threadToggleLock` 接口
+- `AdminController::updateUser` 支持修改 `group_id` 和 `permissions`
 - `ThreadCreateController` 发布失败时返回具体错误信息
 - 新增 `debug_create_thread.php` 调试脚本
+- 新增 `upgrade_version_1_1_5.php` 升级脚本
 
 ---
 
