@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -34,10 +35,12 @@ class CreateThreadPage extends ConsumerStatefulWidget {
 class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   final titleController = TextEditingController();
   final contentController = TextEditingController();
+  final contentFocusNode = FocusNode();
 
   final imagePicker = ImagePicker();
 
   String mode = 'article';
+  bool _showPreview = false;
 
   bool publishing = false;
   bool uploadingImage = false;
@@ -83,6 +86,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
     titleController.addListener(_scheduleAutoSaveDraft);
     contentController.addListener(_scheduleAutoSaveDraft);
+    contentController.addListener(() {
+      if (_showPreview && mounted) setState(() {});
+    });
   }
 
   @override
@@ -90,6 +96,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     draftTimer?.cancel();
     titleController.dispose();
     contentController.dispose();
+    contentFocusNode.dispose();
     tagController.dispose();
     super.dispose();
   }
@@ -540,6 +547,62 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         });
       }
     }
+  }
+
+  /// 退格时若光标前是 BBCode 标签，整体删除
+  bool _handleContentBackspace() {
+    final text = contentController.text;
+    final sel = contentController.selection;
+    if (!sel.isCollapsed) return false;
+
+    final cursor = sel.baseOffset;
+    if (cursor <= 0) return false;
+
+    // 匹配光标前的 BBCode 闭合标签 ]，向前找到对应的 [
+    if (text[cursor - 1] == ']') {
+      // 向前找 [
+      int openBracket = text.lastIndexOf('[', cursor - 2);
+      if (openBracket < 0) return false;
+
+      final tag = text.substring(openBracket, cursor);
+
+      // 简单标签: [img=...] [video=...] [music=...] [attach=...] [thread=...]
+      final simpleTag = RegExp(
+          r'^\[(img|video|music|attach|thread)=[^\]]+\]$',
+          caseSensitive: false);
+      if (simpleTag.hasMatch(tag)) {
+        contentController.text =
+            text.substring(0, openBracket) + text.substring(cursor);
+        contentController.selection =
+            TextSelection.fromPosition(TextPosition(offset: openBracket));
+        return true;
+      }
+
+      // 闭合标签 [/tag]
+      final closeTag = RegExp(r'^\[/[a-zA-Z]+\]$');
+      if (closeTag.hasMatch(tag)) {
+        // 提取标签名
+        final tagName = RegExp(r'\[/([a-zA-Z]+)\]').firstMatch(tag)?.group(1);
+        if (tagName != null) {
+          // 向前找对应的开标签 [tag] 或 [tag=...]
+          final openPattern = RegExp(
+              '\\[$tagName(?:=[^\\]]*)?\\]',
+              caseSensitive: false);
+          final openMatches = openPattern.allMatches(text.substring(0, openBracket)).toList();
+          if (openMatches.isNotEmpty) {
+            final openMatch = openMatches.last;
+            final deleteStart = openMatch.start;
+            contentController.text =
+                text.substring(0, deleteStart) + text.substring(cursor);
+            contentController.selection =
+                TextSelection.fromPosition(TextPosition(offset: deleteStart));
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   void _insertMarkdownBlock() {
@@ -1109,22 +1172,71 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               onDelete: (index) => _deleteImage(index),
             ),
           if (isImageMode) const SizedBox(height: 12),
-          TextField(
-            controller: contentController,
-            minLines: isImageMode ? 5 : 12,
-            maxLines: null,
-            decoration: InputDecoration(
-              hintText: isImageMode
-                  ? '分享这组图片背后的故事...'
-                  : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
-              filled: true,
-              fillColor: AppColors.inputFill(context),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+          // 预览/编辑切换
+          Row(
+            children: [
+              Text(
+                '正文',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const Spacer(),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('编辑')),
+                  ButtonSegment(value: true, label: Text('预览')),
+                ],
+                selected: {_showPreview},
+                onSelectionChanged: (v) => setState(() => _showPreview = v.first),
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!_showPreview)
+            KeyboardListener(
+              focusNode: FocusNode(),
+              onKeyEvent: (event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.backspace) {
+                  _handleContentBackspace();
+                }
+              },
+              child: TextField(
+                controller: contentController,
+                focusNode: contentFocusNode,
+                minLines: isImageMode ? 5 : 12,
+                maxLines: null,
+                decoration: InputDecoration(
+                  hintText: isImageMode
+                      ? '分享这组图片背后的故事...'
+                      : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
+                  filled: true,
+                  fillColor: AppColors.inputFill(context),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
               ),
             ),
-          ),
+          if (_showPreview)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.inputFill(context),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: contentController.text.trim().isEmpty
+                  ? Text(
+                      '暂无内容',
+                      style: TextStyle(color: Colors.grey.shade400),
+                    )
+                  : ForumContentView(content: contentController.text),
+            ),
           const SizedBox(height: 16),
           const Text(
             '标签，最多 5 个',

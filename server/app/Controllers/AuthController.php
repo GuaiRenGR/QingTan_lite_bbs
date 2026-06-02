@@ -156,4 +156,107 @@ class AuthController
 
         \Response::success(null, '退出成功');
     }
+
+    public static function changePassword()
+    {
+        $user = \Auth::requireLogin();
+
+        $oldPassword = (string)\Request::input('old_password');
+        $newPassword = (string)\Request::input('new_password');
+        $confirmPassword = (string)\Request::input('confirm_password');
+
+        if (!$oldPassword || !$newPassword) {
+            \Response::json(422, '请输入旧密码和新密码');
+        }
+
+        if (strlen($newPassword) < 8 || strlen($newPassword) > 32) {
+            \Response::json(422, '新密码长度需为 8-32 位');
+        }
+
+        if ($newPassword !== $confirmPassword) {
+            \Response::json(422, '两次新密码不一致');
+        }
+
+        $users = \Database::table('users');
+        $row = \Database::fetch(
+            "SELECT password_hash FROM {$users} WHERE id = ? LIMIT 1",
+            [$user['id']]
+        );
+
+        if (!$row || !password_verify($oldPassword, $row['password_hash'])) {
+            \Response::json(422, '旧密码错误');
+        }
+
+        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+
+        \Database::execute(
+            "UPDATE {$users} SET password_hash = ?, updated_at = ? WHERE id = ?",
+            [$hash, now(), $user['id']]
+        );
+
+        \Response::success(null, '密码已修改');
+    }
+
+    public static function sessions()
+    {
+        $user = \Auth::requireLogin();
+
+        $tokens = \Database::table('user_tokens');
+
+        $rows = \Database::fetchAll(
+            "SELECT id, device_id, ip, user_agent, created_at, expired_at
+             FROM {$tokens}
+             WHERE user_id = ? AND expired_at > ?
+             ORDER BY created_at DESC",
+            [$user['id'], now()]
+        );
+
+        $currentHash = hash('sha256', \Request::bearerToken() ?? '');
+
+        $sessions = [];
+        foreach ($rows as $row) {
+            $sessions[] = [
+                'id' => (int)$row['id'],
+                'device_id' => $row['device_id'] ?? '',
+                'ip' => $row['ip'] ?? '',
+                'user_agent' => $row['user_agent'] ?? '',
+                'created_at' => $row['created_at'],
+                'expired_at' => $row['expired_at'],
+            ];
+        }
+
+        \Response::success([
+            'sessions' => $sessions,
+            'current_token_hash' => $currentHash,
+        ]);
+    }
+
+    public static function revokeSession()
+    {
+        $user = \Auth::requireLogin();
+
+        $sessionId = \Request::int('session_id');
+
+        if ($sessionId <= 0) {
+            \Response::json(422, '参数错误');
+        }
+
+        $tokens = \Database::table('user_tokens');
+
+        $session = \Database::fetch(
+            "SELECT id FROM {$tokens} WHERE id = ? AND user_id = ? LIMIT 1",
+            [$sessionId, $user['id']]
+        );
+
+        if (!$session) {
+            \Response::json(404, '会话不存在');
+        }
+
+        \Database::execute(
+            "DELETE FROM {$tokens} WHERE id = ? AND user_id = ?",
+            [$sessionId, $user['id']]
+        );
+
+        \Response::success(null, '已撤销该会话');
+    }
 }

@@ -102,11 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.security_outlined,
                 title: '账号与安全',
                 subtitle: '密码、登录设备、安全设置',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('账号与安全开发中')),
-                  );
-                },
+                onTap: () => context.push('/account-security'),
               ),
             ],
           ),

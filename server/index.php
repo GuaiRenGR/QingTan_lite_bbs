@@ -9,6 +9,7 @@ require_once FX_ROOT . '/core/Database.php';
 require_once FX_ROOT . '/core/Auth.php';
 require_once FX_ROOT . '/core/SiteSetting.php';
 require_once FX_ROOT . '/core/OneDriveService.php';
+require_once FX_ROOT . '/core/DvCode.php';
 
 spl_autoload_register(function ($class) {
     $prefix = 'App\\Controllers\\';
@@ -47,6 +48,18 @@ try {
 
         case 'auth/logout':
             App\Controllers\AuthController::logout();
+            break;
+
+        case 'auth/change-password':
+            App\Controllers\AuthController::changePassword();
+            break;
+
+        case 'auth/sessions':
+            App\Controllers\AuthController::sessions();
+            break;
+
+        case 'auth/revoke-session':
+            App\Controllers\AuthController::revokeSession();
             break;
 
         case 'user/me':

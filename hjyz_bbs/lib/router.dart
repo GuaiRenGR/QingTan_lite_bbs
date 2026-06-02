@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
+import 'features/auth/account_security_page.dart';
 import 'features/creator/creator_center_page.dart';
 import 'features/history/history_page.dart';
 import 'features/main/main_shell_page.dart';
@@ -40,6 +41,10 @@ final router = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (_, _) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/account-security',
+      builder: (_, _) => const AccountSecurityPage(),
     ),
     GoRoute(
       path: '/messages',

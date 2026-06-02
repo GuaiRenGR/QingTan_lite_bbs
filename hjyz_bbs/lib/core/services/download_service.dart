@@ -308,11 +308,21 @@ class DownloadService {
     _tasks.remove(taskId);
   }
 
-  /// 打开已下载文件
-  Future<void> openFile(String taskId) async {
+  /// 打开已下载文件，返回结果消息
+  Future<String> openFile(String taskId) async {
     final task = _tasks[taskId];
-    if (task == null || task.status != DownloadStatus.completed) return;
-    await OpenFile.open(task.savePath);
+    if (task == null || task.status != DownloadStatus.completed) {
+      return '文件不存在';
+    }
+    try {
+      final result = await OpenFile.open(task.savePath);
+      if (result.type == ResultType.done) {
+        return '已打开';
+      }
+      return '无法打开: ${result.message}';
+    } catch (e) {
+      return '打开失败: $e';
+    }
   }
 
   /// 保存下载历史

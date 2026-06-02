@@ -109,8 +109,24 @@ class ThreadCreateController
 
             $threadId = (int)\Database::lastInsertId();
 
-            // 生成 DV 码
+            // 生成 DV 码（带冲突检测）
             $dvCode = \DvCode::encode($threadId);
+            $existing = \Database::fetch(
+                "SELECT id FROM {$threads} WHERE dv_code = ? AND id != ? LIMIT 1",
+                [$dvCode, $threadId]
+            );
+            if ($existing) {
+                $suffix = 'a';
+                do {
+                    $tryCode = substr($dvCode, 0, 7) . $suffix;
+                    $existing = \Database::fetch(
+                        "SELECT id FROM {$threads} WHERE dv_code = ? AND id != ? LIMIT 1",
+                        [$tryCode, $threadId]
+                    );
+                    $suffix++;
+                } while ($existing);
+                $dvCode = $tryCode;
+            }
             \Database::execute(
                 "UPDATE {$threads} SET dv_code = ? WHERE id = ?",
                 [$dvCode, $threadId]

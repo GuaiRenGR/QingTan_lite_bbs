@@ -105,6 +105,71 @@ class _DownloadPageState extends State<DownloadPage> {
     }
   }
 
+  void _showNewDownloadDialog() {
+    final urlController = TextEditingController();
+    final nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建下载'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: urlController,
+              decoration: const InputDecoration(
+                labelText: '下载链接',
+                hintText: 'https://example.com/file.zip',
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: '文件名（可选）',
+                hintText: '留空则自动从链接提取',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final url = urlController.text.trim();
+              if (url.isEmpty) return;
+              Navigator.pop(ctx);
+
+              String fileName = nameController.text.trim();
+              if (fileName.isEmpty) {
+                // 从 URL 提取文件名
+                final uri = Uri.tryParse(url);
+                fileName = uri?.pathSegments.isNotEmpty == true
+                    ? uri!.pathSegments.last
+                    : 'download_${DateTime.now().millisecondsSinceEpoch}';
+                // 解码 URL 编码的中文文件名
+                fileName = Uri.decodeComponent(fileName);
+              }
+
+              DownloadService.instance.download(
+                url: url,
+                fileName: fileName,
+              );
+              _listenAll();
+              setState(() {});
+            },
+            child: const Text('下载'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActions(DownloadTask task) {
     final service = DownloadService.instance;
 
@@ -162,7 +227,14 @@ class _DownloadPageState extends State<DownloadPage> {
             IconButton(
               icon: const Icon(Icons.open_in_new_rounded),
               tooltip: '打开',
-              onPressed: () => service.openFile(task.id),
+              onPressed: () async {
+                final msg = await service.openFile(task.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(msg)),
+                  );
+                }
+              },
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded),
@@ -238,6 +310,10 @@ class _DownloadPageState extends State<DownloadPage> {
             ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showNewDownloadDialog,
+        child: const Icon(Icons.add),
+      ),
       body: entries.isEmpty
           ? Center(
               child: Column(
@@ -307,6 +383,20 @@ class _DownloadPageState extends State<DownloadPage> {
                           ),
                         ],
                       ),
+                      // 保存路径
+                      if (task.status == DownloadStatus.completed)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            task.savePath,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 10),
 
                       // 进度条

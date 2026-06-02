@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +28,7 @@ class ForumXApp extends ConsumerStatefulWidget {
 class _ForumXAppState extends ConsumerState<ForumXApp>
     with WidgetsBindingObserver {
   bool _wasLoggedIn = false;
+  StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
@@ -35,13 +39,39 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initNotifications();
     });
+
+    // 监听 deep link
+    _initDeepLinks();
   }
 
   @override
   void dispose() {
+    _linkSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     NotificationService().stopPolling();
     super.dispose();
+  }
+
+  void _initDeepLinks() {
+    final appLinks = AppLinks();
+
+    // 处理冷启动时的 deep link
+    appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleLink(uri);
+    });
+
+    // 监听运行时的 deep link
+    _linkSub = appLinks.uriLinkStream.listen((uri) {
+      _handleLink(uri);
+    });
+  }
+
+  void _handleLink(Uri uri) {
+    if (uri.scheme != 'hyjzbbs') return;
+
+    // hyjzbbs://thread/123
+    final path = '/${uri.host}${uri.path}';
+    router.push(path);
   }
 
   Future<void> _initNotifications() async {
