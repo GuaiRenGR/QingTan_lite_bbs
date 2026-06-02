@@ -338,6 +338,26 @@ try {
             App\Controllers\AdminController::updateUser();
             break;
 
+        case 'admin/groups':
+            App\Controllers\AdminController::groupList();
+            break;
+
+        case 'admin/threads':
+            App\Controllers\AdminController::threads();
+            break;
+
+        case 'admin/thread/delete':
+            App\Controllers\AdminController::threadDelete();
+            break;
+
+        case 'admin/thread/sticky':
+            App\Controllers\AdminController::threadToggleSticky();
+            break;
+
+        case 'admin/thread/lock':
+            App\Controllers\AdminController::threadToggleLock();
+            break;
+
         default:
             Response::json(404, '接口不存在');
     }

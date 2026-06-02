@@ -207,11 +207,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   icon: Icons.article_outlined,
                   title: '帖子管理',
                   subtitle: '查看、编辑、删除帖子',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('帖子管理开发中')),
-                    );
-                  },
+                  onTap: () => context.push('/admin/threads'),
                 ),
                 _AdminEntry(
                   icon: Icons.fact_check_outlined,

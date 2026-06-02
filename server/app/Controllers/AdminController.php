@@ -74,7 +74,7 @@ class AdminController
         $total = (int)($countRow['c'] ?? 0);
 
         $list = \Database::fetchAll(
-            "SELECT id, username, nickname, email, avatar, group_id, level, score, points, status, created_at, last_login_at
+            "SELECT id, username, nickname, email, avatar, group_id, level, score, points, status, permissions, created_at, last_login_at
              FROM {$users}
              {$where}
              ORDER BY id DESC
@@ -417,6 +417,14 @@ class AdminController
             \Response::json(404, '用户不存在');
         }
 
+        // 不能修改管理员的用户组
+        if ((int)$target['group_id'] === 99) {
+            $newGroupId = \Request::input('group_id');
+            if ($newGroupId !== null && (int)$newGroupId !== 99) {
+                \Response::json(422, '不能修改管理员的用户组');
+            }
+        }
+
         $fields = [];
         $params = [];
 
@@ -455,6 +463,45 @@ class AdminController
             $params[] = $level;
         }
 
+        // 用户组
+        $groupId = \Request::input('group_id');
+        if ($groupId !== null) {
+            $gid = (int)$groupId;
+            if ($gid <= 0) {
+                \Response::json(422, '用户组 ID 错误');
+            }
+            // 检查用户组是否存在
+            $groups = \Database::table('user_groups');
+            $group = \Database::fetch(
+                "SELECT id FROM {$groups} WHERE id = ? LIMIT 1",
+                [$gid]
+            );
+            if (!$group) {
+                \Response::json(422, '用户组不存在');
+            }
+            $fields[] = '`group_id` = ?';
+            $params[] = $gid;
+        }
+
+        // 单独权限覆盖（JSON）
+        $permissions = \Request::input('permissions');
+        if ($permissions !== null) {
+            if (is_array($permissions)) {
+                $permJson = json_encode($permissions, JSON_UNESCAPED_UNICODE);
+            } else {
+                $permJson = (string)$permissions;
+            }
+            // 验证是否为合法 JSON
+            if ($permJson !== 'null' && $permJson !== '{}') {
+                json_decode($permJson);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    \Response::json(422, '权限数据格式错误');
+                }
+            }
+            $fields[] = '`permissions` = ?';
+            $params[] = $permJson === 'null' || $permJson === '{}' ? null : $permJson;
+        }
+
         if (empty($fields)) {
             \Response::json(422, '没有需要更新的字段');
         }
@@ -469,5 +516,206 @@ class AdminController
         );
 
         \Response::success(null, '用户资料已更新');
+    }
+
+    // ========== 用户组列表 ==========
+
+    public static function groupList()
+    {
+        self::requireAdmin();
+
+        $groups = \Database::table('user_groups');
+        $rows = \Database::fetchAll(
+            "SELECT id, name, type, permissions, min_score, max_score, status FROM {$groups} ORDER BY id ASC"
+        );
+
+        $list = array_map(function ($row) {
+            $perms = json_decode($row['permissions'] ?? '{}', true) ?: [];
+            return [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+                'type' => $row['type'],
+                'permissions' => $perms,
+                'min_score' => (int)$row['min_score'],
+                'max_score' => (int)$row['max_score'],
+                'status' => (int)$row['status'],
+            ];
+        }, $rows);
+
+        \Response::success(['list' => $list]);
+    }
+
+    // ========== 帖子管理 ==========
+
+    public static function threads()
+    {
+        self::requireAdmin();
+
+        $page = max(1, \Request::int('page', 1));
+        $pageSize = min(100, max(1, \Request::int('page_size', 20)));
+        $keyword = trim(\Request::str('keyword', ''));
+        $forumId = \Request::int('forum_id', 0);
+        $visibility = \Request::str('visibility', '');
+
+        $threads = \Database::table('threads');
+        $users = \Database::table('users');
+        $offset = ($page - 1) * $pageSize;
+
+        $where = ['t.status = 1'];
+        $params = [];
+
+        if ($keyword !== '') {
+            $where[] = '(t.title LIKE ? OR u.nickname LIKE ?)';
+            $like = '%' . $keyword . '%';
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($forumId > 0) {
+            $where[] = 't.forum_id = ?';
+            $params[] = $forumId;
+        }
+
+        if ($visibility !== '') {
+            $where[] = 't.visibility = ?';
+            $params[] = $visibility;
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        $countRow = \Database::fetch(
+            "SELECT COUNT(*) AS c FROM {$threads} t LEFT JOIN {$users} u ON u.id = t.user_id WHERE {$whereClause}",
+            $params
+        );
+        $total = (int)($countRow['c'] ?? 0);
+
+        $rows = \Database::fetchAll(
+            "SELECT t.id, t.title, t.summary, t.cover, t.mode, t.forum_id,
+                    t.visibility, t.is_sticky, t.is_locked, t.view_count,
+                    t.like_count, t.post_count, t.created_at, t.updated_at,
+                    u.id AS author_id, u.nickname AS author_name, u.avatar AS author_avatar
+             FROM {$threads} t
+             LEFT JOIN {$users} u ON u.id = t.user_id
+             WHERE {$whereClause}
+             ORDER BY t.is_sticky DESC, t.created_at DESC
+             LIMIT {$pageSize} OFFSET {$offset}",
+            $params
+        );
+
+        $list = array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'title' => $row['title'],
+                'summary' => $row['summary'] ?? '',
+                'cover' => $row['cover'] ?? '',
+                'mode' => $row['mode'] ?? 'article',
+                'forum_id' => (int)$row['forum_id'],
+                'visibility' => $row['visibility'],
+                'is_sticky' => (int)$row['is_sticky'],
+                'is_locked' => (int)$row['is_locked'],
+                'view_count' => (int)$row['view_count'],
+                'like_count' => (int)$row['like_count'],
+                'post_count' => (int)$row['post_count'],
+                'created_at' => $row['created_at'],
+                'updated_at' => $row['updated_at'],
+                'author' => [
+                    'id' => (int)$row['author_id'],
+                    'nickname' => $row['author_name'] ?: '用户',
+                    'avatar' => $row['author_avatar'] ?: '',
+                ],
+            ];
+        }, $rows);
+
+        \Response::success([
+            'list' => $list,
+            'total' => $total,
+            'page' => $page,
+            'page_size' => $pageSize,
+        ]);
+    }
+
+    public static function threadDelete()
+    {
+        self::requireAdmin();
+
+        $threadId = \Request::int('thread_id');
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        \Database::execute(
+            "UPDATE {$threads} SET status = 0, updated_at = ? WHERE id = ?",
+            [now(), $threadId]
+        );
+
+        \Response::success(null, '帖子已删除');
+    }
+
+    public static function threadToggleSticky()
+    {
+        self::requireAdmin();
+
+        $threadId = \Request::int('thread_id');
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id, is_sticky FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        $newVal = (int)$thread['is_sticky'] === 1 ? 0 : 1;
+
+        \Database::execute(
+            "UPDATE {$threads} SET is_sticky = ?, updated_at = ? WHERE id = ?",
+            [$newVal, now(), $threadId]
+        );
+
+        \Response::success(['is_sticky' => $newVal], $newVal ? '已置顶' : '已取消置顶');
+    }
+
+    public static function threadToggleLock()
+    {
+        self::requireAdmin();
+
+        $threadId = \Request::int('thread_id');
+        if ($threadId <= 0) {
+            \Response::json(422, '帖子 ID 错误');
+        }
+
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id, is_locked FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            [$threadId]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        $newVal = (int)$thread['is_locked'] === 1 ? 0 : 1;
+
+        \Database::execute(
+            "UPDATE {$threads} SET is_locked = ?, updated_at = ? WHERE id = ?",
+            [$newVal, now(), $threadId]
+        );
+
+        \Response::success(['is_locked' => $newVal], $newVal ? '已锁定' : '已取消锁定');
     }
 }

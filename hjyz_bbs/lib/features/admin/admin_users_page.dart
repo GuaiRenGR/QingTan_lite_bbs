@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
@@ -19,6 +21,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   int page = 1;
   int total = 0;
   String keyword = '';
+  List<Map<String, dynamic>> groups = [];
 
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
@@ -27,7 +30,21 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   void initState() {
     super.initState();
     _load(refresh: true);
+    _loadGroups();
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _loadGroups() async {
+    final result = await ApiClient.instance.get('admin/groups');
+    if (!mounted) return;
+    if (result.success && result.data is Map) {
+      final data = result.data as Map;
+      final list = (data['list'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() => groups = list);
+    }
   }
 
   @override
@@ -180,6 +197,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
 
   void _showEditUserDialog(Map<String, dynamic> user) {
     final userId = _toInt(user['id']);
+    final currentGroupId = _toInt(user['group_id']);
     final badgeNameCtrl = TextEditingController(
       text: user['badge_name']?.toString() ?? '',
     );
@@ -187,86 +205,280 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
       text: user['badge_color']?.toString() ?? '#FB7299',
     );
     int verifyLevel = _toInt(user['verify_level']);
+    int selectedGroupId = currentGroupId;
+    // 解析用户单独权限覆盖
+    final userPerms = user['permissions'];
+    Map<String, dynamic> permOverrides = {};
+    if (userPerms is Map) {
+      permOverrides = Map<String, dynamic>.from(userPerms);
+    } else if (userPerms is String && userPerms.isNotEmpty) {
+      try {
+        final decoded = Map<String, dynamic>.from(
+            const JsonDecoder().convert(userPerms) as Map);
+        permOverrides = decoded;
+      } catch (_) {}
+    }
+    // 常见权限列表
+    final knownPerms = [
+      _PermDef('thread.create', '发帖', true),
+      _PermDef('post.create', '评论', true),
+      _PermDef('thread.edit', '编辑帖子', true),
+      _PermDef('thread.delete', '删除帖子', false),
+      _PermDef('post.edit', '编辑评论', true),
+      _PermDef('post.delete', '删除评论', false),
+      _PermDef('user.follow', '关注用户', true),
+      _PermDef('thread.report', '举报', true),
+    ];
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('编辑 ${user['nickname'] ?? ''}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('铭牌', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: badgeNameCtrl,
-                decoration: const InputDecoration(
-                  labelText: '铭牌文字',
-                  hintText: '2-5字，留空则清除铭牌',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: badgeColorCtrl,
-                decoration: const InputDecoration(
-                  labelText: '铭牌颜色',
-                  hintText: '#FB7299',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('认证标志', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
+        builder: (ctx, setDialogState) {
+          // 当前选中组的权限
+          final selGroup = groups.firstWhere(
+            (g) => _toInt(g['id']) == selectedGroupId,
+            orElse: () => {},
+          );
+          final selGroupPerms = selGroup.isNotEmpty &&
+                  selGroup['permissions'] is Map
+              ? Map<String, dynamic>.from(selGroup['permissions'] as Map)
+              : <String, dynamic>{};
+
+          return AlertDialog(
+            title: Text('编辑 ${user['nickname'] ?? ''}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _VerifyChip(
-                    label: '无',
-                    color: Colors.grey,
-                    selected: verifyLevel == 0,
-                    onTap: () => setDialogState(() => verifyLevel = 0),
+                  // 用户组选择
+                  const Text('用户组',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  if (groups.isNotEmpty)
+                    DropdownButtonFormField<int>(
+                      value: selectedGroupId,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: groups.map((g) {
+                        return DropdownMenuItem<int>(
+                          value: _toInt(g['id']),
+                          child: Text(
+                              '${g['name']} (ID: ${g['id']})'),
+                        );
+                      }).toList(),
+                      onChanged: currentGroupId == 99
+                          ? null // 管理员用户组不可改
+                          : (v) {
+                              if (v != null) {
+                                setDialogState(() {
+                                  selectedGroupId = v;
+                                  // 切换组时清除单独权限覆盖
+                                  permOverrides.clear();
+                                });
+                              }
+                            },
+                    ),
+                  if (currentGroupId == 99)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '管理员用户组不可更改',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade500),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // 权限编辑
+                  const Text('单独权限覆盖',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    '覆盖用户组默认权限，留空则继承用户组设置',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade500),
                   ),
-                  _VerifyChip(
-                    label: '已认证',
-                    color: const Color(0xFF4CAF50),
-                    selected: verifyLevel == 1,
-                    onTap: () => setDialogState(() => verifyLevel = 1),
+                  const SizedBox(height: 8),
+                  ...knownPerms.map((perm) {
+                    // 有效权限 = 单独覆盖 > 组权限
+                    final hasOverride = permOverrides.containsKey(perm.key);
+                    final effectiveValue = hasOverride
+                        ? permOverrides[perm.key] == true
+                        : (selGroupPerms[perm.key] == true);
+                    final groupValue = selGroupPerms[perm.key] == true;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(perm.label,
+                                    style: const TextStyle(fontSize: 14)),
+                                Text(perm.key,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade400)),
+                              ],
+                            ),
+                          ),
+                          // 当前值指示
+                          if (hasOverride)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: effectiveValue
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                effectiveValue ? '允许' : '禁止',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: effectiveValue
+                                      ? Colors.green.shade700
+                                      : Colors.red.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          else
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Text(
+                                '继承(${groupValue ? "允许" : "禁止"})',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade400),
+                              ),
+                            ),
+                          // 操作按钮
+                          PopupMenuButton<String>(
+                            onSelected: (action) {
+                              setDialogState(() {
+                                if (action == 'inherit') {
+                                  permOverrides.remove(perm.key);
+                                } else if (action == 'allow') {
+                                  permOverrides[perm.key] = true;
+                                } else if (action == 'deny') {
+                                  permOverrides[perm.key] = false;
+                                }
+                              });
+                            },
+                            icon: Icon(Icons.tune,
+                                size: 18, color: Colors.grey.shade500),
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                  value: 'inherit',
+                                  child: Text('继承用户组')),
+                              const PopupMenuItem(
+                                  value: 'allow',
+                                  child: Text('强制允许')),
+                              const PopupMenuItem(
+                                  value: 'deny',
+                                  child: Text('强制禁止')),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text('铭牌',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: badgeNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '铭牌文字',
+                      hintText: '2-5字，留空则清除',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
-                  _VerifyChip(
-                    label: '官方',
-                    color: const Color(0xFF2196F3),
-                    selected: verifyLevel == 2,
-                    onTap: () => setDialogState(() => verifyLevel = 2),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: badgeColorCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '铭牌颜色',
+                      hintText: '#FB7299',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
-                  _VerifyChip(
-                    label: '知名人物',
-                    color: const Color(0xFFFFB300),
-                    selected: verifyLevel == 3,
-                    onTap: () => setDialogState(() => verifyLevel = 3),
+                  const SizedBox(height: 16),
+                  const Text('认证标志',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      _VerifyChip(
+                        label: '无',
+                        color: Colors.grey,
+                        selected: verifyLevel == 0,
+                        onTap: () =>
+                            setDialogState(() => verifyLevel = 0),
+                      ),
+                      _VerifyChip(
+                        label: '已认证',
+                        color: const Color(0xFF4CAF50),
+                        selected: verifyLevel == 1,
+                        onTap: () =>
+                            setDialogState(() => verifyLevel = 1),
+                      ),
+                      _VerifyChip(
+                        label: '官方',
+                        color: const Color(0xFF2196F3),
+                        selected: verifyLevel == 2,
+                        onTap: () =>
+                            setDialogState(() => verifyLevel = 2),
+                      ),
+                      _VerifyChip(
+                        label: '知名人物',
+                        color: const Color(0xFFFFB300),
+                        selected: verifyLevel == 3,
+                        onTap: () =>
+                            setDialogState(() => verifyLevel = 3),
+                      ),
+                    ],
                   ),
                 ],
               ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _updateUser(
+                    userId,
+                    badgeNameCtrl.text.trim(),
+                    badgeColorCtrl.text.trim(),
+                    verifyLevel,
+                    groupId: selectedGroupId,
+                    permissions: permOverrides,
+                  );
+                },
+                child: const Text('保存'),
+              ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _updateUser(userId, badgeNameCtrl.text.trim(),
-                    badgeColorCtrl.text.trim(), verifyLevel);
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -275,8 +487,10 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     int userId,
     String badgeName,
     String badgeColor,
-    int verifyLevel,
-  ) async {
+    int verifyLevel, {
+    int? groupId,
+    Map<String, dynamic>? permissions,
+  }) async {
     final result = await ApiClient.instance.post(
       'admin/user/update',
       data: {
@@ -284,6 +498,9 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
         'badge_name': badgeName,
         'badge_color': badgeColor,
         'verify_level': verifyLevel,
+        if (groupId != null) 'group_id': groupId,
+        if (permissions != null && permissions.isNotEmpty)
+          'permissions': permissions,
       },
     );
 
@@ -753,4 +970,12 @@ class _VerifyChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PermDef {
+  final String key;
+  final String label;
+  final bool defaultValue;
+
+  const _PermDef(this.key, this.label, this.defaultValue);
 }
