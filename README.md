@@ -4,11 +4,17 @@
 
 ## 功能特性
 
-- 帖子发布（文字、图片、视频、Markdown）
-- 隐藏内容（回复可见）
-- 评论、点赞、收藏、分享
+- 帖子发布（图文/文章模式，BBCode 标签）
+- 隐藏内容（回复可见）、DV 码唯一标识
+- 评论、点赞、收藏、分享、举报
+- B站风格视频播放器（双击快进/后退、拖拽进度、长按倍速）
+- 铭牌系统与认证标识（绿 V / 蓝 V / 金 V）
+- 深度链接（`hyjzbbs://thread/DV码`）
+- 多线程下载管理（暂停/继续/断点续传）
+- 账号与安全（修改密码、设备管理、登录记录）
+- 管理中心（用户权限编辑、帖子管理、置顶/锁定/删除）
 - 签到打卡、用户关注
-- 首页推荐、版块浏览、标签系统
+- 首页推荐（加权随机抽取+兴趣画像）、版块浏览、标签系统
 - 搜索帖子与用户
 - 浏览历史、收藏管理
 - 创作者中心与数据统计
@@ -19,23 +25,34 @@
 
 | 端 | 技术 |
 |---|---|
-| 客户端 | Flutter · Riverpod · GoRouter · MediaKit |
-| 服务端 | PHP · MySQL · OneDrive |
+| 客户端 | Flutter · Riverpod · GoRouter · MediaKit · Dio |
+| 服务端 | PHP 7.4+ · MySQL · OneDrive |
 
 ## 项目结构
 
 ```
-├── hjyz_bbs/              # Flutter 客户端
+├── hjyz_bbs/                # Flutter 客户端
 │   ├── lib/
-│   │   ├── core/          # API、配置、工具类
-│   │   └── features/      # 功能模块（auth、home、thread、me 等）
+│   │   ├── core/
+│   │   │   ├── api/         # Dio 客户端、ApiResult 封装
+│   │   │   ├── config/      # AppConfig（版本、API 地址）
+│   │   │   ├── services/    # 业务服务
+│   │   │   ├── storage/     # Token 持久化
+│   │   │   └── widgets/     # 通用组件
+│   │   ├── features/        # 功能模块（auth、home、thread、me 等）
+│   │   ├── app.dart
+│   │   ├── main.dart
+│   │   └── router.dart      # GoRouter 路由定义
 │   └── pubspec.yaml
 │
-└── server/                # PHP 服务端
-    ├── app/Controllers/   # API 控制器
-    ├── core/              # 核心类库
-    ├── config/            # 配置文件
-    └── index.php          # 入口文件
+└── server/                  # PHP 服务端
+    ├── app/Controllers/     # 27 个 API 控制器
+    ├── core/                # 核心类库（Database、Auth、Response 等）
+    ├── config/              # 数据库、OneDrive 配置
+    ├── install.php          # 安装向导
+    ├── index.php            # API 入口（路由分发）
+    ├── download.php         # 下载分发
+    └── share.php            # 分享跳转
 ```
 
 ## 快速开始
@@ -56,4 +73,4 @@ flutter run
 
 ## 版本
 
-当前版本：1.1.3+8
+当前版本：1.1.5+10
