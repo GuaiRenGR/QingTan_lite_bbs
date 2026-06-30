@@ -29,6 +29,7 @@ class _HomeFeedPageState extends State<HomeFeedPage>
   bool hasMore = true;
 
   final List<Map<String, dynamic>> threads = [];
+  final Set<int> _loadedIds = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -53,6 +54,7 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       'page': page,
       'page_size': 20,
       'channel': widget.type,
+      if (_loadedIds.isNotEmpty) 'exclude_ids': _loadedIds.toList(),
     };
   }
 
@@ -68,19 +70,22 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       final data = result.data as Map<String, dynamic>;
       final raw = data['list'];
 
+      final list = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+
       setState(() {
         page = 1;
         hasMore = data['has_more'] == true;
         threads
           ..clear()
-          ..addAll(
-            raw is List
-                ? raw
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList()
-                : [],
-          );
+          ..addAll(list);
+        _loadedIds
+          ..clear()
+          ..addAll(list.map((e) => (e['id'] as num).toInt()));
         loading = false;
         error = null;
       });
@@ -104,19 +109,22 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       final data = result.data as Map<String, dynamic>;
       final raw = data['list'];
 
+      final list = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+
       setState(() {
         page = 1;
         hasMore = data['has_more'] == true;
         threads
           ..clear()
-          ..addAll(
-            raw is List
-                ? raw
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList()
-                : [],
-          );
+          ..addAll(list);
+        _loadedIds
+          ..clear()
+          ..addAll(list.map((e) => (e['id'] as num).toInt()));
         error = null;
       });
     }
@@ -142,17 +150,18 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       final data = result.data as Map<String, dynamic>;
       final raw = data['list'];
 
+      final list = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+
       setState(() {
         page = nextPage;
         hasMore = data['has_more'] == true;
-        threads.addAll(
-          raw is List
-              ? raw
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList()
-              : [],
-        );
+        threads.addAll(list);
+        _loadedIds.addAll(list.map((e) => (e['id'] as num).toInt()));
         loadingMore = false;
       });
     } else {

@@ -23,7 +23,7 @@ class ThreadWaterfallGrid extends StatelessWidget {
     return MasonryGridView.count(
       padding: padding,
       physics: physics,
-      crossAxisCount: 2,
+      crossAxisCount: _getColumnCount(context),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
       itemCount: threads.length,
@@ -47,7 +47,7 @@ class ThreadWaterfallSliver extends StatelessWidget {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
       sliver: SliverMasonryGrid.count(
-        crossAxisCount: 2,
+        crossAxisCount: _getColumnCount(context),
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
         childCount: threads.length,
@@ -57,6 +57,17 @@ class ThreadWaterfallSliver extends StatelessWidget {
       ),
     );
   }
+}
+
+int _getColumnCount(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  final ratio = size.width / size.height;
+
+  if (ratio < 2 / 3) return 2;
+  if (ratio < 1) return 3;
+  if (ratio < 3 / 2) return 4;
+  if (ratio < 16 / 9) return 5;
+  return 6;
 }
 
 class ThreadWaterfallCard extends StatelessWidget {

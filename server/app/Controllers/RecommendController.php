@@ -115,7 +115,7 @@ class RecommendController
 
         // 取 3 倍候选量
         $candidateLimit = $pageSize * 3;
-        $offset = ($page - 1) * $candidateLimit;
+        $offset = ($page - 1) * $pageSize;
 
         // 构建用户兴趣画像
         $interestMap = $userId > 0 ? self::buildInterestMap($userId) : [];
