@@ -160,8 +160,11 @@ class _HomeFeedPageState extends State<HomeFeedPage>
       setState(() {
         page = nextPage;
         hasMore = data['has_more'] == true;
-        threads.addAll(list);
-        _loadedIds.addAll(list.map((e) => (e['id'] as num).toInt()));
+        final newItems = list
+            .where((e) => !_loadedIds.contains((e['id'] as num).toInt()))
+            .toList();
+        threads.addAll(newItems);
+        _loadedIds.addAll(newItems.map((e) => (e['id'] as num).toInt()));
         loadingMore = false;
       });
     } else {

@@ -50,6 +50,21 @@ class ApiClient {
       ),
     );
 
+  Dio get dio => _dio;
+
+  Future<Response<List<int>>> rawGet(
+    String url, {
+    Map<String, String>? headers,
+  }) async {
+    return _dio.get<List<int>>(
+      url,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: headers,
+      ),
+    );
+  }
+
   Future<ApiResult<dynamic>> get(
     String route, {
     Map<String, dynamic>? query,

@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/bbcode_editor_controller.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/forum_content_view.dart';
@@ -33,7 +34,7 @@ class CreateThreadPage extends ConsumerStatefulWidget {
 
 class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   final titleController = TextEditingController();
-  final contentController = TextEditingController();
+  final contentController = BbcodeEditorController();
 
   final imagePicker = ImagePicker();
 
