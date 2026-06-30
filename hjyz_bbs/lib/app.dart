@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:workmanager/workmanager.dart';
 
 import 'core/services/notification_service.dart';
 import 'features/auth/auth_controller.dart';
@@ -87,21 +86,9 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
     if (isLoggedIn && !_wasLoggedIn) {
       // 刚登录，启动轮询
       NotificationService().startPolling();
-      // 注册后台周期任务
-      Workmanager().registerPeriodicTask(
-        'checkNotificationsTask',
-        'checkNotificationsTask',
-        frequency: const Duration(minutes: 15),
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
-      );
     } else if (!isLoggedIn && _wasLoggedIn) {
       // 刚退出登录，停止轮询
       NotificationService().reset();
-      // 取消后台任务
-      Workmanager().cancelByUniqueName('checkNotificationsTask');
     }
 
     _wasLoggedIn = isLoggedIn;
