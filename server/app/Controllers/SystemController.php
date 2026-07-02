@@ -105,13 +105,14 @@ class SystemController
 
         $logTable = \Database::table('sync_operation_log');
 
+        $batchSize = (int)($config ? $config['sync']['batch_size'] : 100);
         $operations = \Database::fetchAll(
             "SELECT id, server_id, src_op_id, op_type, table_name, row_id, row_data, created_at
              FROM {$logTable}
              WHERE server_id != ? AND id > ?
              ORDER BY id ASC
-             LIMIT ?",
-            [$requesterServerId, $afterId, $config ? $config['sync']['batch_size'] : 100]
+             LIMIT {$batchSize}",
+            [$requesterServerId, $afterId]
         );
 
         $maxId = 0;

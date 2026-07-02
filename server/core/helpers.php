@@ -384,13 +384,13 @@ if (!function_exists('sync_get_unsynced_ops')) {
 
         $logTable = Database::table('sync_operation_log');
 
+        $limit = (int)$limit;
         return Database::fetchAll(
             "SELECT id, server_id, src_op_id, op_type, table_name, row_id, row_data, created_at
              FROM {$logTable}
              WHERE synced_at IS NULL
              ORDER BY id ASC
-             LIMIT ?",
-            [(int)$limit]
+             LIMIT {$limit}"
         );
     }
 }
