@@ -590,7 +590,7 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
     final secs = totalSecs % 60;
     final hours = totalSecs ~/ 3600;
     if (hours > 0) {
-      return '${hours}:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      return '$hours:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
     return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
@@ -635,7 +635,7 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
                       child: Image.memory(
                         _coverArt!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ),
                   Expanded(

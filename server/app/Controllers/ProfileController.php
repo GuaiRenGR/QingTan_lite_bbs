@@ -94,14 +94,14 @@ class ProfileController
         \Database::execute(
             "UPDATE {$users}
              SET avatar = ?,
-                 nickname = ?,
-                 bio = ?,
-                 gender = ?,
-                 birthday = ?,
-                 school = ?,
-                 grade = ?,
-                 location = ?,
-                 profile_visibility_json = ?
+                  nickname = ?,
+                  bio = ?,
+                  gender = ?,
+                  birthday = ?,
+                  school = ?,
+                  grade = ?,
+                  location = ?,
+                  profile_visibility_json = ?
              WHERE id = ?",
             [
                 $avatar,
@@ -116,6 +116,8 @@ class ProfileController
                 $user['id'],
             ]
         );
+        $updatedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$user['id']]);
+        record_sync_operation('users', $user['id'], 'update', $updatedUser);
 
         \Response::success(null, '资料已保存');
     }

@@ -86,13 +86,14 @@ class HistoryController
         \Database::execute(
             "DELETE FROM {$histories}
              WHERE user_id = ?
-               AND object_type = 'thread'
-               AND object_id = ?",
+                AND object_type = 'thread'
+                AND object_id = ?",
             [
                 $user['id'],
                 $threadId,
             ]
         );
+        record_sync_operation('histories', 0, 'delete');
 
         \Response::success(null, '已删除');
     }
@@ -106,9 +107,10 @@ class HistoryController
         \Database::execute(
             "DELETE FROM {$histories}
              WHERE user_id = ?
-               AND object_type = 'thread'",
+                AND object_type = 'thread'",
             [$user['id']]
         );
+        record_sync_operation('histories', 0, 'delete');
 
         \Response::success(null, '历史记录已清空');
     }

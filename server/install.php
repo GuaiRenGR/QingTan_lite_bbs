@@ -440,6 +440,49 @@ function createTables(PDO $pdo, string $prefix)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}sync_operation_log` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `server_id` INT UNSIGNED NOT NULL COMMENT '来源服务器ID',
+      `src_op_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '来源服务器的日志ID',
+      `op_type` VARCHAR(16) NOT NULL COMMENT 'insert | update | delete',
+      `table_name` VARCHAR(64) NOT NULL COMMENT '表名',
+      `row_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '受影响行的主键ID',
+      `row_data` MEDIUMTEXT COMMENT '行数据的 JSON 快照',
+      `old_data` MEDIUMTEXT COMMENT '更新前的旧数据',
+      `created_at` DATETIME NOT NULL,
+      `synced_at` DATETIME DEFAULT NULL,
+      PRIMARY KEY (`id`),
+      KEY `idx_server_op` (`server_id`, `src_op_id`),
+      KEY `idx_synced` (`synced_at`),
+      KEY `idx_created` (`created_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}sync_server_status` (
+      `server_id` INT UNSIGNED NOT NULL,
+      `server_url` VARCHAR(255) NOT NULL,
+      `server_name` VARCHAR(64) NOT NULL,
+      `last_ping_at` DATETIME DEFAULT NULL,
+      `last_sync_at` DATETIME DEFAULT NULL,
+      `last_sync_op_id` BIGINT UNSIGNED DEFAULT 0,
+      `status` VARCHAR(16) NOT NULL DEFAULT 'active',
+      `version` VARCHAR(32) DEFAULT NULL,
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME NOT NULL,
+      PRIMARY KEY (`server_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}id_sequences` (
+      `table_name` VARCHAR(64) NOT NULL,
+      `next_id` BIGINT UNSIGNED NOT NULL DEFAULT 1,
+      PRIMARY KEY (`table_name`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
     foreach ($sqls as $sql) {
         $pdo->exec($sql);
     }

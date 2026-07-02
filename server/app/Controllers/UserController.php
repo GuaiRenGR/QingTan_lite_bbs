@@ -148,6 +148,8 @@ class UserController
                     VALUES (?, ?, ?)",
                     [$viewer['id'], $targetUserId, now()]
                 );
+                $followId = (int)\Database::lastInsertId();
+                record_sync_operation('user_follows', $followId, 'insert');
             }
 
             \Database::commit();
@@ -177,6 +179,7 @@ class UserController
             "DELETE FROM {$follows} WHERE follower_id = ? AND following_id = ?",
             [$viewer['id'], $targetUserId]
         );
+        record_sync_operation('user_follows', 0, 'delete');
 
         \Response::success(null, '已取消关注');
     }

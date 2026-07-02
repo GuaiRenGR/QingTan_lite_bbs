@@ -102,6 +102,11 @@ class CheckinController
 
             \Database::commit();
 
+            $checkinRow = \Database::fetch("SELECT * FROM {$checkins} WHERE user_id = ? AND checkin_date = ?", [$user['id'], $today]);
+            record_sync_operation('checkins', $checkinRow ? (int)$checkinRow['id'] : 0, 'insert', $checkinRow);
+            $updatedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$user['id']]);
+            record_sync_operation('users', $user['id'], 'update', $updatedUser);
+
             \Response::success([
                 'reward_score' => $reward,
                 'continuous_days' => $continuousDays,

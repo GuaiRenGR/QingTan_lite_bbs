@@ -110,17 +110,21 @@ class PostController
             );
 
             $postId = (int)\Database::lastInsertId();
+            $newPost = \Database::fetch("SELECT * FROM {$posts} WHERE id = ?", [$postId]);
+            record_sync_operation('posts', $postId, 'insert', $newPost);
 
             \Database::execute(
                 "UPDATE {$threads}
                  SET reply_count = reply_count + 1,
-                     updated_at = ?
+                      updated_at = ?
                  WHERE id = ?",
                 [
                     now(),
                     $threadId,
                 ]
             );
+            $updatedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+            record_sync_operation('threads', $threadId, 'update', $updatedThread);
 
             add_content_daily_stat(
                 'thread',
@@ -236,11 +240,15 @@ class PostController
                          VALUES (?, 'post', ?, ?)",
                         [$user['id'], $postId, now()]
                     );
+                    $likeId = (int)\Database::lastInsertId();
+                    record_sync_operation('likes', $likeId, 'insert');
 
                     \Database::execute(
                         "UPDATE {$posts} SET like_count = like_count + 1 WHERE id = ?",
                         [$postId]
                     );
+                    $updatedPost = \Database::fetch("SELECT * FROM {$posts} WHERE id = ?", [$postId]);
+                    record_sync_operation('posts', $postId, 'update', $updatedPost);
 
                     // 通知评论作者
                     if ((int)$user['id'] !== (int)$post['user_id']) {
@@ -266,11 +274,14 @@ class PostController
                          WHERE user_id = ? AND object_type = 'post' AND object_id = ?",
                         [$user['id'], $postId]
                     );
+                    if ($exists) record_sync_operation('likes', (int)$exists['id'], 'delete');
 
                     \Database::execute(
                         "UPDATE {$posts} SET like_count = GREATEST(like_count - 1, 0) WHERE id = ?",
                         [$postId]
                     );
+                    $updatedPost = \Database::fetch("SELECT * FROM {$posts} WHERE id = ?", [$postId]);
+                    record_sync_operation('posts', $postId, 'update', $updatedPost);
                 }
 
                 $message = '已取消点赞';

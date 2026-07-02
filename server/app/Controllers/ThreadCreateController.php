@@ -152,6 +152,9 @@ class ThreadCreateController
 
             \Database::commit();
 
+            $newThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+            record_sync_operation('threads', $threadId, 'insert', $newThread);
+
             \Response::success([
                 'id' => $threadId,
                 'thread_id' => $threadId,

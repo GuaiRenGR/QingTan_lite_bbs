@@ -36,8 +36,53 @@ if (!file_exists(FX_ROOT . '/config/database.php')) {
 
 $route = $_GET['route'] ?? '';
 
+// 请求采样触发同步
+$serverConfig = [];
+if (file_exists(FX_ROOT . '/config/servers.php')) {
+    $serverConfig = require FX_ROOT . '/config/servers.php';
+    if (
+        !empty($serverConfig['sync']['sample_rate']) &&
+        mt_rand(1, 100) <= (int)$serverConfig['sync']['sample_rate'] &&
+        !in_array($route, ['sync/trigger', 'sync/push', 'sync/pull', 'sync/receive'], true)
+    ) {
+        try {
+            sync_run_all();
+        } catch (\Throwable $e) {
+            log_error('[SyncSample] ' . $e->getMessage());
+        }
+    }
+}
+
 try {
     switch ($route) {
+        case 'system/ping':
+            App\Controllers\SystemController::ping();
+            break;
+
+        case 'system/health':
+            App\Controllers\SystemController::health();
+            break;
+
+        case 'sync/trigger':
+            App\Controllers\SystemController::syncTrigger();
+            break;
+
+        case 'sync/push':
+            App\Controllers\SystemController::syncPush();
+            break;
+
+        case 'sync/pull':
+            App\Controllers\SystemController::syncPull();
+            break;
+
+        case 'sync/receive':
+            App\Controllers\SystemController::syncReceive();
+            break;
+
+        case 'sync/status':
+            App\Controllers\SystemController::syncStatus();
+            break;
+
         case 'auth/register':
             App\Controllers\AuthController::register();
             break;

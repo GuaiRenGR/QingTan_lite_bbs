@@ -177,6 +177,7 @@ class MessageController
                     [$aId, $bId, now(), mb_substr($content, 0, 100), now()]
                 );
                 $conversationId = (int)\Database::lastInsertId();
+                record_sync_operation('conversations', $conversationId, 'insert');
             }
 
             // 插入消息
@@ -188,6 +189,8 @@ class MessageController
             );
 
             $messageId = (int)\Database::lastInsertId();
+            $newMsg = \Database::fetch("SELECT * FROM {$messages} WHERE id = ?", [$messageId]);
+            record_sync_operation('messages', $messageId, 'insert', $newMsg);
 
             // 更新会话
             \Database::execute(
@@ -196,6 +199,7 @@ class MessageController
                  WHERE id = ?",
                 [now(), mb_substr($content, 0, 100), $conversationId]
             );
+            record_sync_operation('conversations', $conversationId, 'update');
 
             \Database::commit();
 
@@ -254,6 +258,7 @@ class MessageController
              WHERE conversation_id = ? AND sender_id != ? AND is_read = 0",
             [$conversationId, (int)$user['id']]
         );
+        record_sync_operation('messages', 0, 'update');
 
         \Response::success(null, '已标记已读');
     }

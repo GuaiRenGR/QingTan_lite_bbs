@@ -275,6 +275,329 @@ function parse_json_array_input($value)
     return [];
 }
 
+if (!function_exists('load_server_config')) {
+    function load_server_config()
+    {
+        static $config = null;
+        if ($config === null) {
+            $file = FX_ROOT . '/config/servers.php';
+            if (!file_exists($file)) {
+                return null;
+            }
+            $config = require $file;
+        }
+        return $config;
+    }
+}
+
+if (!function_exists('record_sync_operation')) {
+    function record_sync_operation($tableName, $rowId, $opType, $rowData = null, $oldData = null)
+    {
+        $config = load_server_config();
+        if (!$config) {
+            return;
+        }
+
+        $logTable = Database::table('sync_operation_log');
+
+        Database::execute(
+            "INSERT INTO {$logTable}
+             (`server_id`, `src_op_id`, `op_type`, `table_name`, `row_id`, `row_data`, `old_data`, `created_at`)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                $config['server_id'],
+                0,
+                $opType,
+                $tableName,
+                (int)$rowId,
+                $rowData ? json_encode($rowData, JSON_UNESCAPED_UNICODE) : null,
+                $oldData ? json_encode($oldData, JSON_UNESCAPED_UNICODE) : null,
+                now(),
+            ]
+        );
+
+        $logId = (int)Database::lastInsertId();
+
+        Database::execute(
+            "UPDATE {$logTable} SET src_op_id = ? WHERE id = ?",
+            [$logId, $logId]
+        );
+    }
+}
+
+if (!function_exists('apply_sync_operation')) {
+    function apply_sync_operation($op)
+    {
+        $table = Database::table($op['table_name']);
+        $rowData = json_decode($op['row_data'], true);
+        if (!$rowData) {
+            return false;
+        }
+
+        try {
+            switch ($op['op_type']) {
+                case 'insert':
+                    $columns = array_keys($rowData);
+                    $placeholders = array_fill(0, count($columns), '?');
+                    $sql = "INSERT IGNORE INTO {$table} (`"
+                         . implode('`,`', $columns)
+                         . "`) VALUES (" . implode(',', $placeholders) . ")";
+                    Database::execute($sql, array_values($rowData));
+                    return true;
+
+                case 'update':
+                    $sets = [];
+                    $params = [];
+                    foreach ($rowData as $col => $val) {
+                        if ($col === 'id') continue;
+                        $sets[] = "`{$col}` = ?";
+                        $params[] = $val;
+                    }
+                    $params[] = $op['row_id'];
+                    $sql = "UPDATE IGNORE {$table} SET " . implode(', ', $sets)
+                         . " WHERE id = ?";
+                    Database::execute($sql, $params);
+                    return true;
+
+                case 'delete':
+                    Database::execute(
+                        "DELETE FROM {$table} WHERE id = ?",
+                        [$op['row_id']]
+                    );
+                    return true;
+            }
+        } catch (\Throwable $e) {
+            log_error('[SyncApply] ' . $e->getMessage()
+                . ' | table=' . $op['table_name']
+                . ' | op=' . $op['op_type']
+                . ' | row_id=' . $op['row_id']);
+        }
+        return false;
+    }
+}
+
+if (!function_exists('sync_get_unsynced_ops')) {
+    function sync_get_unsynced_ops($limit = 100)
+    {
+        $config = load_server_config();
+        if (!$config) return [];
+
+        $logTable = Database::table('sync_operation_log');
+
+        return Database::fetchAll(
+            "SELECT id, server_id, src_op_id, op_type, table_name, row_id, row_data, created_at
+             FROM {$logTable}
+             WHERE synced_at IS NULL
+             ORDER BY id ASC
+             LIMIT ?",
+            [(int)$limit]
+        );
+    }
+}
+
+if (!function_exists('sync_mark_synced')) {
+    function sync_mark_synced(array $ids)
+    {
+        if (empty($ids)) return;
+
+        $logTable = Database::table('sync_operation_log');
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        Database::execute(
+            "UPDATE {$logTable} SET synced_at = ? WHERE id IN ({$placeholders})",
+            array_merge([now()], $ids)
+        );
+    }
+}
+
+if (!function_exists('sync_receive_ops')) {
+    function sync_receive_ops($sourceServerId, array $operations)
+    {
+        $logTable = Database::table('sync_operation_log');
+
+        $applied = 0;
+        $skipped = 0;
+
+        foreach ($operations as $op) {
+            $exists = Database::fetch(
+                "SELECT id FROM {$logTable} WHERE server_id = ? AND src_op_id = ? LIMIT 1",
+                [$op['server_id'], $op['src_op_id']]
+            );
+
+            if ($exists) {
+                $skipped++;
+                continue;
+            }
+
+            Database::execute(
+                "INSERT INTO {$logTable}
+                 (`server_id`, `src_op_id`, `op_type`, `table_name`, `row_id`, `row_data`, `created_at`, `synced_at`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    $op['server_id'],
+                    $op['src_op_id'],
+                    $op['op_type'],
+                    $op['table_name'],
+                    $op['row_id'],
+                    $op['row_data'],
+                    $op['created_at'],
+                    now(),
+                ]
+            );
+
+            if (apply_sync_operation($op)) {
+                $applied++;
+            }
+        }
+
+        return ['applied' => $applied, 'skipped' => $skipped];
+    }
+}
+
+if (!function_exists('sync_push_to_peer')) {
+    function sync_push_to_peer($peerUrl, $syncToken)
+    {
+        $config = load_server_config();
+        if (!$config) return ['pushed' => 0, 'success' => false];
+
+        $operations = sync_get_unsynced_ops($config['sync']['batch_size']);
+        if (empty($operations)) {
+            return ['pushed' => 0, 'success' => true];
+        }
+
+        $payload = json_encode([
+            'source_server_id' => $config['server_id'],
+            'operations' => $operations,
+        ]);
+
+        $ch = curl_init(rtrim($peerUrl, '/') . '/index.php?route=sync/receive');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Sync-Token: ' . $syncToken,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $config['sync']['timeout'],
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $opIds = array_column($operations, 'id');
+            sync_mark_synced($opIds);
+            return ['pushed' => count($operations), 'success' => true];
+        }
+
+        log_error('[SyncPush] HTTP=' . $httpCode . ' | error=' . $error . ' | peer=' . $peerUrl);
+        return ['pushed' => 0, 'success' => false];
+    }
+}
+
+if (!function_exists('sync_pull_from_peer')) {
+    function sync_pull_from_peer($peerUrl, $syncToken, $lastSyncOpId = 0)
+    {
+        $config = load_server_config();
+        if (!$config) return ['pulled' => 0, 'success' => false];
+
+        $ch = curl_init(rtrim($peerUrl, '/') . '/index.php?route=sync/pull');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'server_id' => $config['server_id'],
+                'after_id'  => $lastSyncOpId,
+            ]),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Sync-Token: ' . $syncToken,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $config['sync']['timeout'],
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            log_error('[SyncPull] HTTP=' . $httpCode . ' | error=' . $error . ' | peer=' . $peerUrl);
+            return ['pulled' => 0, 'success' => false];
+        }
+
+        $data = json_decode($response, true);
+        $operations = $data['data']['operations'] ?? [];
+
+        if (empty($operations)) {
+            return ['pulled' => 0, 'success' => true];
+        }
+
+        $result = sync_receive_ops($config['server_id'], $operations);
+
+        return [
+            'pulled'  => $result['applied'],
+            'skipped' => $result['skipped'],
+            'success' => true,
+        ];
+    }
+}
+
+if (!function_exists('sync_run_all')) {
+    function sync_run_all()
+    {
+        $config = load_server_config();
+        if (!$config) return ['error' => 'servers.php not found'];
+
+        $results = [];
+        $syncToken = $config['sync']['sync_token'] ?? '';
+
+        foreach ($config['servers'] as $peer) {
+            if ($peer['id'] === $config['server_id']) {
+                continue;
+            }
+
+            $peerUrl = $peer['url'];
+
+            $pushResult = sync_push_to_peer($peerUrl, $syncToken);
+
+            $statusTable = Database::table('sync_server_status');
+            $row = Database::fetch(
+                "SELECT last_sync_op_id FROM {$statusTable} WHERE server_id = ? LIMIT 1",
+                [$peer['id']]
+            );
+            $lastSyncId = $row ? (int)$row['last_sync_op_id'] : 0;
+
+            $pullResult = sync_pull_from_peer($peerUrl, $syncToken, $lastSyncId);
+
+            Database::execute(
+                "INSERT INTO {$statusTable}
+                 (`server_id`, `server_url`, `server_name`, `last_sync_at`, `status`, `created_at`, `updated_at`)
+                 VALUES (?, ?, ?, ?, 'active', ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                   `server_url` = VALUES(`server_url`),
+                   `server_name` = VALUES(`server_name`),
+                   `last_sync_at` = VALUES(`last_sync_at`),
+                   `status` = 'active',
+                   `updated_at` = VALUES(`updated_at`)",
+                [$peer['id'], $peerUrl, $peer['name'], now(), now(), now()]
+            );
+
+            $results[$peer['id']] = [
+                'push' => $pushResult,
+                'pull' => $pullResult,
+            ];
+        }
+
+        return $results;
+    }
+}
+
 if (!function_exists('extract_forum_img_urls')) {
     function extract_forum_img_urls($content)
     {
@@ -485,8 +808,7 @@ if (!function_exists('generate_thumbnail')) {
 
         @unlink($tmpFile);
 
-        $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $thumbUrl = $baseUrl . '/index.php?route=file/resolve&id=' . $attachmentId;
+        $thumbUrl = '/index.php?route=file/resolve&id=' . $attachmentId;
 
         return [
             'attachment_id' => $attachmentId,

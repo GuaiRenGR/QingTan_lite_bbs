@@ -104,16 +104,19 @@ class NotificationController
                 "UPDATE {$notifications} SET is_read = 1 WHERE id = ? AND user_id = ?",
                 [$id, (int)$user['id']]
             );
+            record_sync_operation('notifications', $id, 'update');
         } elseif ($type) {
             \Database::execute(
                 "UPDATE {$notifications} SET is_read = 1 WHERE user_id = ? AND type = ? AND is_read = 0",
                 [(int)$user['id'], $type]
             );
+            record_sync_operation('notifications', 0, 'update');
         } elseif ($all) {
             \Database::execute(
                 "UPDATE {$notifications} SET is_read = 1 WHERE user_id = ? AND is_read = 0",
                 [(int)$user['id']]
             );
+            record_sync_operation('notifications', 0, 'update');
         }
 
         \Response::success(null, '已标记已读');
@@ -158,6 +161,7 @@ class NotificationController
              ON DUPLICATE KEY UPDATE `dnd` = VALUES(`dnd`)",
             [(int)$user['id'], $type, $dnd ? 1 : 0]
         );
+        record_sync_operation('notification_settings', 0, 'update');
 
         \Response::success(null, $dnd ? '已开启免打扰' : '已关闭免打扰');
     }
@@ -191,5 +195,7 @@ class NotificationController
                 now(),
             ]
         );
+        $notifId = (int)\Database::lastInsertId();
+        record_sync_operation('notifications', $notifId, 'insert');
     }
 }

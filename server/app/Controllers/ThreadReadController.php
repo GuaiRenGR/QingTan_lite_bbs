@@ -22,6 +22,7 @@ class ThreadReadController
             "UPDATE {$threads} SET view_count = view_count + 1 WHERE id = ?",
             [$threadId]
         );
+        record_sync_operation('threads', $threadId, 'update');
 
         $thread = \Database::fetch(
             "SELECT

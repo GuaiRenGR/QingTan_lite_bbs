@@ -79,12 +79,13 @@ class AuthController
 
             \Database::commit();
 
-            $token = \Auth::createToken($userId);
-
             $user = \Database::fetch(
                 "SELECT id,username,nickname,email,avatar,score,level,status,created_at FROM {$users} WHERE id = ?",
                 [$userId]
             );
+            record_sync_operation('users', $userId, 'insert', $user);
+
+            $token = \Auth::createToken($userId);
 
             \Response::success([
                 'access_token' => $token,
@@ -128,6 +129,8 @@ class AuthController
             "UPDATE {$users} SET last_login_at = ?, last_login_ip = ?, updated_at = ? WHERE id = ?",
             [now(), client_ip(), now(), $user['id']]
         );
+        $updatedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$user['id']]);
+        record_sync_operation('users', $user['id'], 'update', $updatedUser);
 
         $token = \Auth::createToken($user['id']);
 
@@ -193,6 +196,8 @@ class AuthController
             "UPDATE {$users} SET password_hash = ?, updated_at = ? WHERE id = ?",
             [$hash, now(), $user['id']]
         );
+        $updatedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$user['id']]);
+        record_sync_operation('users', $user['id'], 'update', $updatedUser);
 
         \Response::success(null, '密码已修改');
     }

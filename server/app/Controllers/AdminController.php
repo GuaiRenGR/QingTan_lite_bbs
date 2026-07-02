@@ -119,6 +119,8 @@ class AdminController
             "UPDATE {$users} SET status = 0, updated_at = ? WHERE id = ?",
             [now(), $userId]
         );
+        $bannedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$userId]);
+        record_sync_operation('users', $userId, 'update', $bannedUser);
 
         // 清除该用户所有 token，强制下线
         $tokens = \Database::table('user_tokens');
@@ -152,6 +154,8 @@ class AdminController
             "UPDATE {$users} SET status = 1, updated_at = ? WHERE id = ?",
             [now(), $userId]
         );
+        $unbannedUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$userId]);
+        record_sync_operation('users', $userId, 'update', $unbannedUser);
 
         \Response::success(null, '解封成功');
     }
@@ -186,7 +190,9 @@ class AdminController
         \Database::execute("DELETE FROM {$tokens} WHERE user_id = ?", [$userId]);
 
         // 删除用户
+        $delUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$userId]);
         \Database::execute("DELETE FROM {$users} WHERE id = ?", [$userId]);
+        record_sync_operation('users', $userId, 'delete', null, $delUser);
 
         \Response::success(null, '删除成功');
     }
@@ -227,6 +233,9 @@ class AdminController
             VALUES (?,?,?,1,1,10,1,?,?)",
             [$username, $nickname, $hash, $now, $now]
         );
+        $newUserId = (int)\Database::lastInsertId();
+        $newUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$newUserId]);
+        record_sync_operation('users', $newUserId, 'insert', $newUser);
 
         \Response::success(null, '用户创建成功');
     }
@@ -318,6 +327,8 @@ class AdminController
             "UPDATE {$threads} SET visibility = 'public', updated_at = ? WHERE id = ?",
             [now(), $threadId]
         );
+        $approvedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $approvedThread);
 
         // 记录审核日志
         $auditLog = \Database::table('audit_log');
@@ -352,6 +363,8 @@ class AdminController
             "UPDATE {$threads} SET visibility = 'locked', updated_at = ? WHERE id = ?",
             [now(), $threadId]
         );
+        $rejectedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $rejectedThread);
 
         // 记录审核日志
         $auditLog = \Database::table('audit_log');
@@ -514,6 +527,8 @@ class AdminController
             "UPDATE {$users} SET " . implode(', ', $fields) . " WHERE id = ?",
             $params
         );
+        $updatedAdminUser = \Database::fetch("SELECT * FROM {$users} WHERE id = ?", [$userId]);
+        record_sync_operation('users', $userId, 'update', $updatedAdminUser);
 
         \Response::success(null, '用户资料已更新');
     }
@@ -657,6 +672,7 @@ class AdminController
             "UPDATE {$threads} SET status = 0, updated_at = ? WHERE id = ?",
             [now(), $threadId]
         );
+        record_sync_operation('threads', $threadId, 'delete');
 
         \Response::success(null, '帖子已删除');
     }
@@ -686,6 +702,8 @@ class AdminController
             "UPDATE {$threads} SET is_sticky = ?, updated_at = ? WHERE id = ?",
             [$newVal, now(), $threadId]
         );
+        $stickyThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $stickyThread);
 
         \Response::success(['is_sticky' => $newVal], $newVal ? '已置顶' : '已取消置顶');
     }
@@ -715,6 +733,8 @@ class AdminController
             "UPDATE {$threads} SET is_locked = ?, updated_at = ? WHERE id = ?",
             [$newVal, now(), $threadId]
         );
+        $lockedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $lockedThread);
 
         \Response::success(['is_locked' => $newVal], $newVal ? '已锁定' : '已取消锁定');
     }

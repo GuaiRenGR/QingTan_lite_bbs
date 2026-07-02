@@ -8,28 +8,56 @@ import '../storage/token_storage.dart';
 import '../utils/device_helper.dart';
 import '../utils/url_helper.dart';
 import 'api_result.dart';
+import 'server_manager.dart';
+import 'write_queue.dart';
 
 class ApiClient {
   ApiClient._();
 
   static final ApiClient instance = ApiClient._();
 
-  late final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: AppConfig.apiEntry,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-      sendTimeout: const Duration(seconds: 15),
-      responseType: ResponseType.json,
-      headers: {
-        'Accept': 'application/json',
-        'X-Client': 'flutter',
-      },
-      validateStatus: (status) {
-        return status != null && status < 600;
-      },
-    ),
-  )..interceptors.add(
+  final Map<int, Dio> _dioInstances = {};
+  Dio? _fallbackDio;
+
+  Dio _getDio() {
+    final server = ServerManager.instance.currentServer;
+    if (server == null) {
+      return _getFallbackDio();
+    }
+    return _getDioForServer(server.id, server.url);
+  }
+
+  Dio _getDioForServer(int serverId, String baseUrl) {
+    if (!_dioInstances.containsKey(serverId)) {
+      _dioInstances[serverId] = _createDio(baseUrl);
+    }
+    return _dioInstances[serverId]!;
+  }
+
+  Dio _getFallbackDio() {
+    _fallbackDio ??= _createDio(AppConfig.apiEntry);
+    return _fallbackDio!;
+  }
+
+  Dio _createDio(String baseUrl) {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
+        responseType: ResponseType.json,
+        headers: {
+          'Accept': 'application/json',
+          'X-Client': 'flutter',
+        },
+        validateStatus: (status) {
+          return status != null && status < 600;
+        },
+      ),
+    );
+
+    dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           options.baseUrl = UrlHelper.fix(options.baseUrl);
@@ -37,7 +65,6 @@ class ApiClient {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
-          // 注入设备名称，用于服务端记录登录设备
           try {
             final deviceName = await DeviceHelper.getDeviceName();
             options.headers['X-Device-Name'] = deviceName;
@@ -50,13 +77,16 @@ class ApiClient {
       ),
     );
 
-  Dio get dio => _dio;
+    return dio;
+  }
+
+  Dio get dio => _getDio();
 
   Future<Response<List<int>>> rawGet(
     String url, {
     Map<String, String>? headers,
   }) async {
-    return _dio.get<List<int>>(
+    return _getFallbackDio().get<List<int>>(
       url,
       options: Options(
         responseType: ResponseType.bytes,
@@ -69,21 +99,31 @@ class ApiClient {
     String route, {
     Map<String, dynamic>? query,
   }) async {
-    try {
-      final response = await _dio.get(
-        '',
-        queryParameters: {
-          'route': route,
-          ...?query,
-        },
-      );
+    final servers = ServerManager.instance.activeServers;
+    DioException? lastError;
 
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      return ApiResult.fail(_dioErrorMessage(e));
-    } catch (_) {
-      return ApiResult.fail('请求失败，请稍后重试');
+    for (final server in servers) {
+      try {
+        final dio = _getDioForServer(server.id, server.url);
+        final response = await dio.get(
+          '',
+          queryParameters: {
+            'route': route,
+            ...?query,
+          },
+        );
+        ServerManager.instance.reportSuccess(server.id);
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        lastError = e;
+        ServerManager.instance.reportFailure(server.id);
+        continue;
+      } catch (_) {
+        continue;
+      }
     }
+
+    return ApiResult.fail(_dioErrorMessage(lastError!));
   }
 
   Future<ApiResult<dynamic>> post(
@@ -92,22 +132,33 @@ class ApiClient {
     Map<String, dynamic>? data,
     FormData? formData,
   }) async {
-    try {
-      final response = await _dio.post(
-        '',
-        queryParameters: {
-          'route': route,
-          ...?query,
-        },
-        data: formData ?? data,
-      );
+    final servers = ServerManager.instance.activeServers;
 
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      return ApiResult.fail(_dioErrorMessage(e));
-    } catch (_) {
-      return ApiResult.fail('请求失败，请稍后重试');
+    for (final server in servers) {
+      try {
+        final dio = _getDioForServer(server.id, server.url);
+        final response = await dio.post(
+          '',
+          queryParameters: {
+            'route': route,
+            ...?query,
+          },
+          data: formData ?? data,
+        );
+        ServerManager.instance.reportSuccess(server.id);
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        ServerManager.instance.reportFailure(server.id);
+        continue;
+      } catch (_) {
+        continue;
+      }
     }
+
+    // 所有服务器不可用，写入队列
+    await WriteQueue.instance.enqueue(route, data: data);
+
+    return ApiResult.fail('所有服务器均不可用，请求已加入重试队列', code: -1);
   }
 
   ApiResult<dynamic> _handleResponse(Response response) {
@@ -166,30 +217,42 @@ class ApiClient {
     required File file,
     Map<String, String>? fields,
   }) async {
-    try {
-      final formData = FormData.fromMap({
-        ...?fields,
-        'file': await MultipartFile.fromFile(file.path),
-      });
+    final servers = ServerManager.instance.activeServers;
+    DioException? lastError;
 
-      final response = await _dio.post(
-        '',
-        queryParameters: {
-          'route': route,
-        },
-        data: formData,
-        options: Options(
-          sendTimeout: const Duration(seconds: 300),
-          receiveTimeout: const Duration(seconds: 60),
-        ),
-      );
+    for (final server in servers) {
+      try {
+        final formData = FormData.fromMap({
+          ...?fields,
+          'file': await MultipartFile.fromFile(file.path),
+        });
 
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      return ApiResult.fail(_dioErrorMessage(e));
-    } catch (e) {
-      return ApiResult.fail('上传失败：$e');
+        final dio = _getDioForServer(server.id, server.url);
+        final response = await dio.post(
+          '',
+          queryParameters: {
+            'route': route,
+          },
+          data: formData,
+          options: Options(
+            sendTimeout: const Duration(seconds: 300),
+            receiveTimeout: const Duration(seconds: 60),
+          ),
+        );
+        ServerManager.instance.reportSuccess(server.id);
+        return _handleResponse(response);
+      } on DioException catch (e) {
+        lastError = e;
+        ServerManager.instance.reportFailure(server.id);
+        continue;
+      } catch (_) {
+        continue;
+      }
     }
+
+    return ApiResult.fail(lastError != null
+        ? _dioErrorMessage(lastError)
+        : '上传失败，请稍后重试');
   }
 
   String _dioErrorMessage(DioException e) {

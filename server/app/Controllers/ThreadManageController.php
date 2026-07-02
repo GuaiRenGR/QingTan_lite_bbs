@@ -115,6 +115,9 @@ class ThreadManageController
 
         sync_thread_tags($threadId, $tagNames);
 
+        $updatedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $updatedThread);
+
         \Response::success([
             'thread_id' => $threadId,
         ], '保存成功');
@@ -163,6 +166,7 @@ class ThreadManageController
                 $threadId,
             ]
         );
+        record_sync_operation('threads', $threadId, 'delete', null, $thread);
 
         \Response::success(null, '已删除');
     }
@@ -299,6 +303,8 @@ class ThreadManageController
             "UPDATE {$threads} SET is_digest = ? WHERE id = ?",
             [$newVal, $threadId]
         );
+        $updatedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $updatedThread);
 
         \Response::success([
             'is_digest' => $newVal,
@@ -333,6 +339,9 @@ class ThreadManageController
                 now(),
             ]
         );
+        $reportId = (int)\Database::lastInsertId();
+        $reportRow = \Database::fetch("SELECT * FROM {$reports} WHERE id = ?", [$reportId]);
+        record_sync_operation('reports', $reportId, 'insert', $reportRow);
 
         \Response::success(null, '举报已提交');
     }

@@ -46,6 +46,7 @@ class AttachmentController
             "UPDATE {$attachments} SET status = 0 WHERE id = ?",
             [$row['id']]
         );
+        record_sync_operation('attachments', (int)$row['id'], 'delete', null, $row);
 
         \Response::success(null, '已删除');
     }

@@ -51,6 +51,8 @@ class ThreadActionController
             "UPDATE {$threads} SET share_count = share_count + 1 WHERE id = ?",
             [$threadId]
         );
+        $sharedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $sharedThread);
 
         \Database::execute(
             "INSERT INTO {$shares}
@@ -63,6 +65,8 @@ class ThreadActionController
                 now(),
             ]
         );
+        $shareId = (int)\Database::lastInsertId();
+        record_sync_operation('shares', $shareId, 'insert');
 
         add_content_daily_stat(
             'thread',
@@ -124,6 +128,8 @@ class ThreadActionController
                         VALUES (?, 'thread', ?, ?)",
                         [$user['id'], $threadId, now()]
                     );
+                    $likeId = (int)\Database::lastInsertId();
+                    record_sync_operation('likes', $likeId, 'insert');
 
                     \Database::execute(
                         "UPDATE {$threads}
@@ -131,6 +137,8 @@ class ThreadActionController
                          WHERE id = ?",
                         [$threadId]
                     );
+                    $likedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+                    record_sync_operation('threads', $threadId, 'update', $likedThread);
 
                     add_content_daily_stat(
                         'thread',
@@ -170,6 +178,7 @@ class ThreadActionController
                          WHERE user_id = ? AND object_type = 'thread' AND object_id = ?",
                         [$user['id'], $threadId]
                     );
+                    record_sync_operation('likes', (int)$exists['id'], 'delete');
 
                     \Database::execute(
                         "UPDATE {$threads}
@@ -177,6 +186,8 @@ class ThreadActionController
                          WHERE id = ?",
                         [$threadId]
                     );
+                    $unlikedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+                    record_sync_operation('threads', $threadId, 'update', $unlikedThread);
                 }
 
                 $message = '已取消点赞';
@@ -241,6 +252,8 @@ class ThreadActionController
                         VALUES (?, 'thread', ?, ?)",
                         [$user['id'], $threadId, now()]
                     );
+                    $favId = (int)\Database::lastInsertId();
+                    record_sync_operation('favorites', $favId, 'insert');
 
                     \Database::execute(
                         "UPDATE {$threads}
@@ -248,6 +261,8 @@ class ThreadActionController
                          WHERE id = ?",
                         [$threadId]
                     );
+                    $favThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+                    record_sync_operation('threads', $threadId, 'update', $favThread);
 
                     add_content_daily_stat(
                         'thread',
@@ -266,6 +281,7 @@ class ThreadActionController
                          WHERE user_id = ? AND object_type = 'thread' AND object_id = ?",
                         [$user['id'], $threadId]
                     );
+                    record_sync_operation('favorites', (int)$exists['id'], 'delete');
 
                     \Database::execute(
                         "UPDATE {$threads}
@@ -273,6 +289,8 @@ class ThreadActionController
                          WHERE id = ?",
                         [$threadId]
                     );
+                    $unfavThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
+                    record_sync_operation('threads', $threadId, 'update', $unfavThread);
                 }
 
                 $message = '已取消收藏';

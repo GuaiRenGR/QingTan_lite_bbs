@@ -26,7 +26,25 @@ class Database
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
 
+        self::applyServerId();
+
         return self::$pdo;
+    }
+
+    private static function applyServerId()
+    {
+        $configFile = FX_ROOT . '/config/servers.php';
+        if (!file_exists($configFile)) {
+            return;
+        }
+        $serverConfig = require $configFile;
+        $serverId = (int)$serverConfig['server_id'];
+        $maxServers = count($serverConfig['servers']) + 5;
+        if ($maxServers < 2) {
+            return;
+        }
+        self::$pdo->exec("SET @@session.auto_increment_increment = {$maxServers}");
+        self::$pdo->exec("SET @@session.auto_increment_offset = {$serverId}");
     }
 
     public static function table($name)

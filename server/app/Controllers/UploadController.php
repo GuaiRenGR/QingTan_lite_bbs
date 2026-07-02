@@ -100,8 +100,6 @@ class UploadController
 
             $attachments = \Database::table('attachments');
 
-            $baseUrl = 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-
             \Database::execute(
                 "INSERT INTO {$attachments}
                 (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`)
@@ -119,8 +117,10 @@ class UploadController
             );
 
             $attachmentId = (int)\Database::lastInsertId();
+            $attRow = \Database::fetch("SELECT * FROM {$attachments} WHERE id = ?", [$attachmentId]);
+            record_sync_operation('attachments', $attachmentId, 'insert', $attRow);
 
-            $fileUrl = $baseUrl . '/index.php?route=file/resolve&id=' . $attachmentId;
+            $fileUrl = '/index.php?route=file/resolve&id=' . $attachmentId;
 
             \Database::execute(
                 "UPDATE {$attachments} SET file_url = ? WHERE id = ?",
