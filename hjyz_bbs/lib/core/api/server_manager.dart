@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
+import '../utils/app_logger.dart';
 import 'server_config.dart';
 
 class ServerManager {
@@ -52,6 +53,10 @@ class ServerManager {
     }
 
     _currentServer = _servers.first;
+
+    for (final s in _servers) {
+      await AppLogger.log('ServerManager', 'server: id=${s.id} name=${s.name} url=${s.url} weight=${s.weight}');
+    }
 
     await _initialHealthCheck();
 
@@ -108,6 +113,7 @@ class ServerManager {
       final response = await dio.get('', queryParameters: {'route': 'system/ping'});
       if (response.statusCode == 200) {
         final latency = DateTime.now().difference(start).inMilliseconds;
+        await AppLogger.log('ServerManager', 'ping OK: ${server.url} latency=${latency}ms');
         return ServerHealth(
           reachable: true,
           latencyMs: latency,
@@ -115,7 +121,9 @@ class ServerManager {
           consecutiveFailures: 0,
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      await AppLogger.log('ServerManager', 'ping FAIL: ${server.url} error=$e');
+    }
 
     final old = _healthStatus[server.id];
     return ServerHealth(

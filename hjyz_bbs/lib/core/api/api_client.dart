@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
+import '../utils/app_logger.dart';
 import '../utils/device_helper.dart';
 import '../utils/url_helper.dart';
 import 'api_result.dart';
@@ -100,6 +101,7 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) async {
     final servers = ServerManager.instance.activeServers;
+    await AppLogger.log('ApiClient', 'get start: route=$route servers=${servers.length}');
     DioException? lastError;
 
     for (final server in servers) {
@@ -113,16 +115,21 @@ class ApiClient {
           },
         );
         ServerManager.instance.reportSuccess(server.id);
-        return _handleResponse(response);
+        final result = _handleResponse(response);
+        await AppLogger.log('ApiClient', 'get OK: route=$route serverId=${server.id} code=${response.statusCode}');
+        return result;
       } on DioException catch (e) {
         lastError = e;
         ServerManager.instance.reportFailure(server.id);
+        await AppLogger.log('ApiClient', 'get FAIL: route=$route serverId=${server.id} error=${e.type} ${e.message}');
         continue;
-      } catch (_) {
+      } catch (e) {
+        await AppLogger.log('ApiClient', 'get ERROR: route=$route error=$e');
         continue;
       }
     }
 
+    await AppLogger.log('ApiClient', 'get ALL_FAILED: route=$route');
     return ApiResult.fail(_dioErrorMessage(lastError!));
   }
 
@@ -133,6 +140,7 @@ class ApiClient {
     FormData? formData,
   }) async {
     final servers = ServerManager.instance.activeServers;
+    await AppLogger.log('ApiClient', 'post start: route=$route servers=${servers.length}');
 
     for (final server in servers) {
       try {
@@ -146,16 +154,20 @@ class ApiClient {
           data: formData ?? data,
         );
         ServerManager.instance.reportSuccess(server.id);
-        return _handleResponse(response);
+        final result = _handleResponse(response);
+        await AppLogger.log('ApiClient', 'post OK: route=$route serverId=${server.id} code=${response.statusCode}');
+        return result;
       } on DioException catch (e) {
         ServerManager.instance.reportFailure(server.id);
+        await AppLogger.log('ApiClient', 'post FAIL: route=$route serverId=${server.id} error=${e.type} ${e.message}');
         continue;
-      } catch (_) {
+      } catch (e) {
+        await AppLogger.log('ApiClient', 'post ERROR: route=$route error=$e');
         continue;
       }
     }
 
-    // 所有服务器不可用，写入队列
+    await AppLogger.log('ApiClient', 'post ALL_FAILED, enqueue: route=$route');
     await WriteQueue.instance.enqueue(route, data: data);
 
     return ApiResult.fail('所有服务器均不可用，请求已加入重试队列', code: -1);
@@ -166,10 +178,12 @@ class ApiClient {
       final statusCode = response.statusCode ?? 0;
 
       if (statusCode >= 500) {
+        AppLogger.log('ApiClient', 'handleResponse: 500 status=$statusCode');
         return ApiResult.fail('服务器开小差了，请稍后再试', code: statusCode);
       }
 
       if (statusCode == 404) {
+        AppLogger.log('ApiClient', 'handleResponse: 404');
         return ApiResult.fail('接口不存在', code: 404);
       }
 
@@ -179,16 +193,20 @@ class ApiClient {
         try {
           body = jsonDecode(body);
         } catch (_) {
+          AppLogger.log('ApiClient', 'handleResponse: jsonDecode failed, body=$body');
           return ApiResult.fail('服务器返回格式异常');
         }
       }
 
       if (body is! Map<String, dynamic>) {
+        AppLogger.log('ApiClient', 'handleResponse: not Map, type=${body.runtimeType}');
         return ApiResult.fail('服务器返回数据异常');
       }
 
       final int code = _safeInt(body['code'], defaultValue: -1);
       final String message = body['message']?.toString() ?? '';
+
+      AppLogger.log('ApiClient', 'handleResponse: code=$code dataType=${body['data']?.runtimeType}');
 
       if (code != 0) {
         return ApiResult.fail(
@@ -201,7 +219,8 @@ class ApiClient {
         body['data'],
         message: message.isNotEmpty ? message : 'success',
       );
-    } catch (_) {
+    } catch (e) {
+      AppLogger.log('ApiClient', 'handleResponse: exception=$e');
       return ApiResult.fail('数据解析失败');
     }
   }
