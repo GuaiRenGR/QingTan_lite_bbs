@@ -78,6 +78,7 @@ class MePage extends ConsumerWidget {
 
     final user = auth.user ?? {};
     final userId = int.tryParse(user['id']?.toString() ?? '') ?? 0;
+    final groupId = int.tryParse(user['group_id']?.toString() ?? '') ?? 0;
     final nickname = user['nickname']?.toString() ?? '用户';
     final score = user['score']?.toString() ?? '0';
     final avatar = user['avatar']?.toString() ?? '';
@@ -178,7 +179,7 @@ class MePage extends ConsumerWidget {
               context.push('/history');
             },
           ),
-          if ((user['group_id'] ?? 0) >= 50)
+          if (groupId >= 50)
             _MenuItem(
               icon: Icons.fact_check_outlined,
               text: '内容审核',
@@ -186,7 +187,7 @@ class MePage extends ConsumerWidget {
                 context.push('/admin/review');
               },
             ),
-          if ((user['group_id'] ?? 0) == 99)
+          if (groupId == 99)
             _MenuItem(
               icon: Icons.admin_panel_settings_outlined,
               text: '管理中心',
