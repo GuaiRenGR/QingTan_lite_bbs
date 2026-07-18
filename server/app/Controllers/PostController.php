@@ -196,6 +196,83 @@ class PostController
         self::togglePostLike(true);
     }
 
+    public static function delete()
+    {
+        $user = \Auth::requireLogin();
+        $postId = \Request::int('post_id');
+
+        if ($postId <= 0) {
+            \Response::json(422, '评论 ID 错误');
+        }
+
+        $posts = \Database::table('posts');
+        $threads = \Database::table('threads');
+
+        $post = \Database::fetch(
+            "SELECT p.*, t.user_id AS thread_user_id
+             FROM {$posts} p
+             INNER JOIN {$threads} t ON t.id = p.thread_id
+             WHERE p.id = ? AND p.status = 1 AND t.status = 1
+             LIMIT 1",
+            [$postId]
+        );
+
+        if (!$post) {
+            \Response::json(404, '评论不存在');
+        }
+
+        $userId = (int)$user['id'];
+        $canDelete = $userId === (int)$post['user_id']
+            || $userId === (int)$post['thread_user_id']
+            || \SiteSetting::isAdmin($user);
+
+        if (!$canDelete) {
+            \Response::json(403, '无权删除该评论');
+        }
+
+        \Database::begin();
+
+        try {
+            \Database::execute(
+                "UPDATE {$posts} SET status = 0, updated_at = ? WHERE id = ?",
+                [now(), $postId]
+            );
+            $deletedPost = \Database::fetch(
+                "SELECT * FROM {$posts} WHERE id = ?",
+                [$postId]
+            );
+            record_sync_operation('posts', $postId, 'update', $deletedPost);
+
+            \Database::execute(
+                "UPDATE {$threads}
+                 SET reply_count = GREATEST(reply_count - 1, 0), updated_at = ?
+                 WHERE id = ?",
+                [now(), (int)$post['thread_id']]
+            );
+            $updatedThread = \Database::fetch(
+                "SELECT * FROM {$threads} WHERE id = ?",
+                [(int)$post['thread_id']]
+            );
+            record_sync_operation(
+                'threads',
+                (int)$post['thread_id'],
+                'update',
+                $updatedThread
+            );
+
+            \Database::commit();
+
+            \Response::success([
+                'post_id' => $postId,
+                'reply_count' => (int)($updatedThread['reply_count'] ?? 0),
+            ], '评论已删除');
+        } catch (\Throwable $e) {
+            \Database::rollback();
+            log_error($e->getMessage());
+            \Response::json(500, '删除评论失败');
+        }
+    }
+
     public static function unlike()
     {
         self::togglePostLike(false);

@@ -28,11 +28,12 @@ class MePage extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 42,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   child: Icon(
                     Icons.person_outline,
                     size: 44,
-                    color: Colors.grey.shade600,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -82,21 +83,86 @@ class MePage extends ConsumerWidget {
     final nickname = user['nickname']?.toString() ?? '用户';
     final score = user['score']?.toString() ?? '0';
     final avatar = user['avatar']?.toString() ?? '';
+    final actions = <_MeAction>[
+      _MeAction(
+        icon: Icons.mail_outline,
+        label: '消息',
+        color: const Color(0xFFFB7299),
+        onTap: () => context.push('/messages'),
+      ),
+      _MeAction(
+        icon: Icons.article_outlined,
+        label: '我的帖子',
+        color: const Color(0xFFFF9800),
+        onTap: () => context.push('/user/$userId'),
+      ),
+      _MeAction(
+        icon: Icons.star_border_rounded,
+        label: '我的收藏',
+        color: const Color(0xFFFFB300),
+        onTap: () => context.push('/user/$userId'),
+      ),
+      _MeAction(
+        icon: Icons.history_rounded,
+        label: '浏览历史',
+        color: const Color(0xFF42A5F5),
+        onTap: () => context.push('/history'),
+      ),
+      _MeAction(
+        icon: Icons.dashboard_customize_outlined,
+        label: '创作中心',
+        color: const Color(0xFFAB47BC),
+        onTap: () => context.push('/creator'),
+      ),
+      _MeAction(
+        icon: Icons.download_outlined,
+        label: '下载管理',
+        color: const Color(0xFF26A69A),
+        onTap: () => context.push('/downloads'),
+      ),
+      _MeAction(
+        icon: Icons.security_outlined,
+        label: '账号安全',
+        color: const Color(0xFF5C6BC0),
+        onTap: () => context.push('/account-security'),
+      ),
+      _MeAction(
+        icon: Icons.person_outline_rounded,
+        label: '个人主页',
+        color: const Color(0xFF66BB6A),
+        onTap: () => context.push('/user/$userId'),
+      ),
+      if (groupId >= 50)
+        _MeAction(
+          icon: Icons.fact_check_outlined,
+          label: '内容审核',
+          color: const Color(0xFFEF5350),
+          onTap: () => context.push('/admin/review'),
+        ),
+      if (groupId == 99)
+        _MeAction(
+          icon: Icons.admin_panel_settings_outlined,
+          label: '管理中心',
+          color: const Color(0xFFEC407A),
+          onTap: () => context.push('/admin'),
+        ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           GestureDetector(
             onTap: userId > 0 ? () => context.push('/user/$userId') : null,
             child: Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
               decoration: BoxDecoration(
                 color: AppColors.card(context),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border(context)),
               ),
               child: Row(
                 children: [
@@ -107,8 +173,12 @@ class MePage extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(34),
                     errorWidget: CircleAvatar(
                       radius: 34,
-                      backgroundColor: Colors.pink.shade50,
-                      child: const Icon(Icons.person),
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.person,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -124,13 +194,18 @@ class MePage extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text('积分：$score'),
+                        Text(
+                          '积分 $score',
+                          style: TextStyle(
+                            color: AppColors.textSecondary(context),
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           '点击进入个人主页',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade500,
+                            color: AppColors.textSecondary(context),
                           ),
                         ),
                       ],
@@ -144,69 +219,13 @@ class MePage extends ConsumerWidget {
           const SizedBox(height: 14),
           const CheckinCard(),
           const SizedBox(height: 14),
-          _MenuItem(
-            icon: Icons.mail_outline,
-            text: '消息',
-            onTap: () {
-              context.push('/messages');
-            },
-          ),
-          _MenuItem(
-            icon: Icons.article_outlined,
-            text: '我的帖子',
-            onTap: () {
-              if (userId > 0) context.push('/user/$userId');
-            },
-          ),
-          _MenuItem(
-            icon: Icons.star_border,
-            text: '我的收藏',
-            onTap: () {
-              if (userId > 0) context.push('/user/$userId');
-            },
-          ),
-          _MenuItem(
-            icon: Icons.dashboard_customize_outlined,
-            text: '创作中心',
-            onTap: () {
-              context.push('/creator');
-            },
-          ),
-          _MenuItem(
-            icon: Icons.history_rounded,
-            text: '浏览历史',
-            onTap: () {
-              context.push('/history');
-            },
-          ),
-          if (groupId >= 50)
-            _MenuItem(
-              icon: Icons.fact_check_outlined,
-              text: '内容审核',
-              onTap: () {
-                context.push('/admin/review');
-              },
-            ),
-          if (groupId == 99)
-            _MenuItem(
-              icon: Icons.admin_panel_settings_outlined,
-              text: '管理中心',
-              onTap: () {
-                context.push('/admin');
-              },
-            ),
+          _QuickActionGrid(actions: actions),
+          const SizedBox(height: 14),
           _MenuItem(
             icon: Icons.settings_outlined,
             text: '设置',
             onTap: () {
               context.push('/settings');
-            },
-          ),
-          _MenuItem(
-            icon: Icons.logout,
-            text: '退出登录',
-            onTap: () {
-              ref.read(authControllerProvider.notifier).logout();
             },
           ),
         ],
@@ -228,9 +247,12 @@ class _MenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: AppColors.card(context),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border(context)),
+      ),
       child: ListTile(
         leading: Icon(icon),
         title: Text(text),
@@ -239,4 +261,75 @@ class _MenuItem extends StatelessWidget {
       ),
     );
   }
+}
+
+class _QuickActionGrid extends StatelessWidget {
+  final List<_MeAction> actions;
+
+  const _QuickActionGrid({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.card(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border(context)),
+      ),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: actions.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisExtent: 82,
+          crossAxisSpacing: 2,
+          mainAxisSpacing: 8,
+        ),
+        itemBuilder: (context, index) {
+          final action = actions[index];
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: action.onTap,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: action.color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(action.icon, color: action.color, size: 23),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  action.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MeAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MeAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 }

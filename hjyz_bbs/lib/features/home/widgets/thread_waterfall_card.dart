@@ -41,7 +41,6 @@ class ThreadWaterfallCard extends StatelessWidget {
                   height: 1.25,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF222222),
                 ),
               ),
             ),
@@ -55,7 +54,7 @@ class ThreadWaterfallCard extends StatelessWidget {
                   style: TextStyle(
                     height: 1.25,
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary(context),
                   ),
                 ),
               ),
@@ -70,11 +69,12 @@ class ThreadWaterfallCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     errorWidget: CircleAvatar(
                       radius: 10,
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: Icon(
                         Icons.person,
                         size: 12,
-                        color: Colors.grey.shade500,
+                        color: AppColors.textSecondary(context),
                       ),
                     ),
                   ),
@@ -86,21 +86,21 @@ class ThreadWaterfallCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade700,
+                        color: AppColors.textSecondary(context),
                       ),
                     ),
                   ),
                   Icon(
                     Icons.favorite_border_rounded,
                     size: 15,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary(context),
                   ),
                   const SizedBox(width: 2),
                   Text(
                     _formatCount(thread.likeCount),
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
+                      color: AppColors.textSecondary(context),
                     ),
                   ),
                 ],
@@ -130,6 +130,8 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasCover = thread.cover.isNotEmpty;
+    final height = _mockHeight(thread.id);
+    final placeholder = _buildPlaceholder(context, height);
 
     return Stack(
       children: [
@@ -137,31 +139,12 @@ class _Cover extends StatelessWidget {
           SafeNetworkImage(
             url: thread.cover,
             width: double.infinity,
-            height: _mockHeight(thread.id),
+            height: height,
             fit: BoxFit.cover,
+            errorWidget: placeholder,
           )
         else
-          Container(
-            width: double.infinity,
-            height: _mockHeight(thread.id),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.pink.shade50,
-                  Colors.blue.shade50,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.article_outlined,
-                size: 38,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ),
+          placeholder,
         Positioned(
           left: 6,
           top: 6,
@@ -201,6 +184,31 @@ class _Cover extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPlaceholder(BuildContext context, double height) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF2B2228), Color(0xFF202934)]
+              : const [Color(0xFFFFF1F5), Color(0xFFF0F7FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.article_outlined,
+          size: 38,
+          color: AppColors.textSecondary(context),
+        ),
+      ),
     );
   }
 

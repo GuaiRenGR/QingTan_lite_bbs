@@ -211,6 +211,10 @@ try {
             App\Controllers\PostController::create();
             break;
 
+        case 'posts/delete':
+            App\Controllers\PostController::delete();
+            break;
+
         case 'posts/like':
             App\Controllers\PostController::like();
             break;

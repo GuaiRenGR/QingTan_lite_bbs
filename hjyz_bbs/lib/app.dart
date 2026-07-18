@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/services/notification_service.dart';
@@ -127,12 +128,17 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
       title: '获嘉一中论坛',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      locale: const Locale('zh', 'CN'),
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: const [
+        Locale('zh', 'CN'),
+      ],
       themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFFFB7299),
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF7F7F7),
+        scaffoldBackgroundColor: Colors.white,
         fontFamily: null,
         textTheme: ThemeData.light().textTheme.apply(
               fontFamilyFallback: ForumXApp.fontFallback,

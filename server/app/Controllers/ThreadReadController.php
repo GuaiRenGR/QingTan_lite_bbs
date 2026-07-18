@@ -203,7 +203,12 @@ class ThreadReadController
                     'verify_level' => (int)($thread['author_verify_level'] ?? 0),
                 ],
             ],
-            'posts' => array_map(function ($row) use ($likedPostIds) {
+            'posts' => array_map(function ($row) use (
+                $likedPostIds,
+                $viewerId,
+                $isViewerAdmin,
+                $isOwner
+            ) {
                 return [
                     'id' => (int)$row['id'],
                     'thread_id' => (int)$row['thread_id'],
@@ -213,6 +218,11 @@ class ThreadReadController
                     'floor' => (int)$row['floor'],
                     'like_count' => (int)($row['like_count'] ?? 0),
                     'is_liked' => in_array((int)$row['id'], $likedPostIds),
+                    'can_delete' => $viewerId > 0 && (
+                        $viewerId === (int)$row['user_id']
+                        || $isOwner
+                        || $isViewerAdmin
+                    ),
                     'created_at' => $row['created_at'],
                     'author' => [
                         'id' => (int)$row['user_id'],

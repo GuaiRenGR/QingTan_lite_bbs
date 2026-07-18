@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/notification_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/home_feed_page.dart';
 import 'widgets/home_top_bar.dart';
@@ -82,7 +83,7 @@ class HomePageState extends ConsumerState<HomePage>
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               labelColor: const Color(0xFFFB7299),
-              unselectedLabelColor: Colors.black87,
+              unselectedLabelColor: AppColors.textSecondary(context),
               indicatorColor: const Color(0xFFFB7299),
               indicatorWeight: 3,
               tabs: [

@@ -229,6 +229,60 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     }
   }
 
+  Future<void> _deletePost(Map<String, dynamic> post) async {
+    final postId = _toInt(post['id']);
+    if (postId <= 0) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除评论'),
+        content: const Text('确定要删除这条评论吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final result = await ApiClient.instance.post(
+      'posts/delete',
+      data: {'post_id': postId},
+    );
+
+    if (!mounted) return;
+
+    if (!result.success) {
+      _toast(result.message);
+      return;
+    }
+
+    setState(() {
+      posts.removeWhere((item) => _toInt(item['id']) == postId);
+      final response = result.data;
+      if (thread != null) {
+        final currentReplyCount = _toInt(thread!['reply_count']);
+        thread!['reply_count'] = response is Map
+            ? _toInt(response['reply_count'])
+            : (currentReplyCount > 0 ? currentReplyCount - 1 : 0);
+      }
+      if (_replyTo != null && _toInt(_replyTo!['id']) == postId) {
+        _replyTo = null;
+        commentController.clear();
+      }
+    });
+    _toast(result.message);
+  }
+
   void _startReply(Map<String, dynamic> post) {
     final author = post['author'];
     final nickname =
@@ -539,6 +593,9 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                       },
                       onLike: () => _togglePostLike(post),
                       onReply: () => _startReply(post),
+                      onDelete: post['can_delete'] == true
+                          ? () => _deletePost(post)
+                          : null,
                     ),
                 ],
               ),
@@ -716,12 +773,14 @@ class _CommentItem extends StatelessWidget {
   final VoidCallback onUserTap;
   final VoidCallback onLike;
   final VoidCallback onReply;
+  final VoidCallback? onDelete;
 
   const _CommentItem({
     required this.post,
     required this.onUserTap,
     required this.onLike,
     required this.onReply,
+    this.onDelete,
   });
 
   int _toInt(dynamic v) {
@@ -762,28 +821,60 @@ class _CommentItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: onUserTap,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          authorMap['nickname']?.toString() ?? '用户',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: onUserTap,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                authorMap['nickname']?.toString() ?? '用户',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if ((authorMap['badge_name'] ?? '')
+                                .toString()
+                                .isNotEmpty)
+                              UserBadge(
+                                name: authorMap['badge_name'].toString(),
+                                color:
+                                    (authorMap['badge_color'] ?? '').toString(),
+                              ),
+                          ],
                         ),
                       ),
-                      if ((authorMap['badge_name'] ?? '').toString().isNotEmpty)
-                        UserBadge(
-                          name: authorMap['badge_name'].toString(),
-                          color: (authorMap['badge_color'] ?? '').toString(),
-                        ),
-                    ],
-                  ),
+                    ),
+                    if (onDelete != null)
+                      PopupMenuButton<String>(
+                        tooltip: '更多操作',
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.more_horiz, size: 20),
+                        onSelected: (value) {
+                          if (value == 'delete') onDelete?.call();
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  '删除',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 ForumContentView(

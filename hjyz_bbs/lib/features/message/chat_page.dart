@@ -186,7 +186,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(widget.targetNickname),
       ),
@@ -279,7 +279,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 100),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
+                      color: AppColors.inputFill(context),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: TextField(

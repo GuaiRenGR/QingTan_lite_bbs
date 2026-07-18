@@ -99,7 +99,7 @@ class _ForumBottomNavBar extends StatelessWidget {
         color: AppColors.card(context),
         border: Border(
           top: BorderSide(
-            color: Colors.grey.shade200,
+            color: AppColors.border(context),
             width: 0.5,
           ),
         ),
@@ -192,7 +192,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = index == currentIndex;
-    final color = active ? const Color(0xFFFB7299) : Colors.grey.shade600;
+    final color = active
+        ? const Color(0xFFFB7299)
+        : AppColors.textSecondary(context);
 
     return Expanded(
       child: GestureDetector(

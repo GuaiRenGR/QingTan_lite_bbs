@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,15 +8,16 @@ import '../../core/services/notification_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/url_helper.dart';
+import '../auth/auth_controller.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool autoPlayMusic = false;
   bool autoPlayVideo = true;
   bool showImagesOnMobile = true;
@@ -84,8 +86,42 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('退出登录'),
+        content: const Text('确定要退出当前账号吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('退出登录'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(authControllerProvider.notifier).logout();
+    if (!mounted) return;
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
+
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
@@ -103,6 +139,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: '密码、登录设备、安全设置',
                 onTap: () => context.push('/account-security'),
               ),
+              if (auth.loggedIn)
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: const Text(
+                    '退出登录',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _logout,
+                ),
             ],
           ),
           _Section(

@@ -4,8 +4,12 @@ class AppColors {
   AppColors._();
 
   /// 卡片/容器背景色 (light: white, dark: surface)
-  static Color card(BuildContext context) =>
-      Theme.of(context).colorScheme.surface;
+  static Color card(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.brightness == Brightness.light
+        ? Colors.white
+        : theme.colorScheme.surface;
+  }
 
   /// 脚手架背景色
   static Color scaffoldBg(BuildContext context) =>
