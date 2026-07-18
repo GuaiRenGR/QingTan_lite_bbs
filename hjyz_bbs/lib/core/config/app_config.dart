@@ -22,10 +22,10 @@ class AppConfig {
   static const int pageSize = 20;
 
   /// 当前版本号（与 pubspec.yaml 保持一致）
-  static const String appVersion = '1.2.0';
+  static const String appVersion = '1.1.6';
 
   /// 构建号（与 pubspec.yaml 保持一致）
-  static const int buildNumber = 10;
+  static const int buildNumber = 21;
 
   /// 下载页基础地址
   static const String downloadBase = 'http://newbbs.hj1bbs.top/download.php';

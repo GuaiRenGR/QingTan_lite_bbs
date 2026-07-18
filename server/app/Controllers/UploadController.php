@@ -117,15 +117,16 @@ class UploadController
             );
 
             $attachmentId = (int)\Database::lastInsertId();
-            $attRow = \Database::fetch("SELECT * FROM {$attachments} WHERE id = ?", [$attachmentId]);
-            record_sync_operation('attachments', $attachmentId, 'insert', $attRow);
-
-            $fileUrl = '/index.php?route=file/resolve&id=' . $attachmentId;
+            $relativeFileUrl = '/index.php?route=file/resolve&id=' . $attachmentId;
 
             \Database::execute(
                 "UPDATE {$attachments} SET file_url = ? WHERE id = ?",
-                [$fileUrl, $attachmentId]
+                [$relativeFileUrl, $attachmentId]
             );
+            $attRow = \Database::fetch("SELECT * FROM {$attachments} WHERE id = ?", [$attachmentId]);
+            record_sync_operation('attachments', $attachmentId, 'insert', $attRow);
+
+            $fileUrl = request_origin() . $relativeFileUrl;
 
             \Response::success([
                 'id' => $attachmentId,

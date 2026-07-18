@@ -15,6 +15,11 @@ class DiscoverPage extends StatelessWidget {
         onTap: () => context.push('/downloads'),
       ),
       _ToolItem(
+        icon: Icons.queue_music_rounded,
+        label: '音乐播放器',
+        onTap: () => context.push('/music-player'),
+      ),
+      _ToolItem(
         icon: Icons.local_fire_department_outlined,
         label: '热门话题',
       ),

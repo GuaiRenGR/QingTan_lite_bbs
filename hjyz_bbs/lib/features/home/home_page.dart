@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/notification_service.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/home_feed_page.dart';
 import 'widgets/home_top_bar.dart';
@@ -66,8 +67,9 @@ class HomePageState extends ConsumerState<HomePage>
             onSearchTap: () {
               context.push('/search');
             },
-            onMessageTap: () {
-              context.push('/messages');
+            onMessageTap: () async {
+              await context.push('/messages');
+              await NotificationService().checkNow();
             },
           ),
 

@@ -1,10 +1,9 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +14,7 @@ import '../../../core/services/download_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
+import '../../music/music_player_controller.dart';
 import 'forum_video_player.dart';
 
 class ForumContentView extends StatelessWidget {
@@ -310,7 +310,7 @@ class ForumContentView extends StatelessWidget {
       r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
       r'|(\[img=(https?:\/\/[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
-      r'|(\[music=(https?:\/\/[^\]\s]+)\])'
+      r'|(\[music=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
       r'|(\[attach=(\d+)\])',
@@ -439,66 +439,100 @@ class _ContentPart {
   });
 }
 
-class _InlineMusicPlayer extends StatefulWidget {
+class _InlineMusicPlayer extends ConsumerStatefulWidget {
   final String url;
 
   const _InlineMusicPlayer({required this.url});
 
   @override
-  State<_InlineMusicPlayer> createState() => _InlineMusicPlayerState();
+  ConsumerState<_InlineMusicPlayer> createState() => _InlineMusicPlayerState();
 }
 
-class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
-  late final AudioPlayer _player;
-  late final StreamSubscription _playerStateSub;
-  StreamSubscription<Duration>? _positionSub;
-  StreamSubscription<Duration?>? _durationSub;
-
-  bool _playing = false;
-  bool _failed = false;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
+class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   Uint8List? _coverArt;
+  String _resolvedFilename = '';
+  late final String _resolvedUrl;
+
+  MusicTrack get _track => MusicTrack(
+        url: _resolvedUrl,
+        title: _filename,
+        coverArt: _coverArt,
+      );
 
   String get _filename {
+    if (_resolvedFilename.isNotEmpty) {
+      final resolved = _withoutExtension(_resolvedFilename);
+      if (resolved.isNotEmpty && resolved.toLowerCase() != 'index') {
+        return resolved;
+      }
+    }
+
     final uri = Uri.tryParse(widget.url);
     if (uri == null) return '音乐';
-    final path = uri.path;
-    final name = path.split('/').last;
+    final queryName = uri.queryParameters['filename'] ?? uri.queryParameters['name'];
+    final name = queryName?.trim().isNotEmpty == true
+        ? queryName!
+        : uri.path.split('/').last;
+    final filename = _withoutExtension(name);
+    return filename.isNotEmpty && filename.toLowerCase() != 'index'
+        ? filename
+        : '音乐';
+  }
+
+  String _withoutExtension(String value) {
+    String decoded;
+    try {
+      decoded = Uri.decodeComponent(value);
+    } catch (_) {
+      decoded = value;
+    }
+
+    final name = decoded.split('/').last.trim();
+    if (name.isEmpty) return '';
+
     final dot = name.lastIndexOf('.');
-    return dot > 0 ? name.substring(0, dot) : (name.isNotEmpty ? name : '音乐');
+    return dot > 0 ? name.substring(0, dot) : name;
   }
 
   @override
   void initState() {
     super.initState();
-    _player = AudioPlayer();
-    _init();
+    _resolvedUrl = ApiClient.instance.resolveUrl(widget.url);
+    _syncTrack();
+    _loadFilename();
     _fetchCoverArt();
   }
 
-  Future<void> _init() async {
+  void _syncTrack() {
+    ref.read(musicPlayerProvider.notifier).upsertTrack(_track);
+  }
+
+  Future<void> _loadFilename() async {
+    final uri = Uri.tryParse(widget.url);
+    if (uri == null || uri.queryParameters['route'] != 'file/resolve') return;
+
+    final id = int.tryParse(uri.queryParameters['id'] ?? '') ?? 0;
+    if (id <= 0) return;
+
     try {
-      await _player.setUrl(widget.url);
-      _durationSub = _player.durationStream.listen((d) {
-        if (mounted && d != null) setState(() => _duration = d);
-      });
-      _positionSub = _player.positionStream.listen((p) {
-        if (mounted) setState(() => _position = p);
-      });
-      _playerStateSub = _player.playerStateStream.listen((state) {
-        if (!mounted) return;
-        setState(() => _playing = state.playing);
-      });
-    } catch (_) {
-      if (mounted) setState(() => _failed = true);
-    }
+      final result = await ApiClient.instance.get(
+        'upload/info',
+        query: {'id': id},
+      );
+      if (!result.success || result.data is! Map<String, dynamic>) return;
+
+      final name = (result.data as Map<String, dynamic>)['name']?.toString().trim();
+      if (mounted && name != null && name.isNotEmpty) {
+        setState(() => _resolvedFilename = name);
+        _syncTrack();
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchCoverArt() async {
     try {
       final resp = await ApiClient.instance.rawGet(
-        widget.url,
+        _resolvedUrl,
         headers: {'Range': 'bytes=0-9'},
       );
       if (resp.statusCode != 206 && resp.statusCode != 200) return;
@@ -513,41 +547,59 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
       if (tagSize <= 0) return;
       if (tagSize > 1024 * 1024) tagSize = 1024 * 1024;
 
-      final tagResp = await ApiClient.instance.rawGet(
-        widget.url,
-        headers: {'Range': 'bytes=0-${9 + tagSize}'},
-      );
-      if (tagResp.statusCode != 206 && tagResp.statusCode != 200) return;
-      final tagData = tagResp.data ?? [];
+      List<int> tagData;
+      if (header.length >= 10 + tagSize) {
+        tagData = header;
+      } else {
+        final tagResp = await ApiClient.instance.rawGet(
+          _resolvedUrl,
+          headers: {'Range': 'bytes=0-${9 + tagSize}'},
+        );
+        if (tagResp.statusCode != 206 && tagResp.statusCode != 200) return;
+        tagData = tagResp.data ?? [];
+      }
       if (tagData.length < 10) return;
 
       final cover = _extractApic(tagData, 10, tagSize);
       if (cover != null && mounted) {
         setState(() => _coverArt = cover);
+        _syncTrack();
       }
     } catch (_) {}
   }
 
   Uint8List? _extractApic(List<int> data, int offset, int tagSize) {
-    final end = offset + tagSize;
+    if (data.length < 10) return null;
+
+    final expectedEnd = offset + tagSize;
+    final end = expectedEnd < data.length ? expectedEnd : data.length;
     int pos = offset;
     final versionMajor = data[3];
+
+    if ((data[5] & 0x40) != 0 && pos + 4 <= end) {
+      final extendedSize = versionMajor >= 4
+          ? _readSyncSafeInt(data, pos)
+          : _readBigEndianInt(data, pos);
+      pos += versionMajor >= 4 ? extendedSize : extendedSize + 4;
+    }
+
+    if (versionMajor == 2) {
+      return _extractId3v22Cover(data, pos, end);
+    }
 
     while (pos + 10 <= end) {
       final frameId = String.fromCharCodes(data.sublist(pos, pos + 4));
       final frameSize = versionMajor >= 4
-          ? ((data[pos + 4] & 0x7F) << 21) |
-              ((data[pos + 5] & 0x7F) << 14) |
-              ((data[pos + 6] & 0x7F) << 7) |
-              (data[pos + 7] & 0x7F)
-          : (data[pos + 4] << 24) |
-              (data[pos + 5] << 16) |
-              (data[pos + 6] << 8) |
-              data[pos + 7];
+          ? _readSyncSafeInt(data, pos + 4)
+          : _readBigEndianInt(data, pos + 4);
       if (frameSize <= 0) break;
 
+      final frameStart = pos + 10;
+      final frameEnd = frameStart + frameSize;
+      if (frameEnd > end) break;
+
       if (frameId == 'APIC') {
-        final frameData = data.sublist(pos + 10, pos + 10 + frameSize);
+        final frameData = data.sublist(frameStart, frameEnd);
         if (frameData.length < 2) break;
 
         int apicOffset = 1;
@@ -560,22 +612,7 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
         apicOffset++;
         if (apicOffset >= frameData.length) break;
 
-        final encoding = frameData[0];
-        if (encoding == 0x00) {
-          while (apicOffset < frameData.length && frameData[apicOffset] != 0) {
-            apicOffset++;
-          }
-          apicOffset++;
-        } else {
-          while (apicOffset + 1 < frameData.length &&
-              !(frameData[apicOffset] == 0 && frameData[apicOffset + 1] == 0)) {
-            apicOffset++;
-          }
-          apicOffset += 2;
-        }
-        if (apicOffset >= frameData.length) break;
-
-        return Uint8List.fromList(frameData.sublist(apicOffset));
+        return _extractPictureBytes(frameData, apicOffset);
       }
 
       pos += 10 + frameSize;
@@ -583,131 +620,208 @@ class _InlineMusicPlayerState extends State<_InlineMusicPlayer> {
     return null;
   }
 
-  String _formatDuration(Duration d) {
-    final totalSecs = d.inSeconds;
-    if (totalSecs <= 0) return '00:00';
-    final mins = totalSecs ~/ 60;
-    final secs = totalSecs % 60;
-    final hours = totalSecs ~/ 3600;
-    if (hours > 0) {
-      return '$hours:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  Uint8List? _extractId3v22Cover(List<int> data, int offset, int end) {
+    int pos = offset;
+    while (pos + 6 <= end) {
+      final frameId = String.fromCharCodes(data.sublist(pos, pos + 3));
+      final frameSize =
+          (data[pos + 3] << 16) | (data[pos + 4] << 8) | data[pos + 5];
+      if (frameSize <= 0) break;
+
+      final frameStart = pos + 6;
+      final frameEnd = frameStart + frameSize;
+      if (frameEnd > end) break;
+
+      if (frameId == 'PIC') {
+        final frameData = data.sublist(frameStart, frameEnd);
+        if (frameData.length <= 5) return null;
+        return _extractPictureBytes(frameData, 5);
+      }
+
+      pos = frameEnd;
     }
-    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    return null;
   }
 
-  @override
-  void dispose() {
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-    _playerStateSub.cancel();
-    _player.dispose();
-    super.dispose();
+  Uint8List? _extractPictureBytes(List<int> frameData, int offset) {
+    if (frameData.isEmpty || offset >= frameData.length) return null;
+
+    final encoding = frameData[0];
+    int pictureOffset = offset;
+    if (encoding == 0x00 || encoding == 0x03) {
+      while (pictureOffset < frameData.length && frameData[pictureOffset] != 0) {
+        pictureOffset++;
+      }
+      pictureOffset++;
+    } else {
+      while (pictureOffset + 1 < frameData.length &&
+          !(frameData[pictureOffset] == 0 && frameData[pictureOffset + 1] == 0)) {
+        pictureOffset += 2;
+      }
+      pictureOffset += 2;
+    }
+
+    if (pictureOffset >= frameData.length) return null;
+    return Uint8List.fromList(frameData.sublist(pictureOffset));
+  }
+
+  int _readBigEndianInt(List<int> data, int offset) {
+    if (offset + 4 > data.length) return 0;
+    return (data[offset] << 24) |
+        (data[offset + 1] << 16) |
+        (data[offset + 2] << 8) |
+        data[offset + 3];
+  }
+
+  int _readSyncSafeInt(List<int> data, int offset) {
+    if (offset + 4 > data.length) return 0;
+    return ((data[offset] & 0x7F) << 21) |
+        ((data[offset + 1] & 0x7F) << 14) |
+        ((data[offset + 2] & 0x7F) << 7) |
+        (data[offset + 3] & 0x7F);
+  }
+
+  Future<void> _openPlayer() async {
+    await ref.read(musicPlayerProvider.notifier).selectTrack(_track);
+    if (mounted) await context.push('/music-player');
+  }
+
+  Future<void> _togglePlayback() async {
+    await ref.read(musicPlayerProvider.notifier).toggleTrack(_track);
   }
 
   @override
   Widget build(BuildContext context) {
     final hasCover = _coverArt != null;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final playerState = ref.watch(musicPlayerProvider);
+    final isCurrent = playerState.currentTrack?.url == _resolvedUrl;
+    final playing = isCurrent && playerState.playing;
+    final loading = isCurrent && playerState.loading;
+    final failed = isCurrent && playerState.error != null;
+    final progress = isCurrent && playerState.duration.inMilliseconds > 0
+        ? (playerState.position.inMilliseconds /
+                playerState.duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+        : 0.0;
+    final accentColor = theme.colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Material(
-          color: AppColors.inputFill(context),
-          child: InkWell(
-            onTap: _failed
-                ? null
-                : () async {
-                    if (_playing) {
-                      await _player.pause();
-                    } else {
-                      await _player.play();
-                    }
-                  },
-            child: SizedBox(
-              height: 56,
-              child: Row(
-                children: [
-                  if (hasCover)
-                    SizedBox(
-                      width: 56,
-                      height: 56,
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            color: isDark ? theme.colorScheme.surface : Colors.white,
+            border: Border.all(
+              color: isDark
+                  ? theme.colorScheme.outlineVariant.withValues(alpha: 0.7)
+                  : const Color(0xFFE2E2E2),
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(1),
+            child: Row(
+              children: [
+                if (hasCover)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _openPlayer,
+                    child: SizedBox(
+                      width: 70,
+                      height: 70,
                       child: Image.memory(
                         _coverArt!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: hasCover ? 10 : 12,
-                        right: 6,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _failed ? '音乐加载失败' : _filename,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                  ),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      hasCover ? 12 : 14,
+                      8,
+                      8,
+                      7,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _openPlayer,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              _filename,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.text(context),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: progress,
+                                  minHeight: 4,
+                                  color: accentColor,
+                                  backgroundColor: accentColor.withValues(
+                                    alpha: isDark ? 0.25 : 0.12,
                                   ),
                                 ),
                               ),
-                              Icon(
-                                _failed
-                                    ? Icons.error_outline_rounded
-                                    : _playing
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                color: _failed
-                                    ? Colors.grey
-                                    : const Color(0xFFFB7299),
-                                size: 22,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(2),
-                                  child: LinearProgressIndicator(
-                                    value: _duration.inMilliseconds > 0
-                                        ? (_position.inMilliseconds /
-                                                _duration.inMilliseconds)
-                                            .clamp(0.0, 1.0)
-                                        : 0,
-                                    minHeight: 3,
-                                    color: const Color(0xFFFB7299),
-                                    backgroundColor:
-                                        const Color(0xFFFB7299).withValues(alpha: 0.15),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: loading
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(7),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: accentColor,
+                                      ),
+                                    )
+                                  : IconButton(
+                                      onPressed:
+                                          failed ? null : _togglePlayback,
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: playing ? '暂停' : '播放',
+                                      icon: Icon(
+                                        failed
+                                            ? Icons.error_outline_rounded
+                                            : playing
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
+                                      ),
+                                      color: failed
+                                          ? theme.disabledColor
+                                          : accentColor,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

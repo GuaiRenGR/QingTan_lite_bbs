@@ -63,7 +63,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   bool get _isAdmin {
     final user = ref.read(authControllerProvider).user;
     if (user == null) return false;
-    return (user['group_id'] ?? 0) == 99;
+    return _toInt(user['group_id']) == 99;
   }
 
   @override

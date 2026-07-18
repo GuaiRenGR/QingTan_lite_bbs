@@ -12,6 +12,7 @@ import 'features/message/messages_page.dart';
 import 'features/message/notification_list_page.dart';
 import 'features/message/chat_page.dart';
 import 'features/message/notification_settings_page.dart';
+import 'features/music/music_player_page.dart';
 import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
@@ -141,6 +142,10 @@ final router = GoRouter(
     GoRoute(
       path: '/downloads',
       builder: (_, _) => const DownloadPage(),
+    ),
+    GoRoute(
+      path: '/music-player',
+      builder: (_, _) => const MusicPlayerPage(),
     ),
     GoRoute(
       path: '/dv/:code',

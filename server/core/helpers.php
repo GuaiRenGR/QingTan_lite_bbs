@@ -20,6 +20,19 @@ function client_ip()
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
 
+function request_origin()
+{
+    $forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
+    $scheme = $forwardedProto === 'https'
+        || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        ? 'https'
+        : 'http';
+    $forwardedHost = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'] ?? '')[0]);
+    $host = $forwardedHost !== '' ? $forwardedHost : ($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+    return $scheme . '://' . $host;
+}
+
 function safe_text($str)
 {
     return htmlspecialchars((string)$str, ENT_QUOTES, 'UTF-8');

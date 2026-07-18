@@ -97,10 +97,8 @@ $viewCount = (int)$thread['view_count'];
 $replyCount = (int)$thread['reply_count'];
 $likeCount = (int)$thread['like_count'];
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? '';
 $appLink = 'hyjzbbs://thread/' . $threadId;
-$downloadUrl = $scheme . '://' . $host . '/download.php';
+$downloadUrl = request_origin() . '/download.php';
 $summary = htmlspecialchars(make_summary($thread['content'], 120), ENT_QUOTES, 'UTF-8');
 
 $pageTitle = $title . ' - 轻坛分享';

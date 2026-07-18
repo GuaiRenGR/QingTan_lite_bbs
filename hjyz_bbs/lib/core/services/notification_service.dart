@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,6 +20,7 @@ class NotificationService {
   bool _initialized = false;
   Map<String, int> _lastCounts = {};
   int _lastMessageUnread = 0;
+  final ValueNotifier<int> messageUnreadCount = ValueNotifier<int>(0);
 
   // 通知频道
   static const _channelId = 'qingtan_notifications';
@@ -104,7 +106,6 @@ class NotificationService {
     // 检查用户是否启用了原生通知
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool('native_notifications') ?? true;
-    if (!enabled) return;
 
     try {
       // 并行检查通知和私信
@@ -125,10 +126,12 @@ class NotificationService {
         };
 
         // 检测新增通知
-        _checkAndNotify('reply', currentCounts, '回复我的', '有人回复了你的帖子');
-        _checkAndNotify('mention', currentCounts, '@我', '有人在帖子中@了你');
-        _checkAndNotify('like', currentCounts, '收到的赞', '有人赞了你的帖子');
-        _checkAndNotify('system', currentCounts, '系统通知', '你有新的系统通知');
+        if (enabled) {
+          _checkAndNotify('reply', currentCounts, '回复我的', '有人回复了你的帖子');
+          _checkAndNotify('mention', currentCounts, '@我', '有人在帖子中@了你');
+          _checkAndNotify('like', currentCounts, '收到的赞', '有人赞了你的帖子');
+          _checkAndNotify('system', currentCounts, '系统通知', '你有新的系统通知');
+        }
 
         _lastCounts = currentCounts;
       }
@@ -137,8 +140,12 @@ class NotificationService {
       final msgResult = results[1];
       if (msgResult.success && msgResult.data is Map) {
         final msgUnread = _toInt((msgResult.data as Map)['unread_count']);
+        messageUnreadCount.value = msgUnread;
 
-        if (msgUnread > _lastMessageUnread && _lastMessageUnread >= 0 && msgUnread > 0) {
+        if (enabled &&
+            msgUnread > _lastMessageUnread &&
+            _lastMessageUnread >= 0 &&
+            msgUnread > 0) {
           _showNativeNotification(
             id: 100,
             title: '新私信',
@@ -219,6 +226,7 @@ class NotificationService {
   void reset() {
     _lastCounts = {};
     _lastMessageUnread = 0;
+    messageUnreadCount.value = 0;
     stopPolling();
   }
 

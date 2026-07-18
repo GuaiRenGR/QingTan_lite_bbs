@@ -38,7 +38,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _currentUserId = ref.read(authControllerProvider).user?['id'] as int?;
+    _currentUserId = _toInt(ref.read(authControllerProvider).user?['id']);
     _conversationId = widget.conversationId;
     _loadMessages(refresh: true);
     _scrollController.addListener(_onScroll);
@@ -249,7 +249,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
                           final msg = messages[index];
                           final isMine = msg['is_mine'] == true ||
-                              (msg['sender_id'] as int?) == _currentUserId;
+                              _toInt(msg['sender_id']) == _currentUserId;
 
                           return _MessageBubble(
                             content: msg['content']?.toString() ?? '',

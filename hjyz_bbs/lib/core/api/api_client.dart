@@ -83,15 +83,25 @@ class ApiClient {
 
   Dio get dio => _getDio();
 
+  String resolveUrl(String url) {
+    final value = UrlHelper.fix(url.trim());
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme) return value;
+
+    final base = Uri.tryParse(UrlHelper.fix(_getDio().options.baseUrl));
+    return base?.resolve(value).toString() ?? value;
+  }
+
   Future<Response<List<int>>> rawGet(
     String url, {
     Map<String, String>? headers,
   }) async {
-    return _getFallbackDio().get<List<int>>(
-      url,
+    return _getDio().get<List<int>>(
+      resolveUrl(url),
       options: Options(
         responseType: ResponseType.bytes,
         headers: headers,
+        receiveTimeout: const Duration(seconds: 30),
       ),
     );
   }

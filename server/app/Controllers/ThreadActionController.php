@@ -76,13 +76,7 @@ class ThreadActionController
             1
         );
 
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            ? 'https'
-            : 'http';
-
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-
-        $shareUrl = $scheme . '://' . $host . '/#/thread/' . $threadId;
+        $shareUrl = request_origin() . '/share.php?id=' . $threadId;
 
         \Response::success([
             'share_url' => $shareUrl,
