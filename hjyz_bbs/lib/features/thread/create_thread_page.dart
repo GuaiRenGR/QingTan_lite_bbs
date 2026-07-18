@@ -370,7 +370,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         final data = result.data;
 
         if (data is Map<String, dynamic>) {
-          final url = data['url']?.toString() ?? '';
+          final url = ApiClient.instance.resolveUrl(
+            data['url']?.toString() ?? '',
+          );
           final id = _toInt(data['id']);
 
           if (url.isNotEmpty) {
@@ -448,7 +450,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       final data = result.data;
 
       if (data is Map<String, dynamic>) {
-        final url = data['url']?.toString() ?? '';
+        final url = ApiClient.instance.resolveUrl(
+          data['url']?.toString() ?? '',
+        );
 
         if (url.isNotEmpty) {
           final old = contentController.text;
@@ -745,7 +749,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       final data = result.data;
 
       if (data is Map<String, dynamic>) {
-        final url = data['url']?.toString() ?? '';
+        final url = ApiClient.instance.resolveUrl(
+          data['url']?.toString() ?? '',
+        );
 
         if (url.isNotEmpty) {
           final old = contentController.text;

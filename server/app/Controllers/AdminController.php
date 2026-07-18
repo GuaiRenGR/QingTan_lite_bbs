@@ -74,7 +74,9 @@ class AdminController
         $total = (int)($countRow['c'] ?? 0);
 
         $list = \Database::fetchAll(
-            "SELECT id, username, nickname, email, avatar, group_id, level, score, points, status, permissions, created_at, last_login_at
+            "SELECT id, username, nickname, email, avatar, group_id, level, score, points,
+                    status, permissions, badge_name, badge_color, verify_level,
+                    created_at, last_login_at
              FROM {$users}
              {$where}
              ORDER BY id DESC
@@ -606,13 +608,14 @@ class AdminController
 
         $rows = \Database::fetchAll(
             "SELECT t.id, t.title, t.summary, t.cover, t.mode, t.forum_id,
-                    t.visibility, t.is_sticky, t.is_locked, t.view_count,
-                    t.like_count, t.post_count, t.created_at, t.updated_at,
+                    t.visibility, t.is_top AS is_sticky, t.is_closed AS is_locked,
+                    t.view_count, t.like_count, t.reply_count AS post_count,
+                    t.created_at, t.updated_at,
                     u.id AS author_id, u.nickname AS author_name, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE {$whereClause}
-             ORDER BY t.is_sticky DESC, t.created_at DESC
+             ORDER BY t.is_top DESC, t.created_at DESC
              LIMIT {$pageSize} OFFSET {$offset}",
             $params
         );
@@ -688,7 +691,7 @@ class AdminController
 
         $threads = \Database::table('threads');
         $thread = \Database::fetch(
-            "SELECT id, is_sticky FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, is_top FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -696,10 +699,10 @@ class AdminController
             \Response::json(404, '帖子不存在');
         }
 
-        $newVal = (int)$thread['is_sticky'] === 1 ? 0 : 1;
+        $newVal = (int)$thread['is_top'] === 1 ? 0 : 1;
 
         \Database::execute(
-            "UPDATE {$threads} SET is_sticky = ?, updated_at = ? WHERE id = ?",
+            "UPDATE {$threads} SET is_top = ?, updated_at = ? WHERE id = ?",
             [$newVal, now(), $threadId]
         );
         $stickyThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
@@ -719,7 +722,7 @@ class AdminController
 
         $threads = \Database::table('threads');
         $thread = \Database::fetch(
-            "SELECT id, is_locked FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT id, is_closed FROM {$threads} WHERE id = ? AND status = 1 LIMIT 1",
             [$threadId]
         );
 
@@ -727,10 +730,10 @@ class AdminController
             \Response::json(404, '帖子不存在');
         }
 
-        $newVal = (int)$thread['is_locked'] === 1 ? 0 : 1;
+        $newVal = (int)$thread['is_closed'] === 1 ? 0 : 1;
 
         \Database::execute(
-            "UPDATE {$threads} SET is_locked = ?, updated_at = ? WHERE id = ?",
+            "UPDATE {$threads} SET is_closed = ?, updated_at = ? WHERE id = ?",
             [$newVal, now(), $threadId]
         );
         $lockedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);

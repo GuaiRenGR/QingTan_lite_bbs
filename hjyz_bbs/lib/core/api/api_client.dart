@@ -85,6 +85,8 @@ class ApiClient {
 
   String resolveUrl(String url) {
     final value = UrlHelper.fix(url.trim());
+    if (value.isEmpty) return value;
+
     final uri = Uri.tryParse(value);
     if (uri != null && uri.hasScheme) return value;
 

@@ -36,45 +36,63 @@ class ForumContentView extends StatelessWidget {
         .where((p) => p.type == _ContentPartType.image)
         .map((p) => p.value)
         .toList();
+    final children = _buildContentWidgets(context, parts, allImages);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final part in parts) _buildPart(context, part, allImages),
-      ],
+      children: children,
     );
+  }
+
+  List<Widget> _buildContentWidgets(
+    BuildContext context,
+    List<_ContentPart> parts,
+    List<String> allImages,
+  ) {
+    final widgets = <Widget>[];
+    final inlineParts = <_ContentPart>[];
+
+    void flushInlineParts() {
+      if (inlineParts.isEmpty) return;
+      widgets.add(_buildInlineParts(context, List.of(inlineParts)));
+      inlineParts.clear();
+    }
+
+    for (final part in parts) {
+      if (part.type == _ContentPartType.text ||
+          part.type == _ContentPartType.link) {
+        inlineParts.add(part);
+        continue;
+      }
+
+      flushInlineParts();
+      widgets.add(_buildPart(context, part, allImages));
+    }
+
+    flushInlineParts();
+    return widgets;
   }
 
   Widget _buildPart(BuildContext context, _ContentPart part, List<String> allImages) {
     switch (part.type) {
       case _ContentPartType.text:
-        if (part.value.trim().isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _buildTextWithEmoji(context, part.value),
-        );
+        return _buildInlineParts(context, [part]);
 
       case _ContentPartType.image:
         final imgIndex = allImages.indexOf(part.value);
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: GestureDetector(
-            onTap: () => ImageViewer.open(
-              context,
-              allImages,
-              initialIndex: imgIndex >= 0 ? imgIndex : 0,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SafeNetworkImage(
-                url: part.value,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+        return GestureDetector(
+          onTap: () => ImageViewer.open(
+            context,
+            allImages,
+            initialIndex: imgIndex >= 0 ? imgIndex : 0,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SafeNetworkImage(
+              url: part.value,
+              width: double.infinity,
+              fit: BoxFit.cover,
             ),
           ),
         );
@@ -86,41 +104,39 @@ class ForumContentView extends StatelessWidget {
         return _InlineMusicPlayer(url: part.value);
 
       case _ContentPartType.markdown:
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: MarkdownBody(
-            data: part.value,
-            selectable: true,
-            onTapLink: (text, href, title) async {
-              if (href == null || href.isEmpty) return;
+        return MarkdownBody(
+          data: part.value,
+          selectable: true,
+          onTapLink: (text, href, title) async {
+            if (href == null || href.isEmpty) return;
 
-              final uri = Uri.tryParse(href);
-              if (uri == null) return;
+            final uri = Uri.tryParse(href);
+            if (uri == null) return;
 
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
-            styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                fontSize: 15,
-                height: 1.65,
-                color: AppColors.text(context),
-              ),
-              code: TextStyle(
-                backgroundColor: AppColors.inputFill(context),
-                color: Colors.deepPurple,
-                fontSize: 13,
-              ),
-              codeblockDecoration: BoxDecoration(
-                color: AppColors.inputFill(context),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              blockquoteDecoration: BoxDecoration(
-                color: AppColors.inputFill(context),
-                border: Border(
-                  left: BorderSide(
-                    color: Colors.grey.shade400,
-                    width: 4,
-                  ),
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          },
+          styleSheet: MarkdownStyleSheet(
+            blockSpacing: 0,
+            p: TextStyle(
+              fontSize: 15,
+              height: 1.65,
+              color: AppColors.text(context),
+            ),
+            code: TextStyle(
+              backgroundColor: AppColors.inputFill(context),
+              color: Colors.deepPurple,
+              fontSize: 13,
+            ),
+            codeblockDecoration: BoxDecoration(
+              color: AppColors.inputFill(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            blockquoteDecoration: BoxDecoration(
+              color: AppColors.inputFill(context),
+              border: Border(
+                left: BorderSide(
+                  color: Colors.grey.shade400,
+                  width: 4,
                 ),
               ),
             ),
@@ -129,166 +145,125 @@ class ForumContentView extends StatelessWidget {
 
       case _ContentPartType.hidden:
         if (canViewHidden) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.lock_open_rounded, size: 16, color: Colors.amber.shade700),
-                      const SizedBox(width: 6),
-                      Text(
-                        '隐藏内容（回复可见）',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    part.value,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.65,
-                      color: AppColors.text(context),
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.lock_open_rounded,
+                      size: 16,
+                      color: Colors.amber.shade700,
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '隐藏内容（回复可见）',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ForumContentView(
+                  content: part.value,
+                  canViewHidden: true,
+                  onNeedReply: onNeedReply,
+                ),
+              ],
             ),
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: GestureDetector(
-            onTap: onNeedReply,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.inputFill(context),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.lock_outline_rounded, size: 18, color: Colors.grey.shade600),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '回复后可见隐藏内容',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '去回复',
+        return GestureDetector(
+          onTap: onNeedReply,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.inputFill(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 18,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '回复后可见隐藏内容',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
                     ),
                   ),
-                ],
-              ),
+                ),
+                Text(
+                  '去回复',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
             ),
           ),
         );
 
       case _ContentPartType.link:
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: InkWell(
-            onTap: () async {
-              final url = part.extra ?? '';
-              final uri = Uri.tryParse(url);
+        return _buildInlineParts(context, [part]);
 
-              if (uri != null) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-            child: Text(
-              part.value,
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.6,
-                color: Color(0xFF1677FF),
-                decoration: TextDecoration.underline,
+      case _ContentPartType.attachment:
+        return _AttachmentCard(attachmentId: part.value);
+    }
+  }
+
+  Widget _buildInlineParts(
+    BuildContext context,
+    List<_ContentPart> parts,
+  ) {
+    final spans = <InlineSpan>[];
+
+    for (final part in parts) {
+      if (part.type == _ContentPartType.link) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: GestureDetector(
+              onTap: () async {
+                final uri = Uri.tryParse(part.extra ?? '');
+                if (uri != null) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: Text(
+                part.value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.65,
+                  color: Color(0xFF1677FF),
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
           ),
         );
-
-      case _ContentPartType.attachment:
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _AttachmentCard(attachmentId: part.value),
-        );
-    }
-  }
-
-  Widget _buildTextWithEmoji(BuildContext context, String text) {
-    // Check if text contains any PUA emoji characters
-    bool hasEmoji = false;
-    for (int i = 0; i < text.length; i++) {
-      if (EmojiData.isEmojiCodepoint(text.codeUnitAt(i))) {
-        hasEmoji = true;
-        break;
-      }
-    }
-
-    if (!hasEmoji) {
-      return Text(
-        text,
-        style: TextStyle(
-          fontSize: 15,
-          height: 1.65,
-          color: AppColors.text(context),
-        ),
-      );
-    }
-
-    final spans = <InlineSpan>[];
-    final buffer = StringBuffer();
-
-    for (int i = 0; i < text.length; i++) {
-      final codeUnit = text.codeUnitAt(i);
-      if (EmojiData.isEmojiCodepoint(codeUnit)) {
-        if (buffer.isNotEmpty) {
-          spans.add(TextSpan(text: buffer.toString()));
-          buffer.clear();
-        }
-        final emoji = EmojiData.findByCodepoint(codeUnit);
-        if (emoji != null) {
-          spans.add(WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Image.asset(
-              emoji.assetPath,
-              width: 22,
-              height: 22,
-              fit: BoxFit.contain,
-            ),
-          ));
-        }
       } else {
-        buffer.write(text[i]);
+        spans.addAll(_buildEmojiSpans(part.value));
       }
-    }
-
-    if (buffer.isNotEmpty) {
-      spans.add(TextSpan(text: buffer.toString()));
     }
 
     return RichText(
@@ -303,12 +278,51 @@ class ForumContentView extends StatelessWidget {
     );
   }
 
+  List<InlineSpan> _buildEmojiSpans(String text) {
+    final spans = <InlineSpan>[];
+    final buffer = StringBuffer();
+
+    for (int index = 0; index < text.length; index++) {
+      final codeUnit = text.codeUnitAt(index);
+      if (!EmojiData.isEmojiCodepoint(codeUnit)) {
+        buffer.write(text[index]);
+        continue;
+      }
+
+      if (buffer.isNotEmpty) {
+        spans.add(TextSpan(text: buffer.toString()));
+        buffer.clear();
+      }
+
+      final emoji = EmojiData.findByCodepoint(codeUnit);
+      if (emoji != null) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Image.asset(
+              emoji.assetPath,
+              width: 22,
+              height: 22,
+              fit: BoxFit.contain,
+            ),
+          ),
+        );
+      }
+    }
+
+    if (buffer.isNotEmpty) {
+      spans.add(TextSpan(text: buffer.toString()));
+    }
+
+    return spans;
+  }
+
   List<_ContentPart> _parse(String input) {
     final List<_ContentPart> result = [];
 
     final reg = RegExp(
       r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
-      r'|(\[img=(https?:\/\/[^\]\s]+)\])'
+      r'|(\[img=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
       r'|(\[music=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
@@ -324,7 +338,7 @@ class ForumContentView extends StatelessWidget {
     for (final match in matches) {
       if (match.start > last) {
         final text = input.substring(last, match.start);
-        if (text.trim().isNotEmpty) {
+        if (text.isNotEmpty) {
           result.add(
             _ContentPart(
               type: _ContentPartType.text,
@@ -354,7 +368,7 @@ class ForumContentView extends StatelessWidget {
         result.add(
           _ContentPart(
             type: _ContentPartType.image,
-            value: image.trim(),
+            value: ApiClient.instance.resolveUrl(image.trim()),
           ),
         );
       } else if (video != null) {
@@ -402,7 +416,7 @@ class ForumContentView extends StatelessWidget {
 
     if (last < input.length) {
       final text = input.substring(last);
-      if (text.trim().isNotEmpty) {
+      if (text.isNotEmpty) {
         result.add(
           _ContentPart(
             type: _ContentPartType.text,

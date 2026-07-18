@@ -33,9 +33,13 @@ class _NotificationListPageState extends State<NotificationListPage> {
   @override
   void initState() {
     super.initState();
-    _load(refresh: true);
-    _markTypeRead();
+    _initialize();
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _initialize() async {
+    await _markTypeRead();
+    await _load(refresh: true);
   }
 
   @override
@@ -53,10 +57,17 @@ class _NotificationListPageState extends State<NotificationListPage> {
   }
 
   Future<void> _markTypeRead() async {
-    await ApiClient.instance.post(
+    final result = await ApiClient.instance.post(
       'notifications/read',
       data: {'type': widget.type},
     );
+    if (!mounted || !result.success) return;
+
+    setState(() {
+      for (final item in items) {
+        item['is_read'] = 1;
+      }
+    });
   }
 
   Future<void> _markAllRead() async {
@@ -253,7 +264,7 @@ class _NotificationItem extends StatelessWidget {
     final title = item['title']?.toString() ?? '';
     final content = item['content']?.toString() ?? '';
     final createdAt = item['created_at']?.toString() ?? '';
-    final isRead = item['is_read'] == 1;
+    final isRead = item['is_read']?.toString() == '1';
 
     final fromUser = item['from_user'] as Map?;
     final fromNickname = fromUser?['nickname']?.toString() ?? '';

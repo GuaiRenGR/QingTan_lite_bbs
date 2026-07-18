@@ -114,13 +114,24 @@ function validate_remote_url($url)
     return in_array(strtolower($scheme), ['http', 'https'], true);
 }
 
+function normalize_forum_media_url($url)
+{
+    $url = trim((string)$url);
+
+    if (preg_match('#^/index\.php\?route=file/resolve&id=\d+$#', $url)) {
+        return request_origin() . $url;
+    }
+
+    return validate_remote_url($url) ? $url : '';
+}
+
 function extract_img_tags($content)
 {
     $content = (string)$content;
 
-    preg_match_all('/\[img=(https?:\/\/[^\]\s]+)\]/i', $content, $matches);
+    preg_match_all('/\[img=((?:https?:\/\/|\/)[^\]\s]+)\]/i', $content, $matches);
 
-    return $matches[1] ?? [];
+    return array_values(array_filter(array_map('normalize_forum_media_url', $matches[1] ?? [])));
 }
 
 function sanitize_forum_content($content)
@@ -130,9 +141,9 @@ function sanitize_forum_content($content)
     $content = strip_dangerous_html($content);
 
     $content = preg_replace_callback('/\[img=([^\]]+)\]/i', function ($m) {
-        $url = trim($m[1]);
+        $url = normalize_forum_media_url($m[1]);
 
-        if (!validate_remote_url($url)) {
+        if ($url === '') {
             return '';
         }
 
@@ -140,9 +151,9 @@ function sanitize_forum_content($content)
     }, $content);
 
     $content = preg_replace_callback('/\[video=([^\]]+)\]/i', function ($m) {
-        $url = trim($m[1]);
+        $url = normalize_forum_media_url($m[1]);
 
-        if (!validate_remote_url($url)) {
+        if ($url === '') {
             return '';
         }
 
@@ -150,9 +161,9 @@ function sanitize_forum_content($content)
     }, $content);
 
     $content = preg_replace_callback('/\[music=([^\]]+)\]/i', function ($m) {
-        $url = trim($m[1]);
+        $url = normalize_forum_media_url($m[1]);
 
-        if (!validate_remote_url($url)) {
+        if ($url === '') {
             return '';
         }
 

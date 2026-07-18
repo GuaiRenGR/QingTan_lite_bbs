@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final musicPlayerProvider =
     StateNotifierProvider<MusicPlayerController, MusicPlayerState>((ref) {
@@ -28,6 +30,26 @@ class MusicTrack {
       url: url,
       title: nextTitle.isNotEmpty ? nextTitle : title,
       coverArt: other.coverArt ?? coverArt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'url': url,
+      'title': title,
+    };
+  }
+
+  static MusicTrack? fromJson(dynamic value) {
+    if (value is! Map) return null;
+
+    final url = value['url']?.toString().trim() ?? '';
+    if (url.isEmpty) return null;
+
+    final title = value['title']?.toString().trim() ?? '';
+    return MusicTrack(
+      url: url,
+      title: title.isEmpty ? '音乐' : title,
     );
   }
 }
@@ -104,7 +126,10 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         unawaited(_handleCompletion());
       }
     });
+    _storageQueue = _restorePlaylist();
   }
+
+  static const _playlistStorageKey = 'music_player_playlist_v1';
 
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<Duration>? _positionSub;
@@ -112,6 +137,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   StreamSubscription<PlayerState>? _playerStateSub;
   String? _loadedUrl;
   bool _handlingCompletion = false;
+  Future<void> _storageQueue = Future.value();
 
   int upsertTrack(MusicTrack track) {
     final url = track.url.trim();
@@ -128,6 +154,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     if (index >= 0) {
       tracks[index] = tracks[index].merge(normalized);
       state = state.copyWith(playlist: List.unmodifiable(tracks));
+      _schedulePersist();
       return index;
     }
 
@@ -136,6 +163,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       playlist: List.unmodifiable(tracks),
       currentIndex: state.currentIndex < 0 ? 0 : state.currentIndex,
     );
+    _schedulePersist();
     return tracks.length - 1;
   }
 
@@ -241,12 +269,14 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       playlist: List.unmodifiable(tracks),
       currentIndex: currentIndex,
     );
+    _schedulePersist();
   }
 
   Future<void> clearPlaylist() async {
     await _player.stop();
     _loadedUrl = null;
     state = const MusicPlayerState();
+    _schedulePersist();
   }
 
   Future<void> _loadIndex(int index, {required bool autoplay}) async {
@@ -263,6 +293,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         duration: Duration.zero,
         clearError: true,
       );
+      _schedulePersist();
       await _player.setUrl(track.url);
       _loadedUrl = track.url;
       if (mounted) state = state.copyWith(loading: false, clearError: true);
@@ -300,6 +331,61 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     } finally {
       _handlingCompletion = false;
     }
+  }
+
+  Future<void> _restorePlaylist() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_playlistStorageKey);
+      if (raw == null || raw.isEmpty || !mounted) return;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+
+      final restored = (decoded['playlist'] as List? ?? const [])
+          .map(MusicTrack.fromJson)
+          .whereType<MusicTrack>()
+          .toList();
+      if (restored.isEmpty) return;
+
+      final currentTrackUrl = state.currentTrack?.url;
+      for (final track in state.playlist) {
+        final index = restored.indexWhere((item) => item.url == track.url);
+        if (index >= 0) {
+          restored[index] = restored[index].merge(track);
+        } else {
+          restored.add(track);
+        }
+      }
+
+      final storedIndex = decoded['current_index'] is int
+          ? decoded['current_index'] as int
+          : int.tryParse(decoded['current_index']?.toString() ?? '') ?? 0;
+      final fallbackIndex = storedIndex < 0
+          ? 0
+          : (storedIndex >= restored.length ? restored.length - 1 : storedIndex);
+      final currentIndex = currentTrackUrl == null
+          ? fallbackIndex
+          : restored.indexWhere((track) => track.url == currentTrackUrl);
+
+      state = state.copyWith(
+        playlist: List.unmodifiable(restored),
+        currentIndex: currentIndex < 0 ? 0 : currentIndex,
+      );
+    } catch (_) {}
+  }
+
+  void _schedulePersist() {
+    _storageQueue = _storageQueue.then((_) => _persistPlaylist()).catchError((_) {});
+  }
+
+  Future<void> _persistPlaylist() async {
+    final preferences = await SharedPreferences.getInstance();
+    final data = {
+      'playlist': state.playlist.map((track) => track.toJson()).toList(),
+      'current_index': state.currentIndex,
+    };
+    await preferences.setString(_playlistStorageKey, jsonEncode(data));
   }
 
   @override

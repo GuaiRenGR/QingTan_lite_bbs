@@ -150,12 +150,24 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.badge_outlined, color: Color(0xFFFB7299)),
-                title: const Text('编辑资料'),
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('权限管理'),
+                subtitle: const Text('用户组、单独权限覆盖'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showUserSettingsDialog(user, managePermissions: true);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.badge_outlined,
+                  color: Color(0xFFFB7299),
+                ),
+                title: const Text('铭牌设置'),
                 subtitle: const Text('铭牌、认证标志'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showEditUserDialog(user);
+                  _showUserSettingsDialog(user, managePermissions: false);
                 },
               ),
               if (!isAdmin) ...[
@@ -183,7 +195,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 const Padding(
                   padding: EdgeInsets.all(16),
                   child: Text(
-                    '管理员账户不可操作',
+                    '管理员账户不可封禁或删除',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ),
@@ -195,7 +207,10 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     );
   }
 
-  void _showEditUserDialog(Map<String, dynamic> user) {
+  void _showUserSettingsDialog(
+    Map<String, dynamic> user, {
+    required bool managePermissions,
+  }) {
     final userId = _toInt(user['id']);
     final currentGroupId = _toInt(user['group_id']);
     final badgeNameCtrl = TextEditingController(
@@ -245,64 +260,72 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
               : <String, dynamic>{};
 
           return AlertDialog(
-            title: Text('编辑 ${user['nickname'] ?? ''}'),
+            title: Text(
+              '${managePermissions ? '权限管理' : '铭牌设置'} · ${user['nickname'] ?? ''}',
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 用户组选择
-                  const Text('用户组',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  if (groups.isNotEmpty)
-                    DropdownButtonFormField<int>(
-                      initialValue: selectedGroupId,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: groups.map((g) {
-                        return DropdownMenuItem<int>(
-                          value: _toInt(g['id']),
-                          child: Text(
-                              '${g['name']} (ID: ${g['id']})'),
-                        );
-                      }).toList(),
-                      onChanged: currentGroupId == 99
-                          ? null // 管理员用户组不可改
-                          : (v) {
-                              if (v != null) {
-                                setDialogState(() {
-                                  selectedGroupId = v;
-                                  // 切换组时清除单独权限覆盖
-                                  permOverrides.clear();
-                                });
-                              }
-                            },
+                  if (managePermissions) ...[
+                    const Text(
+                      '用户组',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                  if (currentGroupId == 99)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '管理员用户组不可更改',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade500),
+                    const SizedBox(height: 8),
+                    if (groups.isNotEmpty)
+                      DropdownButtonFormField<int>(
+                        initialValue: selectedGroupId,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: groups.map((group) {
+                          return DropdownMenuItem<int>(
+                            value: _toInt(group['id']),
+                            child: Text(
+                              '${group['name']} (ID: ${group['id']})',
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: currentGroupId == 99
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  setDialogState(() {
+                                    selectedGroupId = value;
+                                    permOverrides.clear();
+                                  });
+                                }
+                              },
+                      ),
+                    if (currentGroupId == 99)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '管理员用户组不可更改',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '单独权限覆盖',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '覆盖用户组默认权限，留空则继承用户组设置',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
                       ),
                     ),
-                  const SizedBox(height: 16),
-
-                  // 权限编辑
-                  const Text('单独权限覆盖',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(
-                    '覆盖用户组默认权限，留空则继承用户组设置',
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey.shade500),
-                  ),
-                  const SizedBox(height: 8),
-                  ...knownPerms.map((perm) {
+                    const SizedBox(height: 8),
+                    ...knownPerms.map((perm) {
                     // 有效权限 = 单独覆盖 > 组权限
                     final hasOverride = permOverrides.containsKey(perm.key);
                     final effectiveValue = hasOverride
@@ -390,70 +413,72 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                         ],
                       ),
                     );
-                  }),
-
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text('铭牌',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: badgeNameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '铭牌文字',
-                      hintText: '2-5字，留空则清除',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                    }),
+                  ] else ...[
+                    const Text(
+                      '铭牌',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: badgeColorCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '铭牌颜色',
-                      hintText: '#FB7299',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: badgeNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '铭牌文字',
+                        hintText: '2-5字，留空则清除',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('认证标志',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      _VerifyChip(
-                        label: '无',
-                        color: Colors.grey,
-                        selected: verifyLevel == 0,
-                        onTap: () =>
-                            setDialogState(() => verifyLevel = 0),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: badgeColorCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '铭牌颜色',
+                        hintText: '#FB7299',
+                        border: OutlineInputBorder(),
+                        isDense: true,
                       ),
-                      _VerifyChip(
-                        label: '已认证',
-                        color: const Color(0xFF4CAF50),
-                        selected: verifyLevel == 1,
-                        onTap: () =>
-                            setDialogState(() => verifyLevel = 1),
-                      ),
-                      _VerifyChip(
-                        label: '官方',
-                        color: const Color(0xFF2196F3),
-                        selected: verifyLevel == 2,
-                        onTap: () =>
-                            setDialogState(() => verifyLevel = 2),
-                      ),
-                      _VerifyChip(
-                        label: '知名人物',
-                        color: const Color(0xFFFFB300),
-                        selected: verifyLevel == 3,
-                        onTap: () =>
-                            setDialogState(() => verifyLevel = 3),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '认证标志',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _VerifyChip(
+                          label: '无',
+                          color: Colors.grey,
+                          selected: verifyLevel == 0,
+                          onTap: () =>
+                              setDialogState(() => verifyLevel = 0),
+                        ),
+                        _VerifyChip(
+                          label: '已认证',
+                          color: const Color(0xFF4CAF50),
+                          selected: verifyLevel == 1,
+                          onTap: () =>
+                              setDialogState(() => verifyLevel = 1),
+                        ),
+                        _VerifyChip(
+                          label: '官方',
+                          color: const Color(0xFF2196F3),
+                          selected: verifyLevel == 2,
+                          onTap: () =>
+                              setDialogState(() => verifyLevel = 2),
+                        ),
+                        _VerifyChip(
+                          label: '知名人物',
+                          color: const Color(0xFFFFB300),
+                          selected: verifyLevel == 3,
+                          onTap: () =>
+                              setDialogState(() => verifyLevel = 3),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -465,14 +490,24 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
               FilledButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  _updateUser(
-                    userId,
-                    badgeNameCtrl.text.trim(),
-                    badgeColorCtrl.text.trim(),
-                    verifyLevel,
-                    groupId: selectedGroupId,
-                    permissions: permOverrides,
-                  );
+                  if (managePermissions) {
+                    _updateUser(
+                      userId,
+                      {
+                        'group_id': selectedGroupId,
+                        'permissions': jsonEncode(permOverrides),
+                      },
+                    );
+                  } else {
+                    _updateUser(
+                      userId,
+                      {
+                        'badge_name': badgeNameCtrl.text.trim(),
+                        'badge_color': badgeColorCtrl.text.trim(),
+                        'verify_level': verifyLevel,
+                      },
+                    );
+                  }
                 },
                 child: const Text('保存'),
               ),
@@ -485,22 +520,13 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
 
   Future<void> _updateUser(
     int userId,
-    String badgeName,
-    String badgeColor,
-    int verifyLevel, {
-    int? groupId,
-    Map<String, dynamic>? permissions,
-  }) async {
+    Map<String, dynamic> updates,
+  ) async {
     final result = await ApiClient.instance.post(
       'admin/user/update',
       data: {
         'user_id': userId,
-        'badge_name': badgeName,
-        'badge_color': badgeColor,
-        'verify_level': verifyLevel,
-        'group_id': ?groupId,
-        if (permissions != null && permissions.isNotEmpty)
-          'permissions': permissions,
+        ...updates,
       },
     );
 
