@@ -1,5 +1,30 @@
 # 更新日志
 
+## v1.1.8
+
+### 性能与体验
+
+- 统一图片磁盘缓存并优化缩略图内存解码，减少重复流量
+- 瀑布流和图集采用小批量顺序预加载，主导航页面改为按需创建
+- 修复 `hyjzbbs://thread/ID` 深度链接跳转到不存在页面
+- “我的”页面改为无边框设计，发帖输入框改为白色无边框
+
+### 新功能与修复
+
+- 管理员新增附件文件管理、文件夹归类、移动和删除功能
+- 完成 `[thread=DV码]` 插入帖子卡片渲染和帖子选择器
+- 修复用户空间帖子预览泄露 `[hide]` 隐藏内容
+- 首页头像改为进入“我的”页面
+
+### 项目维护
+
+- 删除旧核心代码快照、Claude/VS Code 本地配置和临时调试脚本
+- 删除与客户端 assets 完全重复的根目录表情资源和图标副本
+- 清理旧构建包、下载页面快照及其他本地临时文件
+- 完善忽略规则，防止本地产物再次进入仓库
+
+---
+
 ## v1.1.7
 
 ### 功能调整
@@ -87,7 +112,6 @@
 - `AdminController` 新增 `groupList`、`threads`、`threadDelete`、`threadToggleSticky`、`threadToggleLock` 接口
 - `AdminController::updateUser` 支持修改 `group_id` 和 `permissions`
 - `ThreadCreateController` 发布失败时返回具体错误信息
-- 新增 `debug_create_thread.php` 调试脚本
 - 新增 `upgrade_version_1_1_5.php` 升级脚本
 
 ---

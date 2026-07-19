@@ -31,6 +31,8 @@
 ## 项目结构
 
 ```
+├── PRD.md                   # 产品需求文档
+├── changes.md               # 版本更新日志
 ├── hjyz_bbs/                # Flutter 客户端
 │   ├── lib/
 │   │   ├── core/

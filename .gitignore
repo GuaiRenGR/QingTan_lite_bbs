@@ -7,3 +7,27 @@ server/server.zip
 server/config/onedrive.local.php
 server/cache/onedrive_token.json
 .opencode/plans/多服务端部署方案.md
+
+# 本地编辑器与 AI 工具配置
+.claude/
+.vscode/
+
+# 临时文件与调试脚本
+*.tmp.*
+/resume.txt
+/server/dbcheck.php
+/server/debug_*.php
+/server/version_update.php
+/hjyz_bbs/devtools_options.yaml
+
+# 本地构建、下载与导出产物
+/hjyz_bbs*.zip
+/index.html
+/*Download Center.html
+/cloudflare_waf_rules.json
+
+# 已迁移到正式源码目录的重复资源
+/资源/
+/icon.png
+/icon.ico
+/*核心代码*.md
