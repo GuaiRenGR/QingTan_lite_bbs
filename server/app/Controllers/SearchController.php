@@ -138,4 +138,55 @@ class SearchController
             'list' => $list,
         ]);
     }
+
+    public static function threadPicker()
+    {
+        $user = \Auth::requireLogin();
+        $keyword = trim(\Request::str('keyword'));
+        $pageSize = min(50, max(1, \Request::int('page_size', 30)));
+
+        if (mb_strlen($keyword, 'UTF-8') > 50) {
+            \Response::json(422, '关键词过长');
+        }
+
+        $threads = \Database::table('threads');
+        $users = \Database::table('users');
+        $where = "t.status = 1
+                  AND t.dv_code IS NOT NULL
+                  AND t.dv_code != ''
+                  AND (t.visibility = 'public' OR t.user_id = ?)";
+        $params = [(int)$user['id']];
+
+        if ($keyword !== '') {
+            $where .= ' AND (t.title LIKE ? OR u.nickname LIKE ? OR t.dv_code LIKE ?)';
+            $like = '%' . $keyword . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $rows = \Database::fetchAll(
+            "SELECT t.id, t.dv_code, t.title, t.content, t.created_at,
+                    COALESCE(u.nickname, u.username, '用户') AS author_name
+             FROM {$threads} t
+             LEFT JOIN {$users} u ON u.id = t.user_id
+             WHERE {$where}
+             ORDER BY t.created_at DESC, t.id DESC
+             LIMIT {$pageSize}",
+            $params
+        );
+
+        $list = array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'dv_code' => $row['dv_code'],
+                'title' => $row['title'],
+                'summary' => make_summary($row['content'], 80),
+                'author_name' => $row['author_name'],
+                'created_at' => $row['created_at'],
+            ];
+        }, $rows);
+
+        \Response::success(['list' => $list]);
+    }
 }

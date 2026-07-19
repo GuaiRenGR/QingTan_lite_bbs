@@ -175,6 +175,10 @@ try {
             App\Controllers\ThreadReadController::detailByDv();
             break;
 
+        case 'threads/embed':
+            App\Controllers\ThreadReadController::embed();
+            break;
+
         case 'threads/create':
             App\Controllers\ThreadCreateController::create();
             break;
@@ -265,6 +269,10 @@ try {
 
         case 'search/hot':
             App\Controllers\SearchController::hot();
+            break;
+
+        case 'threads/selection':
+            App\Controllers\SearchController::threadPicker();
             break;
 
         case 'tags/hot':
@@ -405,6 +413,22 @@ try {
 
         case 'admin/thread/lock':
             App\Controllers\AdminController::threadToggleLock();
+            break;
+
+        case 'admin/files':
+            App\Controllers\AdminFileController::index();
+            break;
+
+        case 'admin/files/folder/create':
+            App\Controllers\AdminFileController::createFolder();
+            break;
+
+        case 'admin/files/move':
+            App\Controllers\AdminFileController::move();
+            break;
+
+        case 'admin/files/delete':
+            App\Controllers\AdminFileController::delete();
             break;
 
         default:

@@ -584,19 +584,59 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
   Future<void> _insertThreadLink() async {
     final dvController = TextEditingController();
+    var selectedTitle = '';
 
     final result = await showDialog<String>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('插入帖子链接'),
-          content: TextField(
-            controller: dvController,
-            decoration: const InputDecoration(
-              labelText: 'DV 号',
-              hintText: '例如 DV3k7M2x9P',
-            ),
-            autofocus: true,
+          content: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: dvController,
+                    decoration: const InputDecoration(
+                      labelText: 'DV 号',
+                      hintText: '例如 DV3k7M2x9P',
+                    ),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final selected = await showModalBottomSheet<_ThreadSelection>(
+                        context: context,
+                        isScrollControlled: true,
+                        useSafeArea: true,
+                        showDragHandle: true,
+                        builder: (_) => const _ThreadPickerSheet(),
+                      );
+                      if (selected == null) return;
+                      dvController.text = selected.dvCode;
+                      setDialogState(() => selectedTitle = selected.title);
+                    },
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('选择帖子'),
+                  ),
+                  if (selectedTitle.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '已选择：$selectedTitle',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
           actions: [
             TextButton(
@@ -614,6 +654,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       },
     );
 
+    dvController.dispose();
     if (result == null || result.isEmpty) return;
 
     final tag = '[thread=$result]';
@@ -1098,15 +1139,16 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           TextField(
             controller: titleController,
             maxLength: 80,
+            style: const TextStyle(color: Colors.black87),
             decoration: InputDecoration(
               hintText: isImageMode ? '给图片笔记起个标题' : '请输入标题',
+              hintStyle: const TextStyle(color: Colors.black45),
               filled: true,
-              fillColor: AppColors.inputFill(context),
+              fillColor: Colors.white,
               counterText: '',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
           const SizedBox(height: 12),
@@ -1120,16 +1162,17 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
             controller: contentController,
             minLines: isImageMode ? 5 : 12,
             maxLines: null,
+            style: const TextStyle(color: Colors.black87),
             decoration: InputDecoration(
               hintText: isImageMode
                   ? '分享这组图片背后的故事...'
                   : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
+              hintStyle: const TextStyle(color: Colors.black45),
               filled: true,
-              fillColor: AppColors.inputFill(context),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
+              fillColor: Colors.white,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
           const SizedBox(height: 16),
@@ -1145,14 +1188,15 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               Expanded(
                 child: TextField(
                   controller: tagController,
+                  style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     hintText: '输入标签，例如 校园',
+                    hintStyle: const TextStyle(color: Colors.black45),
                     filled: true,
-                    fillColor: AppColors.inputFill(context),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
-                      borderSide: BorderSide.none,
-                    ),
+                    fillColor: Colors.white,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
                   onSubmitted: (_) => _addTag(),
                 ),
@@ -1246,6 +1290,177 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         ],
       ),
       backgroundColor: AppColors.scaffoldBg(context),
+    );
+  }
+}
+
+class _ThreadSelection {
+  final String dvCode;
+  final String title;
+
+  const _ThreadSelection({required this.dvCode, required this.title});
+}
+
+class _ThreadPickerSheet extends StatefulWidget {
+  const _ThreadPickerSheet();
+
+  @override
+  State<_ThreadPickerSheet> createState() => _ThreadPickerSheetState();
+}
+
+class _ThreadPickerSheetState extends State<_ThreadPickerSheet> {
+  final _searchController = TextEditingController();
+  final List<Map<String, dynamic>> _threads = [];
+
+  Timer? _searchTimer;
+  bool _loading = true;
+  String? _error;
+  int _requestSerial = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final serial = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final result = await ApiClient.instance.get(
+      'threads/selection',
+      query: {
+        'keyword': _searchController.text.trim(),
+        'page_size': 30,
+      },
+    );
+    if (!mounted || serial != _requestSerial) return;
+
+    if (!result.success || result.data is! Map<String, dynamic>) {
+      setState(() {
+        _loading = false;
+        _error = result.message;
+      });
+      return;
+    }
+
+    final raw = (result.data as Map<String, dynamic>)['list'];
+    setState(() {
+      _threads
+        ..clear()
+        ..addAll(
+          raw is List
+              ? raw
+                  .whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+              : const Iterable<Map<String, dynamic>>.empty(),
+        );
+      _loading = false;
+    });
+  }
+
+  void _onSearchChanged(String _) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 350), _load);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.78,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: '搜索帖子标题、作者或 DV 号',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: AppColors.inputFill(context),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!),
+                            const SizedBox(height: 10),
+                            OutlinedButton(
+                              onPressed: _load,
+                              child: const Text('重试'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _threads.isEmpty
+                        ? const Center(child: Text('没有找到可插入的帖子'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            itemCount: _threads.length,
+                            separatorBuilder: (_, _) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final thread = _threads[index];
+                              final title =
+                                  thread['title']?.toString() ?? '无标题';
+                              final dvCode =
+                                  thread['dv_code']?.toString() ?? '';
+                              final author =
+                                  thread['author_name']?.toString() ?? '用户';
+                              final summary =
+                                  thread['summary']?.toString() ?? '';
+
+                              return ListTile(
+                                leading: const CircleAvatar(
+                                  child: Icon(Icons.article_outlined),
+                                ),
+                                title: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  summary.isEmpty
+                                      ? '$author · $dvCode'
+                                      : '$summary\n$author · $dvCode',
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                isThreeLine: summary.isNotEmpty,
+                                onTap: dvCode.isEmpty
+                                    ? null
+                                    : () => Navigator.of(context).pop(
+                                          _ThreadSelection(
+                                            dvCode: dvCode,
+                                            title: title,
+                                          ),
+                                        ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
     );
   }
 }

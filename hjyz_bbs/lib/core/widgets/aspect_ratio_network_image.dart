@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/image_cache_service.dart';
+
 class AspectRatioNetworkImage extends StatefulWidget {
   final String url;
   final double? width;
@@ -30,6 +32,7 @@ class AspectRatioNetworkImage extends StatefulWidget {
 class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
   ImageStream? _stream;
   ImageStreamListener? _listener;
+  ImageProvider<Object>? _provider;
 
   double? _aspectRatio;
   bool _failed = false;
@@ -49,6 +52,7 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
 
     if (oldWidget.url != widget.url) {
       _removeListener();
+      _provider = null;
       _aspectRatio = null;
       _failed = false;
       _resolve();
@@ -63,8 +67,19 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
       return;
     }
 
-    final provider = NetworkImage(widget.url);
+    final imageCache = ImageCacheService.instance;
+    final imageUrl = imageCache.resolveUrl(widget.url);
+    if (imageUrl.isEmpty) {
+      setState(() {
+        _failed = true;
+      });
+      return;
+    }
+
+    final provider = imageCache.provider(imageUrl);
     final stream = provider.resolve(const ImageConfiguration());
+
+    _provider = provider;
 
     _listener = ImageStreamListener(
       (info, _) {
@@ -145,8 +160,8 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
             : (widget.width ?? MediaQuery.of(context).size.width);
         final imageHeight = maxWidth / ratio;
 
-        final img = Image.network(
-          widget.url,
+        final img = Image(
+          image: _provider!,
           width: maxWidth,
           height: imageHeight,
           fit: widget.containMode ? BoxFit.contain : widget.fit,

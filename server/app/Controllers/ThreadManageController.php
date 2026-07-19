@@ -87,7 +87,7 @@ class ThreadManageController
             $cover = $thumb ? $thumb['url'] : $allImages[0];
         }
 
-        $summary = mb_substr(strip_tags(preg_replace('/\[[^\]]+\]/', '', $content)), 0, 120);
+        $summary = make_summary($content);
 
         \Database::execute(
             "UPDATE {$threads}

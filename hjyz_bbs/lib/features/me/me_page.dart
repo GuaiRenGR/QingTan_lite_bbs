@@ -162,7 +162,6 @@ class MePage extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: AppColors.card(context),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border(context)),
               ),
               child: Row(
                 children: [
@@ -251,7 +250,6 @@ class _MenuItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border(context)),
       ),
       child: ListTile(
         leading: Icon(icon),
@@ -275,7 +273,6 @@ class _QuickActionGrid extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border(context)),
       ),
       child: GridView.builder(
         shrinkWrap: true,

@@ -21,26 +21,48 @@ class MainShellPage extends ConsumerStatefulWidget {
 
 class _MainShellPageState extends ConsumerState<MainShellPage> {
   final _homeKey = GlobalKey<HomePageState>();
+  late final List<Widget?> _pages;
 
   @override
   void initState() {
     super.initState();
+    _pages = <Widget?>[
+      HomePage(key: _homeKey),
+      null,
+      null,
+      null,
+      null,
+    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkOnStart(context);
     });
   }
 
+  Widget _createPage(int index) {
+    return switch (index) {
+      0 => HomePage(key: _homeKey),
+      1 => const DynamicPage(),
+      2 => const CreatePostPage(),
+      3 => const DiscoverPage(),
+      4 => const MePage(),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
+  void _selectTab(int index) {
+    _pages[index] ??= _createPage(index);
+
+    final previousIndex = ref.read(mainTabIndexProvider);
+    ref.read(mainTabIndexProvider.notifier).state = index;
+    if (index == 0 && previousIndex != 0) {
+      _homeKey.currentState?.refreshCurrentFeed();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(mainTabIndexProvider);
-
-    final pages = [
-      HomePage(key: _homeKey),
-      const DynamicPage(),
-      const CreatePostPage(),
-      const DiscoverPage(),
-      const MePage(),
-    ];
+    _pages[currentIndex] ??= _createPage(currentIndex);
 
     return PopScope(
       canPop: currentIndex == 0,
@@ -52,27 +74,27 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
       child: Scaffold(
         body: IndexedStack(
           index: currentIndex,
-          children: pages,
+          children: [
+            for (var index = 0; index < _pages.length; index++)
+              TickerMode(
+                enabled: index == currentIndex,
+                child: _pages[index] ?? const SizedBox.shrink(),
+              ),
+          ],
         ),
         bottomNavigationBar: _ForumBottomNavBar(
-        currentIndex: currentIndex,
-        onTap: (index) {
-          final prev = ref.read(mainTabIndexProvider);
-          ref.read(mainTabIndexProvider.notifier).state = index;
-          if (index == 0 && prev != 0) {
-            _homeKey.currentState?.refreshCurrentFeed();
-          }
-        },
-        onCreateThread: () {
-          final auth = ref.read(authControllerProvider);
-          if (!auth.loggedIn) {
-            context.push('/login');
-            return;
-          }
-          context.push('/thread/create');
-        },
+          currentIndex: currentIndex,
+          onTap: _selectTab,
+          onCreateThread: () {
+            final auth = ref.read(authControllerProvider);
+            if (!auth.loggedIn) {
+              context.push('/login');
+              return;
+            }
+            context.push('/thread/create');
+          },
+        ),
       ),
-    ),
     );
   }
 }

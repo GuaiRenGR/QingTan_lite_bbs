@@ -247,20 +247,36 @@ function createTables(PDO $pdo, string $prefix)
     ";
 
     $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}attachment_folders` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `name` VARCHAR(50) NOT NULL,
+      `created_by` BIGINT UNSIGNED NOT NULL,
+      `status` TINYINT NOT NULL DEFAULT 1,
+      `created_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_name_status` (`name`, `status`),
+      KEY `idx_status_name` (`status`, `name`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
     CREATE TABLE IF NOT EXISTS `{$prefix}attachments` (
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `user_id` BIGINT UNSIGNED NOT NULL,
       `object_type` VARCHAR(20) DEFAULT NULL,
       `object_id` BIGINT UNSIGNED DEFAULT NULL,
+      `folder_id` BIGINT UNSIGNED DEFAULT NULL,
       `file_name` VARCHAR(255) NOT NULL,
-      `file_path` VARCHAR(255) NOT NULL,
-      `file_url` VARCHAR(255) NOT NULL,
+      `file_path` VARCHAR(1000) NOT NULL,
+      `file_url` VARCHAR(1000) NOT NULL,
       `file_type` VARCHAR(80) DEFAULT NULL,
-      `file_size` INT NOT NULL DEFAULT 0,
+      `file_size` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      `onedrive_item_id` VARCHAR(255) DEFAULT NULL,
       `status` TINYINT NOT NULL DEFAULT 1,
       `created_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`),
-      KEY `idx_object` (`object_type`, `object_id`)
+      KEY `idx_object` (`object_type`, `object_id`),
+      KEY `idx_folder` (`folder_id`, `status`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

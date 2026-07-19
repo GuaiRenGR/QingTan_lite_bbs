@@ -22,6 +22,7 @@ import 'features/admin/admin_center_page.dart';
 import 'features/admin/admin_review_page.dart';
 import 'features/admin/admin_users_page.dart';
 import 'features/admin/admin_threads_page.dart';
+import 'features/admin/admin_files_page.dart';
 import 'features/download/download_page.dart';
 import 'features/user/user_home_page.dart';
 
@@ -138,6 +139,10 @@ final router = GoRouter(
     GoRoute(
       path: '/admin/threads',
       builder: (_, _) => const AdminThreadsPage(),
+    ),
+    GoRoute(
+      path: '/admin/files',
+      builder: (_, _) => const AdminFilesPage(),
     ),
     GoRoute(
       path: '/downloads',

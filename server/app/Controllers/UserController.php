@@ -211,6 +211,7 @@ class UserController
                 user_id,
                 title,
                 summary,
+                content,
                 cover,
                 view_count,
                 reply_count,
@@ -259,6 +260,7 @@ class UserController
                 t.id,
                 t.title,
                 t.summary,
+                t.content AS thread_content,
                 t.cover,
                 t.reply_count,
                 t.like_count,
@@ -305,6 +307,7 @@ class UserController
                 t.user_id,
                 t.title,
                 t.summary,
+                t.content AS thread_content,
                 t.cover,
                 t.view_count,
                 t.reply_count,
@@ -332,11 +335,19 @@ class UserController
     private static function formatList($rows)
     {
         return array_map(function ($row) {
+            if (array_key_exists('thread_content', $row)) {
+                $summarySource = $row['thread_content'];
+            } elseif (array_key_exists('content', $row)) {
+                $summarySource = $row['content'];
+            } else {
+                $summarySource = $row['summary'] ?? '';
+            }
+
             return [
                 'id' => isset($row['id']) ? (int)$row['id'] : 0,
                 'thread_id' => isset($row['thread_id']) ? (int)$row['thread_id'] : (int)($row['id'] ?? 0),
                 'title' => $row['title'] ?? '无标题',
-                'summary' => $row['summary'] ?? '',
+                'summary' => make_summary($summarySource),
                 'content' => isset($row['content']) ? make_summary($row['content'], 80) : '',
                 'cover' => $row['cover'] ?? '',
                 'reply_count' => (int)($row['reply_count'] ?? 0),

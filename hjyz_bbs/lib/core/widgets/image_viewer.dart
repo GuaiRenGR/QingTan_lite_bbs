@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../utils/url_helper.dart';
+import '../services/image_cache_service.dart';
 
 /// 全屏图片查看器，支持双指缩放、左右滑动切换
 class ImageViewer extends StatefulWidget {
@@ -43,6 +43,14 @@ class _ImageViewerState extends State<ImageViewer> {
     super.initState();
     _index = widget.initialIndex;
     _pageController = PageController(initialPage: _index);
+    _preloadAround(_index);
+  }
+
+  void _preloadAround(int index) {
+    ImageCacheService.instance.preload(
+      widget.images.skip(index + 1),
+      maxItems: 2,
+    );
   }
 
   @override
@@ -61,14 +69,19 @@ class _ImageViewerState extends State<ImageViewer> {
           PageView.builder(
             controller: _pageController,
             itemCount: widget.images.length,
-            onPageChanged: (i) => setState(() => _index = i),
+            onPageChanged: (i) {
+              setState(() => _index = i);
+              _preloadAround(i);
+            },
             itemBuilder: (context, i) {
+              final imageCache = ImageCacheService.instance;
               return InteractiveViewer(
                 minScale: 0.5,
                 maxScale: 5.0,
                 child: Center(
                   child: CachedNetworkImage(
-                    imageUrl: UrlHelper.fix(widget.images[i]),
+                    imageUrl: imageCache.resolveUrl(widget.images[i]),
+                    cacheManager: imageCache.cacheManager,
                     fit: BoxFit.contain,
                     placeholder: (_, _) => const Center(
                       child: SizedBox(

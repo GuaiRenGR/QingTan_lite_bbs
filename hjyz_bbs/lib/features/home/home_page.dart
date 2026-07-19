@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_colors.dart';
-import '../auth/auth_controller.dart';
+import '../main/main_tab_provider.dart';
 import 'widgets/home_feed_page.dart';
 import 'widgets/home_top_bar.dart';
 
@@ -58,12 +58,7 @@ class HomePageState extends ConsumerState<HomePage>
         children: [
           HomeTopBar(
             onAvatarTap: () {
-              final auth = ref.read(authControllerProvider);
-              final userId =
-                  int.tryParse(auth.user?['id']?.toString() ?? '') ?? 0;
-              if (userId > 0) {
-                context.push('/user/$userId');
-              }
+              ref.read(mainTabIndexProvider.notifier).state = 4;
             },
             onSearchTap: () {
               context.push('/search');

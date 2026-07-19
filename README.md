@@ -75,8 +75,11 @@ flutter run
 3. 运行 `server/install.php` 初始化数据库
 4. 部署 `server/` 到 PHP 环境
 
+已有站点升级附件文件管理功能时，部署后运行一次
+`server/upgrade_version_1_1_8.php`，成功后立即删除该脚本。
+
 `onedrive.local.php` 和 `cache/onedrive_token.json` 已被 Git 忽略，禁止将真实凭据写入其他受版本控制的文件。
 
 ## 版本
 
-当前版本：1.1.7+22
+当前版本：1.1.8+23

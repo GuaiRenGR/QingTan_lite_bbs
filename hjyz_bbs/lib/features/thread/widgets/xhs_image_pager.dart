@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/image_cache_service.dart';
 import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/image_viewer.dart';
 
@@ -45,8 +46,11 @@ class _XhsImagePagerState extends State<XhsImagePager> {
   void _resolveFirstImage() {
     if (widget.images.isEmpty) return;
 
-    final provider = NetworkImage(widget.images.first);
+    final imageCache = ImageCacheService.instance;
+    final provider = imageCache.provider(widget.images.first);
     final stream = provider.resolve(const ImageConfiguration());
+
+    imageCache.preload(widget.images.skip(1), maxItems: 2);
 
     stream.addListener(
       ImageStreamListener(
@@ -125,6 +129,10 @@ class _XhsImagePagerState extends State<XhsImagePager> {
                   setState(() {
                     index = value;
                   });
+                  ImageCacheService.instance.preload(
+                    widget.images.skip(value + 1),
+                    maxItems: 2,
+                  );
                 },
                 itemBuilder: (context, i) {
                   return GestureDetector(

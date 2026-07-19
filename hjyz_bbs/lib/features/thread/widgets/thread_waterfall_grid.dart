@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/services/image_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/safe_network_image.dart';
 
-class ThreadWaterfallGrid extends StatelessWidget {
+class ThreadWaterfallGrid extends StatefulWidget {
   final List<Map<String, dynamic>> threads;
   final ScrollPhysics? physics;
   final EdgeInsetsGeometry padding;
@@ -19,22 +20,48 @@ class ThreadWaterfallGrid extends StatelessWidget {
   });
 
   @override
+  State<ThreadWaterfallGrid> createState() => _ThreadWaterfallGridState();
+}
+
+class _ThreadWaterfallGridState extends State<ThreadWaterfallGrid> {
+  int? _preloadSignature;
+
+  void _schedulePreload() {
+    final signature = Object.hashAll(
+      widget.threads.map((thread) => thread['cover']?.toString() ?? ''),
+    );
+    if (_preloadSignature == signature) return;
+
+    _preloadSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ImageCacheService.instance.preload(
+        widget.threads
+            .skip(4)
+            .map((thread) => thread['cover']?.toString() ?? ''),
+        maxItems: 4,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _schedulePreload();
     return MasonryGridView.count(
-      padding: padding,
-      physics: physics,
+      padding: widget.padding,
+      physics: widget.physics,
       crossAxisCount: _getColumnCount(context),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      itemCount: threads.length,
+      itemCount: widget.threads.length,
       itemBuilder: (context, index) {
-        return ThreadWaterfallCard(item: threads[index]);
+        return ThreadWaterfallCard(item: widget.threads[index]);
       },
     );
   }
 }
 
-class ThreadWaterfallSliver extends StatelessWidget {
+class ThreadWaterfallSliver extends StatefulWidget {
   final List<Map<String, dynamic>> threads;
 
   const ThreadWaterfallSliver({
@@ -43,16 +70,42 @@ class ThreadWaterfallSliver extends StatelessWidget {
   });
 
   @override
+  State<ThreadWaterfallSliver> createState() => _ThreadWaterfallSliverState();
+}
+
+class _ThreadWaterfallSliverState extends State<ThreadWaterfallSliver> {
+  int? _preloadSignature;
+
+  void _schedulePreload() {
+    final signature = Object.hashAll(
+      widget.threads.map((thread) => thread['cover']?.toString() ?? ''),
+    );
+    if (_preloadSignature == signature) return;
+
+    _preloadSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ImageCacheService.instance.preload(
+        widget.threads
+            .skip(4)
+            .map((thread) => thread['cover']?.toString() ?? ''),
+        maxItems: 4,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _schedulePreload();
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
       sliver: SliverMasonryGrid.count(
         crossAxisCount: _getColumnCount(context),
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childCount: threads.length,
+        childCount: widget.threads.length,
         itemBuilder: (context, index) {
-          return ThreadWaterfallCard(item: threads[index]);
+          return ThreadWaterfallCard(item: widget.threads[index]);
         },
       ),
     );

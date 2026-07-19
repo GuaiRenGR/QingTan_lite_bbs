@@ -103,6 +103,9 @@ class ForumContentView extends StatelessWidget {
       case _ContentPartType.music:
         return _InlineMusicPlayer(url: part.value);
 
+      case _ContentPartType.thread:
+        return _InlineThreadCard(dvCode: part.value);
+
       case _ContentPartType.markdown:
         return MarkdownBody(
           data: part.value,
@@ -325,6 +328,7 @@ class ForumContentView extends StatelessWidget {
       r'|(\[img=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
       r'|(\[music=((?:https?:\/\/|\/)[^\]\s]+)\])'
+      r'|(\[thread=([^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
       r'|(\[attach=(\d+)\])',
@@ -352,10 +356,11 @@ class ForumContentView extends StatelessWidget {
       final image = match.group(4);
       final video = match.group(6);
       final music = match.group(8);
-      final hidden = match.group(10);
-      final linkUrl = match.group(12);
-      final linkText = match.group(13);
-      final attachment = match.group(15);
+      final thread = match.group(10);
+      final hidden = match.group(12);
+      final linkUrl = match.group(14);
+      final linkText = match.group(15);
+      final attachment = match.group(17);
 
       if (markdown != null) {
         result.add(
@@ -383,6 +388,13 @@ class ForumContentView extends StatelessWidget {
           _ContentPart(
             type: _ContentPartType.music,
             value: music.trim(),
+          ),
+        );
+      } else if (thread != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.thread,
+            value: thread.trim(),
           ),
         );
       } else if (hidden != null) {
@@ -435,6 +447,7 @@ enum _ContentPartType {
   image,
   video,
   music,
+  thread,
   markdown,
   link,
   hidden,
@@ -451,6 +464,148 @@ class _ContentPart {
     required this.value,
     this.extra,
   });
+}
+
+class _InlineThreadCard extends StatefulWidget {
+  final String dvCode;
+
+  const _InlineThreadCard({required this.dvCode});
+
+  @override
+  State<_InlineThreadCard> createState() => _InlineThreadCardState();
+}
+
+class _InlineThreadCardState extends State<_InlineThreadCard> {
+  late Future<Map<String, dynamic>?> _threadFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _threadFuture = _loadThread();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineThreadCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dvCode != widget.dvCode) {
+      _threadFuture = _loadThread();
+    }
+  }
+
+  Future<Map<String, dynamic>?> _loadThread() async {
+    final result = await ApiClient.instance.get(
+      'threads/embed',
+      query: {'dv_code': widget.dvCode},
+    );
+    if (!result.success || result.data is! Map<String, dynamic>) return null;
+    return result.data as Map<String, dynamic>;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _threadFuture,
+      builder: (context, snapshot) {
+        final thread = snapshot.data;
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final threadId = int.tryParse(thread?['id']?.toString() ?? '') ?? 0;
+        final title = thread?['title']?.toString() ?? '帖子不可用';
+        final summary = thread?['summary']?.toString() ?? '';
+        final cover = thread?['cover']?.toString() ?? '';
+        final author = thread?['author_name']?.toString() ?? '';
+
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.card(context),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border(context)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: threadId > 0 ? () => context.push('/thread/$threadId') : null,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: loading
+                  ? const SizedBox(
+                      height: 48,
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (cover.isNotEmpty) ...[
+                          SafeNetworkImage(
+                            url: cover,
+                            width: 82,
+                            height: 62,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          const SizedBox(width: 10),
+                        ] else ...[
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.inputFill(context),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.article_outlined),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (summary.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  summary,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary(context),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 5),
+                              Text(
+                                author.isEmpty
+                                    ? widget.dvCode
+                                    : '$author · ${widget.dvCode}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (threadId > 0)
+                          const Icon(Icons.chevron_right_rounded, size: 20),
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _InlineMusicPlayer extends ConsumerStatefulWidget {

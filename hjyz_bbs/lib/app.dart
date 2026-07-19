@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/services/notification_service.dart';
+import 'core/utils/deep_link_helper.dart';
 import 'features/auth/auth_controller.dart';
 import 'router.dart';
 
@@ -30,6 +31,8 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
     with WidgetsBindingObserver {
   bool _wasLoggedIn = false;
   StreamSubscription<Uri>? _linkSub;
+  String? _pendingDeepLink;
+  bool _deepLinkNavigationScheduled = false;
 
   @override
   void initState() {
@@ -56,23 +59,41 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
   void _initDeepLinks() {
     final appLinks = AppLinks();
 
-    // 处理冷启动时的 deep link
-    appLinks.getInitialLink().then((uri) {
-      if (uri != null) _handleLink(uri);
-    });
+    _loadInitialLink(appLinks);
 
-    // 监听运行时的 deep link
     _linkSub = appLinks.uriLinkStream.listen((uri) {
       _handleLink(uri);
-    });
+    }, onError: (_) {});
+  }
+
+  Future<void> _loadInitialLink(AppLinks appLinks) async {
+    try {
+      final uri = await appLinks.getInitialLink();
+      if (uri != null) _handleLink(uri);
+    } catch (_) {}
   }
 
   void _handleLink(Uri uri) {
-    if (uri.scheme != 'hyjzbbs') return;
+    final location = DeepLinkHelper.locationFor(uri);
+    if (location == null) return;
 
-    // hyjzbbs://thread/123
-    final path = '/${uri.host}${uri.path}';
-    router.push(path);
+    _pendingDeepLink = location;
+    if (_deepLinkNavigationScheduled) return;
+
+    _deepLinkNavigationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deepLinkNavigationScheduled = false;
+      if (!mounted) return;
+
+      final target = _pendingDeepLink;
+      _pendingDeepLink = null;
+      if (target == null) return;
+
+      final currentLocation = router.routeInformationProvider.value.uri.path;
+      if (currentLocation != target) {
+        router.push(target);
+      }
+    });
   }
 
   Future<void> _initNotifications() async {

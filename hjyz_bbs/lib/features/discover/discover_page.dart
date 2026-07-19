@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_controller.dart';
 
-class DiscoverPage extends StatelessWidget {
+class DiscoverPage extends ConsumerWidget {
   const DiscoverPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authControllerProvider).user;
+    final groupId = int.tryParse(user?['group_id']?.toString() ?? '') ?? 0;
     final items = [
       _ToolItem(
         icon: Icons.cloud_download_outlined,
@@ -19,6 +23,12 @@ class DiscoverPage extends StatelessWidget {
         label: '音乐播放器',
         onTap: () => context.push('/music-player'),
       ),
+      if (groupId == 99)
+        _ToolItem(
+          icon: Icons.folder_copy_outlined,
+          label: '文件管理',
+          onTap: () => context.push('/admin/files'),
+        ),
       _ToolItem(
         icon: Icons.local_fire_department_outlined,
         label: '热门话题',

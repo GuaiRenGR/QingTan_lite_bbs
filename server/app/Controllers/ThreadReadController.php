@@ -263,6 +263,55 @@ class ThreadReadController
         self::detail();
     }
 
+    public static function embed()
+    {
+        $dvCode = trim(\Request::str('dv_code'));
+        if (!\DvCode::isValid($dvCode)) {
+            \Response::json(422, 'DV 码格式错误');
+        }
+
+        $threads = \Database::table('threads');
+        $users = \Database::table('users');
+        $thread = \Database::fetch(
+            "SELECT t.id, t.user_id, t.dv_code, t.title, t.content, t.cover,
+                    t.visibility, t.status, t.created_at,
+                    COALESCE(u.nickname, u.username, '用户') AS author_name
+             FROM {$threads} t
+             LEFT JOIN {$users} u ON u.id = t.user_id
+             WHERE t.dv_code = ? AND t.status = 1
+             LIMIT 1",
+            [$dvCode]
+        );
+
+        if (!$thread) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        $viewer = \Auth::user();
+        $viewerId = $viewer ? (int)$viewer['id'] : 0;
+        $isOwner = $viewerId > 0 && $viewerId === (int)$thread['user_id'];
+        $isReviewer = $viewer && \SiteSetting::isReviewer($viewer);
+        $isAdmin = $viewer && \SiteSetting::isAdmin($viewer);
+        $visibility = $thread['visibility'] ?? 'public';
+
+        if ($visibility === 'private' && !$isOwner && !$isAdmin) {
+            \Response::json(404, '帖子不存在');
+        }
+        if (in_array($visibility, ['pending', 'locked'], true) && !$isOwner && !$isReviewer) {
+            \Response::json(404, '帖子不存在');
+        }
+
+        \Response::success([
+            'id' => (int)$thread['id'],
+            'dv_code' => $thread['dv_code'],
+            'title' => $thread['title'],
+            'summary' => make_summary($thread['content'], 100),
+            'cover' => $thread['cover'] ?? '',
+            'author_name' => $thread['author_name'],
+            'created_at' => $thread['created_at'],
+        ]);
+    }
+
     public static function following()
     {
         $user = \Auth::requireLogin();
