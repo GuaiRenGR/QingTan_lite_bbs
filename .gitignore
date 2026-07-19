@@ -4,4 +4,6 @@ setup/轻坛-cache/part1/轻坛1.cab
 setup/轻坛-cache/part1/output-info.ini
 setup/轻坛-SetupFiles/轻坛.exe
 server/server.zip
+server/config/onedrive.local.php
+server/cache/onedrive_token.json
 .opencode/plans/多服务端部署方案.md

@@ -67,9 +67,15 @@ flutter run
 
 ### 服务端
 
-1. 配置 `server/config/` 下的数据库与 OneDrive
-2. 运行 `server/install.php` 初始化数据库
-3. 部署 `server/` 到 PHP 环境
+1. 配置 `server/config/` 下的数据库
+2. 复制 `server/config/onedrive.local.example.php` 为
+   `server/config/onedrive.local.php`，填写 OneDrive 凭据；也可使用
+   `ONEDRIVE_CLIENT_ID`、`ONEDRIVE_CLIENT_SECRET`、
+   `ONEDRIVE_REFRESH_TOKEN` 等环境变量
+3. 运行 `server/install.php` 初始化数据库
+4. 部署 `server/` 到 PHP 环境
+
+`onedrive.local.php` 和 `cache/onedrive_token.json` 已被 Git 忽略，禁止将真实凭据写入其他受版本控制的文件。
 
 ## 版本
 
