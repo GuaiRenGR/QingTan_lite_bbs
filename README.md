@@ -80,8 +80,11 @@ flutter run
 已有站点升级附件文件管理功能时，部署后运行一次
 `server/upgrade_version_1_1_8.php`，成功后立即删除该脚本。
 
+升级 1.1.9 时，再运行一次 `server/upgrade_version_1_1_9.php`，
+该脚本会保存旧 DV 别名、重新生成全部帖子 DV，并创建音乐歌单数据表，成功后立即删除。
+
 `onedrive.local.php` 和 `cache/onedrive_token.json` 已被 Git 忽略，禁止将真实凭据写入其他受版本控制的文件。
 
 ## 版本
 
-当前版本：1.1.8+23
+当前版本：1.1.9+24

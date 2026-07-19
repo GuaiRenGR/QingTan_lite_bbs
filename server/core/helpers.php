@@ -161,13 +161,17 @@ function sanitize_forum_content($content)
     }, $content);
 
     $content = preg_replace_callback('/\[music=([^\]]+)\]/i', function ($m) {
-        $url = normalize_forum_media_url($m[1]);
+        $values = preg_split('/[,|]/', $m[1], 2);
+        $url = normalize_forum_media_url($values[0] ?? '');
 
         if ($url === '') {
             return '';
         }
 
-        return '[music=' . $url . ']';
+        $lyricsUrl = normalize_forum_media_url($values[1] ?? '');
+        return $lyricsUrl === ''
+            ? '[music=' . $url . ']'
+            : '[music=' . $url . ',' . $lyricsUrl . ']';
     }, $content);
 
     $content = preg_replace_callback('/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/i', function ($m) {

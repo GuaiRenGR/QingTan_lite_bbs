@@ -11,6 +11,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/emoji/emoji_data.dart';
 import '../../../core/services/download_service.dart';
+import '../../../core/services/music_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
@@ -101,7 +102,7 @@ class ForumContentView extends StatelessWidget {
         return ForumVideoPlayer(url: part.value);
 
       case _ContentPartType.music:
-        return _InlineMusicPlayer(url: part.value);
+        return _InlineMusicPlayer(url: part.value, lyricsUrl: part.extra);
 
       case _ContentPartType.thread:
         return _InlineThreadCard(dvCode: part.value);
@@ -327,7 +328,7 @@ class ForumContentView extends StatelessWidget {
       r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
       r'|(\[img=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
-      r'|(\[music=((?:https?:\/\/|\/)[^\]\s]+)\])'
+      r'|(\[music=((?:https?:\/\/|\/)[^\]]+)\])'
       r'|(\[thread=([^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
@@ -384,10 +385,26 @@ class ForumContentView extends StatelessWidget {
           ),
         );
       } else if (music != null) {
+        final commaIndex = music.indexOf(',');
+        final pipeIndex = music.indexOf('|');
+        final separators = [commaIndex, pipeIndex].where((index) => index >= 0);
+        final separatorIndex = separators.isEmpty
+            ? -1
+            : separators.reduce((left, right) => left < right ? left : right);
+        final musicUrl = (separatorIndex < 0
+                ? music
+                : music.substring(0, separatorIndex))
+            .trim();
+        final lyricsUrl = separatorIndex < 0
+            ? ''
+            : music.substring(separatorIndex + 1).trim();
         result.add(
           _ContentPart(
             type: _ContentPartType.music,
-            value: music.trim(),
+            value: ApiClient.instance.resolveUrl(musicUrl),
+            extra: lyricsUrl.isEmpty
+                ? null
+                : ApiClient.instance.resolveUrl(lyricsUrl),
           ),
         );
       } else if (thread != null) {
@@ -477,6 +494,7 @@ class _InlineThreadCard extends StatefulWidget {
 
 class _InlineThreadCardState extends State<_InlineThreadCard> {
   late Future<Map<String, dynamic>?> _threadFuture;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -488,17 +506,38 @@ class _InlineThreadCardState extends State<_InlineThreadCard> {
   void didUpdateWidget(covariant _InlineThreadCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.dvCode != widget.dvCode) {
+      _errorMessage = '';
       _threadFuture = _loadThread();
     }
   }
 
   Future<Map<String, dynamic>?> _loadThread() async {
-    final result = await ApiClient.instance.get(
-      'threads/embed',
-      query: {'dv_code': widget.dvCode},
-    );
-    if (!result.success || result.data is! Map<String, dynamic>) return null;
-    return result.data as Map<String, dynamic>;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final result = await ApiClient.instance.get(
+        'threads/embed',
+        query: {'dv_code': widget.dvCode},
+      );
+      if (result.success && result.data is Map<String, dynamic>) {
+        return result.data as Map<String, dynamic>;
+      }
+
+      _errorMessage = result.message;
+      final retryable = result.code == null ||
+          result.code == -1 ||
+          (result.code != null && result.code! >= 500);
+      if (!retryable || attempt == 2) break;
+      await Future<void>.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+    }
+
+    return null;
+  }
+
+  void _retry() {
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = '';
+      _threadFuture = _loadThread();
+    });
   }
 
   @override
@@ -509,8 +548,13 @@ class _InlineThreadCardState extends State<_InlineThreadCard> {
         final thread = snapshot.data;
         final loading = snapshot.connectionState == ConnectionState.waiting;
         final threadId = int.tryParse(thread?['id']?.toString() ?? '') ?? 0;
-        final title = thread?['title']?.toString() ?? '帖子不可用';
-        final summary = thread?['summary']?.toString() ?? '';
+        final failed = !loading && thread == null;
+        final title = thread?['title']?.toString() ??
+            (failed && _errorMessage == '帖子不存在'
+                ? '帖子不可用'
+                : '加载失败，点击重试');
+        final summary = thread?['summary']?.toString() ??
+            (failed ? _errorMessage : '');
         final cover = thread?['cover']?.toString() ?? '';
         final author = thread?['author_name']?.toString() ?? '';
 
@@ -523,7 +567,11 @@ class _InlineThreadCardState extends State<_InlineThreadCard> {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: threadId > 0 ? () => context.push('/thread/$threadId') : null,
+            onTap: threadId > 0
+                ? () => context.push('/thread/$threadId')
+                : failed
+                    ? _retry
+                    : null,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: loading
@@ -610,8 +658,9 @@ class _InlineThreadCardState extends State<_InlineThreadCard> {
 
 class _InlineMusicPlayer extends ConsumerStatefulWidget {
   final String url;
+  final String? lyricsUrl;
 
-  const _InlineMusicPlayer({required this.url});
+  const _InlineMusicPlayer({required this.url, this.lyricsUrl});
 
   @override
   ConsumerState<_InlineMusicPlayer> createState() => _InlineMusicPlayerState();
@@ -620,17 +669,19 @@ class _InlineMusicPlayer extends ConsumerStatefulWidget {
 class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   Uint8List? _coverArt;
   String _resolvedFilename = '';
-  late final String _resolvedUrl;
+  late String _resolvedUrl;
+  String? _resolvedLyricsUrl;
 
   MusicTrack get _track => MusicTrack(
         url: _resolvedUrl,
         title: _filename,
         coverArt: _coverArt,
+        lyricsUrl: _resolvedLyricsUrl,
       );
 
   String get _filename {
     if (_resolvedFilename.isNotEmpty) {
-      final resolved = _withoutExtension(_resolvedFilename);
+      final resolved = _resolvedFilename.trim();
       if (resolved.isNotEmpty && resolved.toLowerCase() != 'index') {
         return resolved;
       }
@@ -666,189 +717,46 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   @override
   void initState() {
     super.initState();
-    _resolvedUrl = ApiClient.instance.resolveUrl(widget.url);
+    _resolveUrls();
     _syncTrack();
-    _loadFilename();
-    _fetchCoverArt();
+    _loadCachedMetadata();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineMusicPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url || oldWidget.lyricsUrl != widget.lyricsUrl) {
+      _coverArt = null;
+      _resolvedFilename = '';
+      _resolveUrls();
+      _syncTrack();
+      _loadCachedMetadata();
+    }
+  }
+
+  void _resolveUrls() {
+    _resolvedUrl = MusicCacheService.instance.resolveUrl(widget.url);
+    final lyricsUrl = widget.lyricsUrl?.trim() ?? '';
+    _resolvedLyricsUrl = lyricsUrl.isEmpty
+        ? null
+        : MusicCacheService.instance.resolveUrl(lyricsUrl);
+  }
+
+  Future<void> _loadCachedMetadata() async {
+    final expectedUrl = _resolvedUrl;
+    final metadata = await MusicCacheService.instance.loadMetadata(expectedUrl);
+    if (!mounted || expectedUrl != _resolvedUrl) return;
+    setState(() {
+      _coverArt = metadata.coverArt;
+      _resolvedFilename = metadata.title;
+    });
+    _syncTrack();
   }
 
   void _syncTrack() {
     ref.read(musicPlayerProvider.notifier).upsertTrack(_track);
   }
 
-  Future<void> _loadFilename() async {
-    final uri = Uri.tryParse(widget.url);
-    if (uri == null || uri.queryParameters['route'] != 'file/resolve') return;
-
-    final id = int.tryParse(uri.queryParameters['id'] ?? '') ?? 0;
-    if (id <= 0) return;
-
-    try {
-      final result = await ApiClient.instance.get(
-        'upload/info',
-        query: {'id': id},
-      );
-      if (!result.success || result.data is! Map<String, dynamic>) return;
-
-      final name = (result.data as Map<String, dynamic>)['name']?.toString().trim();
-      if (mounted && name != null && name.isNotEmpty) {
-        setState(() => _resolvedFilename = name);
-        _syncTrack();
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _fetchCoverArt() async {
-    try {
-      final resp = await ApiClient.instance.rawGet(
-        _resolvedUrl,
-        headers: {'Range': 'bytes=0-9'},
-      );
-      if (resp.statusCode != 206 && resp.statusCode != 200) return;
-      final header = resp.data ?? [];
-      if (header.length < 10) return;
-      if (header[0] != 0x49 || header[1] != 0x44 || header[2] != 0x33) return;
-
-      int tagSize = 0;
-      for (int i = 6; i < 10; i++) {
-        tagSize = (tagSize << 7) | (header[i] & 0x7F);
-      }
-      if (tagSize <= 0) return;
-      if (tagSize > 1024 * 1024) tagSize = 1024 * 1024;
-
-      List<int> tagData;
-      if (header.length >= 10 + tagSize) {
-        tagData = header;
-      } else {
-        final tagResp = await ApiClient.instance.rawGet(
-          _resolvedUrl,
-          headers: {'Range': 'bytes=0-${9 + tagSize}'},
-        );
-        if (tagResp.statusCode != 206 && tagResp.statusCode != 200) return;
-        tagData = tagResp.data ?? [];
-      }
-      if (tagData.length < 10) return;
-
-      final cover = _extractApic(tagData, 10, tagSize);
-      if (cover != null && mounted) {
-        setState(() => _coverArt = cover);
-        _syncTrack();
-      }
-    } catch (_) {}
-  }
-
-  Uint8List? _extractApic(List<int> data, int offset, int tagSize) {
-    if (data.length < 10) return null;
-
-    final expectedEnd = offset + tagSize;
-    final end = expectedEnd < data.length ? expectedEnd : data.length;
-    int pos = offset;
-    final versionMajor = data[3];
-
-    if ((data[5] & 0x40) != 0 && pos + 4 <= end) {
-      final extendedSize = versionMajor >= 4
-          ? _readSyncSafeInt(data, pos)
-          : _readBigEndianInt(data, pos);
-      pos += versionMajor >= 4 ? extendedSize : extendedSize + 4;
-    }
-
-    if (versionMajor == 2) {
-      return _extractId3v22Cover(data, pos, end);
-    }
-
-    while (pos + 10 <= end) {
-      final frameId = String.fromCharCodes(data.sublist(pos, pos + 4));
-      final frameSize = versionMajor >= 4
-          ? _readSyncSafeInt(data, pos + 4)
-          : _readBigEndianInt(data, pos + 4);
-      if (frameSize <= 0) break;
-
-      final frameStart = pos + 10;
-      final frameEnd = frameStart + frameSize;
-      if (frameEnd > end) break;
-
-      if (frameId == 'APIC') {
-        final frameData = data.sublist(frameStart, frameEnd);
-        if (frameData.length < 2) break;
-
-        int apicOffset = 1;
-        while (apicOffset < frameData.length && frameData[apicOffset] != 0) {
-          apicOffset++;
-        }
-        apicOffset++;
-        if (apicOffset >= frameData.length) break;
-
-        apicOffset++;
-        if (apicOffset >= frameData.length) break;
-
-        return _extractPictureBytes(frameData, apicOffset);
-      }
-
-      pos += 10 + frameSize;
-    }
-    return null;
-  }
-
-  Uint8List? _extractId3v22Cover(List<int> data, int offset, int end) {
-    int pos = offset;
-    while (pos + 6 <= end) {
-      final frameId = String.fromCharCodes(data.sublist(pos, pos + 3));
-      final frameSize =
-          (data[pos + 3] << 16) | (data[pos + 4] << 8) | data[pos + 5];
-      if (frameSize <= 0) break;
-
-      final frameStart = pos + 6;
-      final frameEnd = frameStart + frameSize;
-      if (frameEnd > end) break;
-
-      if (frameId == 'PIC') {
-        final frameData = data.sublist(frameStart, frameEnd);
-        if (frameData.length <= 5) return null;
-        return _extractPictureBytes(frameData, 5);
-      }
-
-      pos = frameEnd;
-    }
-    return null;
-  }
-
-  Uint8List? _extractPictureBytes(List<int> frameData, int offset) {
-    if (frameData.isEmpty || offset >= frameData.length) return null;
-
-    final encoding = frameData[0];
-    int pictureOffset = offset;
-    if (encoding == 0x00 || encoding == 0x03) {
-      while (pictureOffset < frameData.length && frameData[pictureOffset] != 0) {
-        pictureOffset++;
-      }
-      pictureOffset++;
-    } else {
-      while (pictureOffset + 1 < frameData.length &&
-          !(frameData[pictureOffset] == 0 && frameData[pictureOffset + 1] == 0)) {
-        pictureOffset += 2;
-      }
-      pictureOffset += 2;
-    }
-
-    if (pictureOffset >= frameData.length) return null;
-    return Uint8List.fromList(frameData.sublist(pictureOffset));
-  }
-
-  int _readBigEndianInt(List<int> data, int offset) {
-    if (offset + 4 > data.length) return 0;
-    return (data[offset] << 24) |
-        (data[offset + 1] << 16) |
-        (data[offset + 2] << 8) |
-        data[offset + 3];
-  }
-
-  int _readSyncSafeInt(List<int> data, int offset) {
-    if (offset + 4 > data.length) return 0;
-    return ((data[offset] & 0x7F) << 21) |
-        ((data[offset + 1] & 0x7F) << 14) |
-        ((data[offset + 2] & 0x7F) << 7) |
-        (data[offset + 3] & 0x7F);
-  }
 
   Future<void> _openPlayer() async {
     await ref.read(musicPlayerProvider.notifier).selectTrack(_track);

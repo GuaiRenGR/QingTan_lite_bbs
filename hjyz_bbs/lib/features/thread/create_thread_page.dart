@@ -406,33 +406,146 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   Future<void> _pickAndUploadMusic() async {
     if (uploadingMusic) return;
 
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: [
-        'mp3',
-        'm4a',
-        'aac',
-        'wav',
-        'ogg',
-        'flac',
-      ],
-      allowMultiple: false,
+    File? musicFile;
+    File? lyricsFile;
+    String musicName = '';
+    String lyricsName = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickMusic() async {
+              final picked = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: [
+                  'mp3',
+                  'm4a',
+                  'aac',
+                  'wav',
+                  'ogg',
+                  'flac',
+                ],
+                allowMultiple: false,
+              );
+              final file = picked == null || picked.files.isEmpty
+                  ? null
+                  : picked.files.single;
+              if (file?.path == null || !dialogContext.mounted) return;
+              setDialogState(() {
+                musicFile = File(file!.path!);
+                musicName = file.name;
+              });
+            }
+
+            Future<void> pickLyrics() async {
+              final picked = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: ['lrc'],
+                allowMultiple: false,
+              );
+              final file = picked == null || picked.files.isEmpty
+                  ? null
+                  : picked.files.single;
+              if (file?.path == null || !dialogContext.mounted) return;
+              setDialogState(() {
+                lyricsFile = File(file!.path!);
+                lyricsName = file.name;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('上传音乐'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.audio_file_rounded),
+                      title: const Text('音乐文件'),
+                      subtitle: Text(musicName.isEmpty ? '请选择音乐文件' : musicName),
+                      trailing: OutlinedButton(
+                        onPressed: pickMusic,
+                        child: const Text('选择'),
+                      ),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.lyrics_outlined),
+                      title: const Text('歌词文件（可选）'),
+                      subtitle: Text(lyricsName.isEmpty ? '支持任意名称的 LRC 文件' : lyricsName),
+                      trailing: OutlinedButton(
+                        onPressed: pickLyrics,
+                        child: const Text('选择'),
+                      ),
+                    ),
+                    if (lyricsFile != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => setDialogState(() {
+                            lyricsFile = null;
+                            lyricsName = '';
+                          }),
+                          child: const Text('移除歌词'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: musicFile == null
+                      ? null
+                      : () => Navigator.pop(dialogContext, true),
+                  child: const Text('开始上传'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
 
-    if (picked == null || picked.files.isEmpty) return;
-
-    final path = picked.files.single.path;
-
-    if (path == null || path.isEmpty) return;
+    if (confirmed != true || musicFile == null) return;
 
     setState(() {
       uploadingMusic = true;
     });
 
     try {
+      String lyricsUrl = '';
+      if (lyricsFile != null) {
+        final lyricsResult = await ApiClient.instance.uploadFile(
+          'upload/media',
+          file: lyricsFile!,
+          fields: {'type': 'lyrics'},
+        );
+        if (!mounted) return;
+        if (!lyricsResult.success || lyricsResult.data is! Map<String, dynamic>) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(lyricsResult.message)),
+          );
+          return;
+        }
+        final lyricsData = lyricsResult.data as Map<String, dynamic>;
+        lyricsUrl = ApiClient.instance.resolveUrl(
+          lyricsData['url']?.toString() ?? '',
+        );
+        final lyricsId = int.tryParse(lyricsData['id']?.toString() ?? '') ?? 0;
+        if (lyricsId > 0) attachmentIds.add(lyricsId);
+      }
+
       final result = await ApiClient.instance.uploadFile(
         'upload/media',
-        file: File(path),
+        file: musicFile!,
         fields: {
           'type': 'music',
         },
@@ -453,10 +566,14 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         final url = ApiClient.instance.resolveUrl(
           data['url']?.toString() ?? '',
         );
+        final musicId = int.tryParse(data['id']?.toString() ?? '') ?? 0;
+        if (musicId > 0) attachmentIds.add(musicId);
 
         if (url.isNotEmpty) {
           final old = contentController.text;
-          final insert = '\n[music=$url]\n';
+          final insert = lyricsUrl.isEmpty
+              ? '\n[music=$url]\n'
+              : '\n[music=$url,$lyricsUrl]\n';
 
           contentController.text = old + insert;
           contentController.selection = TextSelection.fromPosition(

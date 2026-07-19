@@ -76,7 +76,7 @@ function bbcode_to_html($text) {
     $text = htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
     $text = preg_replace('/\[img=(https?:\/\/[^\]]+)\]/i', '<img src="$1" alt="图片" loading="lazy">', $text);
     $text = preg_replace('/\[video=(https?:\/\/[^\]]+)\]/i', '<a href="$1" target="_blank" rel="noopener" class="video-link">查看视频</a>', $text);
-    $text = preg_replace('/\[music=(https?:\/\/[^\]]+)\]/i', '<a href="$1" target="_blank" rel="noopener" class="music-link">查看音频</a>', $text);
+    $text = preg_replace('/\[music=(https?:\/\/[^,|\]]+)(?:[,|][^\]]+)?\]/i', '<a href="$1" target="_blank" rel="noopener" class="music-link">查看音频</a>', $text);
     $text = preg_replace('/\[url=(https?:\/\/[^\]]+)\]([\s\S]*?)\[\/url\]/i', '<a href="$1" target="_blank" rel="noopener">$2</a>', $text);
     $text = preg_replace('/\[hide\][\s\S]*?\[\/hide\]/i', '<span class="hidden-text">隐藏内容，请在App中查看</span>', $text);
     $text = preg_replace('/\[thread=([^\]]+)\]/i', '<span class="thread-link">帖子链接: $1</span>', $text);

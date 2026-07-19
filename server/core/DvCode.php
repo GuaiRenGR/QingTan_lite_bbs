@@ -5,16 +5,18 @@
  *
  * 将帖子数字 ID 编码为 DV + 8位混合字符的唯一标识
  * 字符集：大小写字母+数字，去除易混淆字符 0/O/o/I/l/1
- * 保留：23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz（54字符）
+ * 保留：23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz（55字符）
  */
 class DvCode
 {
-    // 54 字符集（大小写敏感）
+    // 字符集（大小写敏感）
     private const CHARSET = '23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
-    private const BASE = 54;
+    private const BASE = 55;
     private const CODE_LEN = 8;
-    // 混淆盐（XOR），不影响唯一性，仅防止连续 ID 可预测
-    private const SALT = 0xA3B7C9D1;
+    private const SPACE = 83733937890625;
+    private const MULTIPLIER = 32020345226239;
+    private const OFFSET = 17320508075688;
+    private const MULTIPLIER_INVERSE = 49350892233409;
 
     private static $reverseMap = null;
 
@@ -41,16 +43,18 @@ class DvCode
             return '';
         }
 
-        $obfuscated = $id ^ self::SALT;
-        $chars = '';
-        $charset = self::CHARSET;
+        $value = self::mix($id);
+        return 'DV' . self::encodeValue($value);
+    }
 
-        for ($i = 0; $i < self::CODE_LEN; $i++) {
-            $chars = $charset[$obfuscated % self::BASE] . $chars;
-            $obfuscated = intdiv($obfuscated, self::BASE);
+    public static function encodeVariant(int $id, int $attempt): string
+    {
+        if ($id <= 0) {
+            return '';
         }
 
-        return 'DV' . $chars;
+        $value = (self::mix($id) + ($attempt * 7919)) % self::SPACE;
+        return 'DV' . self::encodeValue($value);
     }
 
     /**
@@ -65,7 +69,54 @@ class DvCode
             return 0;
         }
 
-        $chars = substr($code, 2);
+        $value = self::decodeValue(substr($code, 2));
+        $normalized = $value - self::OFFSET;
+        if ($normalized < 0) {
+            $normalized += self::SPACE;
+        }
+
+        return self::multiplyMod(
+            $normalized,
+            self::MULTIPLIER_INVERSE,
+            self::SPACE
+        );
+    }
+
+    /**
+     * 验证新 DV 码格式是否合法（大小写敏感）
+     */
+    public static function isValid(string $code): bool
+    {
+        $code = trim($code);
+        return (bool)preg_match(
+            '/^DV[' . preg_quote(self::CHARSET, '/') . ']{8}$/D',
+            $code
+        );
+    }
+
+    public static function isLookupSafe(string $code): bool
+    {
+        return (bool)preg_match('/^DV[0-9A-Za-z]{6,32}$/D', trim($code));
+    }
+
+    private static function mix(int $id): int
+    {
+        return (self::multiplyMod($id, self::MULTIPLIER, self::SPACE)
+            + self::OFFSET) % self::SPACE;
+    }
+
+    private static function encodeValue(int $value): string
+    {
+        $chars = '';
+        for ($i = 0; $i < self::CODE_LEN; $i++) {
+            $chars = self::CHARSET[$value % self::BASE] . $chars;
+            $value = intdiv($value, self::BASE);
+        }
+        return $chars;
+    }
+
+    private static function decodeValue(string $chars): int
+    {
         $map = self::getReverseMap();
         $result = 0;
 
@@ -76,16 +127,22 @@ class DvCode
             $result = $result * self::BASE + $map[$chars[$i]];
         }
 
-        return ($result ^ self::SALT);
+        return $result;
     }
 
-    /**
-     * 验证格式是否合法（大小写敏感）
-     * 必须是 DV + 8个合法字符
-     */
-    public static function isValid(string $code): bool
+    private static function multiplyMod(int $left, int $right, int $mod): int
     {
-        $code = trim($code);
-        return (bool)preg_match('/^DV[2-9A-HJ-NP-Za-hj-np-z]{8}$/', $code);
+        $result = 0;
+        $left %= $mod;
+
+        while ($right > 0) {
+            if (($right % 2) === 1) {
+                $result = ($result + $left) % $mod;
+            }
+            $left = ($left * 2) % $mod;
+            $right = intdiv($right, 2);
+        }
+
+        return $result;
     }
 }

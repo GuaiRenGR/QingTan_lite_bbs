@@ -145,6 +145,7 @@ function createTables(PDO $pdo, string $prefix)
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `forum_id` INT NOT NULL,
       `user_id` BIGINT UNSIGNED NOT NULL,
+      `dv_code` VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
       `type` VARCHAR(20) NOT NULL DEFAULT 'normal',
       `title` VARCHAR(120) NOT NULL,
       `summary` VARCHAR(255) DEFAULT NULL,
@@ -167,9 +168,22 @@ function createTables(PDO $pdo, string $prefix)
       `created_at` DATETIME NOT NULL,
       `updated_at` DATETIME DEFAULT NULL,
       PRIMARY KEY (`id`),
+      UNIQUE KEY `idx_dv_code` (`dv_code`),
       KEY `idx_forum_status_time` (`forum_id`, `status`, `created_at`),
       KEY `idx_user_status_time` (`user_id`, `status`, `created_at`),
       KEY `idx_feed` (`status`, `is_top`, `is_digest`, `last_reply_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}thread_dv_aliases` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `thread_id` BIGINT UNSIGNED NOT NULL,
+      `dv_code` VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+      `created_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_dv_code` (`dv_code`),
+      KEY `idx_thread_id` (`thread_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 
@@ -229,6 +243,44 @@ function createTables(PDO $pdo, string $prefix)
       PRIMARY KEY (`id`),
       UNIQUE KEY `uk_user_date` (`user_id`, `checkin_date`),
       KEY `idx_date` (`checkin_date`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}music_playlists` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `name` VARCHAR(100) NOT NULL,
+      `description` VARCHAR(500) DEFAULT NULL,
+      `cover_url` VARCHAR(1000) DEFAULT NULL,
+      `default_key` BIGINT UNSIGNED DEFAULT NULL,
+      `is_default` TINYINT NOT NULL DEFAULT 0,
+      `status` TINYINT NOT NULL DEFAULT 1,
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_default_key` (`default_key`),
+      KEY `idx_user_status` (`user_id`, `status`, `is_default`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}music_playlist_tracks` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `playlist_id` BIGINT UNSIGNED NOT NULL,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `music_key` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+      `music_url` VARCHAR(1000) NOT NULL,
+      `lyrics_url` VARCHAR(1000) DEFAULT NULL,
+      `title` VARCHAR(255) NOT NULL,
+      `sort_order` INT NOT NULL DEFAULT 0,
+      `status` TINYINT NOT NULL DEFAULT 1,
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_playlist_music` (`playlist_id`, `music_key`),
+      KEY `idx_user_time` (`user_id`, `created_at`),
+      KEY `idx_playlist_sort` (`playlist_id`, `status`, `sort_order`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

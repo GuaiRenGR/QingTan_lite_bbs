@@ -13,7 +13,7 @@ class UploadController
             $type = 'image';
         }
         $type = trim($type);
-        if (!in_array($type, ['image', 'music', 'video', 'attachment'], true)) {
+        if (!in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment'], true)) {
             $type = 'image';
         }
 
@@ -41,6 +41,10 @@ class UploadController
             }
         } elseif ($type === 'attachment') {
             // 管理员上传附件不限制大小
+        } elseif ($type === 'lyrics') {
+            if ($size > 2 * 1024 * 1024) {
+                \Response::json(422, '歌词文件不能超过 2MB');
+            }
         } else {
             if ($size > intval($config['max_music_size'])) {
                 \Response::json(422, '音乐不能超过 ' . intval($config['max_music_size'] / 1024 / 1024) . 'MB');
@@ -73,6 +77,16 @@ class UploadController
             ], true)) {
                 \Response::json(422, '不支持的音乐格式');
             }
+        } elseif ($type === 'lyrics') {
+            if (!in_array($mime, [
+                'text/plain',
+                'application/octet-stream',
+            ], true)) {
+                \Response::json(422, '仅支持 LRC 歌词文件');
+            }
+            if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'lrc') {
+                \Response::json(422, '歌词文件扩展名必须为 .lrc');
+            }
         } elseif ($type === 'video') {
             if (!in_array($mime, [
                 'video/mp4',
@@ -89,7 +103,11 @@ class UploadController
         try {
             $service = new \OneDriveService();
 
-            $uploadType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : ($type === 'attachment' ? 'attachments' : 'music'));
+            $uploadType = $type === 'image'
+                ? 'images'
+                : ($type === 'video'
+                    ? 'video'
+                    : ($type === 'attachment' ? 'attachments' : 'music'));
 
             $result = $service->upload(
                 $tmp,
@@ -182,6 +200,7 @@ class UploadController
             'wav'  => 'audio/wav',
             'ogg'  => 'audio/ogg',
             'flac' => 'audio/flac',
+            'lrc' => 'text/plain',
             'mp4'  => 'video/mp4',
             'webm' => 'video/webm',
             'mov'  => 'video/quicktime',

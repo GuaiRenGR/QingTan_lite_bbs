@@ -167,6 +167,14 @@ try {
             App\Controllers\AttachmentController::info();
             break;
 
+        case 'music/playlists/default':
+            App\Controllers\MusicPlaylistController::defaultPlaylist();
+            break;
+
+        case 'music/favorites/toggle':
+            App\Controllers\MusicPlaylistController::toggleFavorite();
+            break;
+
         case 'threads/detail':
             App\Controllers\ThreadReadController::detail();
             break;

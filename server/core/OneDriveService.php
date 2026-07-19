@@ -298,7 +298,7 @@ class OneDriveService
         $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
         $allowImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        $allowMusic = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'flac'];
+        $allowMusic = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'flac', 'lrc'];
 
         if ($type === 'images') {
             if (in_array($ext, $allowImage, true)) {
@@ -324,6 +324,7 @@ class OneDriveService
             if ($mime === 'audio/wav') return 'wav';
             if ($mime === 'audio/ogg') return 'ogg';
             if ($mime === 'audio/flac') return 'flac';
+            if ($mime === 'text/plain') return 'lrc';
 
             throw new Exception('不支持的音乐格式');
         }

@@ -244,30 +244,30 @@ class ThreadReadController
     {
         $dvCode = trim(\Request::str('dv_code'));
 
-        if (!\DvCode::isValid($dvCode)) {
+        if (!\DvCode::isLookupSafe($dvCode)) {
             \Response::json(422, 'DV 码格式错误');
         }
 
-        $threads = \Database::table('threads');
-        $thread = \Database::fetch(
-            "SELECT id FROM {$threads} WHERE dv_code = ? AND status = 1 LIMIT 1",
-            [$dvCode]
-        );
+        $threadId = self::findThreadIdByDv($dvCode);
 
-        if (!$thread) {
+        if ($threadId <= 0) {
             \Response::json(404, '帖子不存在');
         }
 
-        // 复用 detail 逻辑：设置 id 参数后调用 detail
-        $_GET['id'] = $thread['id'];
+        $_GET['id'] = $threadId;
         self::detail();
     }
 
     public static function embed()
     {
         $dvCode = trim(\Request::str('dv_code'));
-        if (!\DvCode::isValid($dvCode)) {
+        if (!\DvCode::isLookupSafe($dvCode)) {
             \Response::json(422, 'DV 码格式错误');
+        }
+
+        $threadId = self::findThreadIdByDv($dvCode);
+        if ($threadId <= 0) {
+            \Response::json(404, '帖子不存在');
         }
 
         $threads = \Database::table('threads');
@@ -278,9 +278,9 @@ class ThreadReadController
                     COALESCE(u.nickname, u.username, '用户') AS author_name
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
-             WHERE t.dv_code = ? AND t.status = 1
+             WHERE t.id = ? AND t.status = 1
              LIMIT 1",
-            [$dvCode]
+            [$threadId]
         );
 
         if (!$thread) {
@@ -310,6 +310,35 @@ class ThreadReadController
             'author_name' => $thread['author_name'],
             'created_at' => $thread['created_at'],
         ]);
+    }
+
+    private static function findThreadIdByDv($dvCode)
+    {
+        $threads = \Database::table('threads');
+        $thread = \Database::fetch(
+            "SELECT id FROM {$threads}
+             WHERE BINARY dv_code = ? AND status = 1
+             LIMIT 1",
+            [$dvCode]
+        );
+        if ($thread) {
+            return (int)$thread['id'];
+        }
+
+        try {
+            $aliases = \Database::table('thread_dv_aliases');
+            $alias = \Database::fetch(
+                "SELECT t.id
+                 FROM {$aliases} a
+                 INNER JOIN {$threads} t ON t.id = a.thread_id
+                 WHERE BINARY a.dv_code = ? AND t.status = 1
+                 LIMIT 1",
+                [$dvCode]
+            );
+            return $alias ? (int)$alias['id'] : 0;
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     public static function following()

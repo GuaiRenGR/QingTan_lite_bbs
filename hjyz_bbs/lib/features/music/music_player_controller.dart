@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/services/music_cache_service.dart';
+
 final musicPlayerProvider =
     StateNotifierProvider<MusicPlayerController, MusicPlayerState>((ref) {
   return MusicPlayerController();
@@ -15,11 +17,13 @@ class MusicTrack {
   final String url;
   final String title;
   final Uint8List? coverArt;
+  final String? lyricsUrl;
 
   const MusicTrack({
     required this.url,
     required this.title,
     this.coverArt,
+    this.lyricsUrl,
   });
 
   MusicTrack merge(MusicTrack other) {
@@ -30,6 +34,9 @@ class MusicTrack {
       url: url,
       title: nextTitle.isNotEmpty ? nextTitle : title,
       coverArt: other.coverArt ?? coverArt,
+      lyricsUrl: other.lyricsUrl?.trim().isNotEmpty == true
+          ? other.lyricsUrl
+          : lyricsUrl,
     );
   }
 
@@ -37,6 +44,7 @@ class MusicTrack {
     return {
       'url': url,
       'title': title,
+      'lyrics_url': lyricsUrl,
     };
   }
 
@@ -50,6 +58,9 @@ class MusicTrack {
     return MusicTrack(
       url: url,
       title: title.isEmpty ? '音乐' : title,
+      lyricsUrl: value['lyrics_url']?.toString().trim().isEmpty == true
+          ? null
+          : value['lyrics_url']?.toString().trim(),
     );
   }
 }
@@ -147,6 +158,9 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       url: url,
       title: track.title.trim().isEmpty ? '音乐' : track.title.trim(),
       coverArt: track.coverArt,
+      lyricsUrl: track.lyricsUrl?.trim().isEmpty == true
+          ? null
+          : track.lyricsUrl?.trim(),
     );
     final tracks = List<MusicTrack>.from(state.playlist);
     final index = tracks.indexWhere((item) => item.url == url);
@@ -294,10 +308,16 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         clearError: true,
       );
       _schedulePersist();
-      await _player.setUrl(track.url);
+      final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
+      if (cachedFile == null) {
+        await _player.setUrl(track.url);
+      } else {
+        await _player.setFilePath(cachedFile.path);
+      }
       _loadedUrl = track.url;
       if (mounted) state = state.copyWith(loading: false, clearError: true);
       if (autoplay) _startPlayback();
+      _preloadNext(index);
     } catch (_) {
       _loadedUrl = null;
       if (mounted) {
@@ -307,6 +327,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
           error: '音乐加载失败',
         );
       }
+    }
+  }
+
+  void _preloadNext(int currentIndex) {
+    if (state.playlist.length < 2) return;
+    final nextIndex = (currentIndex + 1) % state.playlist.length;
+    unawaited(
+      MusicCacheService.instance.preloadAudio(state.playlist[nextIndex].url),
+    );
+    final lyricsUrl = state.playlist[nextIndex].lyricsUrl;
+    if (lyricsUrl != null && lyricsUrl.isNotEmpty) {
+      unawaited(MusicCacheService.instance.loadLyrics(lyricsUrl));
     }
   }
 
