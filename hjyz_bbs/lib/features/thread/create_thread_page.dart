@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -410,6 +411,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     File? lyricsFile;
     String musicName = '';
     String lyricsName = '';
+    MusicMetadata? musicMetadata;
+    final songTitleController = TextEditingController();
+    final artistController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -432,9 +436,17 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   ? null
                   : picked.files.single;
               if (file?.path == null || !dialogContext.mounted) return;
+              final metadata = await MusicCacheService.instance.readLocalMetadata(
+                File(file!.path!),
+                fallbackTitle: file.name,
+              );
+              if (!dialogContext.mounted) return;
               setDialogState(() {
                 musicFile = File(file!.path!);
                 musicName = file.name;
+                musicMetadata = metadata;
+                songTitleController.text = metadata.title;
+                artistController.text = metadata.artist;
               });
             }
 
@@ -470,6 +482,15 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                         onPressed: pickMusic,
                         child: const Text('选择'),
                       ),
+                    ),
+                    TextField(
+                      controller: songTitleController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: '歌曲名'),
+                    ),
+                    TextField(
+                      controller: artistController,
+                      decoration: const InputDecoration(labelText: '歌手名（可选）'),
                     ),
                     const Divider(),
                     ListTile(
@@ -514,7 +535,11 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       },
     );
 
-    if (confirmed != true || musicFile == null) return;
+    if (confirmed != true || musicFile == null) {
+      songTitleController.dispose();
+      artistController.dispose();
+      return;
+    }
 
     setState(() {
       uploadingMusic = true;
@@ -522,6 +547,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
     try {
       String lyricsUrl = '';
+      String coverUrl = '';
       if (lyricsFile != null) {
         final lyricsResult = await ApiClient.instance.uploadFile(
           'upload/media',
@@ -539,8 +565,28 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         lyricsUrl = ApiClient.instance.resolveUrl(
           lyricsData['url']?.toString() ?? '',
         );
-        final lyricsId = int.tryParse(lyricsData['id']?.toString() ?? '') ?? 0;
-        if (lyricsId > 0) attachmentIds.add(lyricsId);
+      }
+
+      final cover = musicMetadata?.coverArt;
+      if (cover != null && cover.isNotEmpty) {
+        final coverFile = File(
+          '${Directory.systemTemp.path}/hjyz_music_cover_${DateTime.now().microsecondsSinceEpoch}.jpg',
+        );
+        try {
+          await coverFile.writeAsBytes(cover, flush: true);
+          final coverResult = await ApiClient.instance.uploadFile(
+            'upload/media',
+            file: coverFile,
+            fields: {'type': 'image'},
+          );
+          if (coverResult.success && coverResult.data is Map<String, dynamic>) {
+            coverUrl = ApiClient.instance.resolveUrl(
+              (coverResult.data as Map<String, dynamic>)['url']?.toString() ?? '',
+            );
+          }
+        } finally {
+          if (await coverFile.exists()) await coverFile.delete();
+        }
       }
 
       final result = await ApiClient.instance.uploadFile(
@@ -548,6 +594,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         file: musicFile!,
         fields: {
           'type': 'music',
+          'lyrics_url': lyricsUrl,
+          'cover_url': coverUrl,
+          'title': songTitleController.text.trim(),
+          'artist': artistController.text.trim(),
         },
       );
 
@@ -563,17 +613,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       final data = result.data;
 
       if (data is Map<String, dynamic>) {
-        final url = ApiClient.instance.resolveUrl(
-          data['url']?.toString() ?? '',
-        );
-        final musicId = int.tryParse(data['id']?.toString() ?? '') ?? 0;
-        if (musicId > 0) attachmentIds.add(musicId);
-
-        if (url.isNotEmpty) {
+        final uuid = data['music_uuid']?.toString().trim() ?? '';
+        if (uuid.isNotEmpty) {
           final old = contentController.text;
-          final insert = lyricsUrl.isEmpty
-              ? '\n[music=$url]\n'
-              : '\n[music=$url,$lyricsUrl]\n';
+          final insert = '\n[music=$uuid]\n';
 
           contentController.text = old + insert;
           contentController.selection = TextSelection.fromPosition(
@@ -582,12 +625,27 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         }
       }
     } finally {
+      songTitleController.dispose();
+      artistController.dispose();
       if (mounted) {
         setState(() {
           uploadingMusic = false;
         });
       }
     }
+  }
+
+  Future<void> _pickExistingMusic() async {
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _MusicPickerDialog(),
+    );
+    final uuid = selected?['uuid']?.toString().trim() ?? '';
+    if (uuid.isEmpty || !mounted) return;
+    contentController.text = '${contentController.text}\n[music=$uuid]\n';
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: contentController.text.length),
+    );
   }
 
   // Insert methods
@@ -1381,6 +1439,11 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                 text: uploadingMusic ? '上传中...' : '上传音乐',
                 onTap: uploadingMusic ? null : _pickAndUploadMusic,
               ),
+              _ToolButton(
+                icon: Icons.library_music_outlined,
+                text: '插入音乐',
+                onTap: _pickExistingMusic,
+              ),
               if (_isAdmin)
                 _ToolButton(
                   icon: Icons.attach_file_rounded,
@@ -1833,6 +1896,105 @@ class _ImageItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MusicPickerDialog extends StatefulWidget {
+  const _MusicPickerDialog();
+
+  @override
+  State<_MusicPickerDialog> createState() => _MusicPickerDialogState();
+}
+
+class _MusicPickerDialogState extends State<_MusicPickerDialog> {
+  final _controller = TextEditingController();
+  var _loading = false;
+  List<Map<String, dynamic>> _results = const [];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final keyword = _controller.text.trim();
+    if (keyword.isEmpty) return;
+    setState(() => _loading = true);
+    final result = await ApiClient.instance.get(
+      'music/search',
+      query: {'keyword': keyword, 'page_size': 30},
+    );
+    if (!mounted) return;
+    final raw = result.success && result.data is Map<String, dynamic>
+        ? (result.data as Map<String, dynamic>)['list']
+        : null;
+    setState(() {
+      _loading = false;
+      _results = raw is List
+          ? raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+          : const [];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('插入音乐'),
+      content: SizedBox(
+        width: 420,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _search(),
+              decoration: InputDecoration(
+                hintText: '搜索歌名或歌手',
+                suffixIcon: IconButton(
+                  tooltip: '搜索',
+                  onPressed: _search,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                      ? const Center(child: Text('搜索已上传的音乐'))
+                      : ListView.separated(
+                          itemCount: _results.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final item = _results[index];
+                            final cover = item['cover_url']?.toString() ?? '';
+                            final title = item['title']?.toString() ?? '未知歌曲';
+                            final artist = item['artist']?.toString() ?? '';
+                            return ListTile(
+                              leading: cover.isEmpty
+                                  ? const CircleAvatar(child: Icon(Icons.music_note_rounded))
+                                  : SafeNetworkImage(
+                                      url: cover,
+                                      width: 44,
+                                      height: 44,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              subtitle: artist.isEmpty ? null : Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              onTap: () => Navigator.pop(context, item),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消'))],
     );
   }
 }

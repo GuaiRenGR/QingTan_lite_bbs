@@ -28,6 +28,11 @@ class DiscoverPage extends ConsumerWidget {
         label: '我的歌单',
         onTap: () => context.push('/music-playlist'),
       ),
+      _ToolItem(
+        icon: Icons.manage_search_rounded,
+        label: '音乐管理器',
+        onTap: () => context.push('/music-library'),
+      ),
       if (groupId == 99)
         _ToolItem(
           icon: Icons.folder_copy_outlined,

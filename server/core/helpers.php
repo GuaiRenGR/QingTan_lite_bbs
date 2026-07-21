@@ -162,7 +162,11 @@ function sanitize_forum_content($content)
 
     $content = preg_replace_callback('/\[music=([^\]]+)\]/i', function ($m) {
         $values = preg_split('/[,|]/', $m[1], 2);
-        $url = normalize_forum_media_url($values[0] ?? '');
+        $source = trim($values[0] ?? '');
+        if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $source)) {
+            return '[music=' . strtolower($source) . ']';
+        }
+        $url = normalize_forum_media_url($source);
 
         if ($url === '') {
             return '';

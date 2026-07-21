@@ -14,15 +14,21 @@ final musicPlayerProvider =
 });
 
 class MusicTrack {
+  final String? uuid;
   final String url;
   final String title;
+  final String artist;
   final Uint8List? coverArt;
+  final String? coverUrl;
   final String? lyricsUrl;
 
   const MusicTrack({
+    this.uuid,
     required this.url,
     required this.title,
+    this.artist = '',
     this.coverArt,
+    this.coverUrl,
     this.lyricsUrl,
   });
 
@@ -31,9 +37,12 @@ class MusicTrack {
         ? title
         : other.title.trim();
     return MusicTrack(
+      uuid: other.uuid?.trim().isNotEmpty == true ? other.uuid : uuid,
       url: url,
       title: nextTitle.isNotEmpty ? nextTitle : title,
+      artist: other.artist.trim().isNotEmpty ? other.artist.trim() : artist,
       coverArt: other.coverArt ?? coverArt,
+      coverUrl: other.coverUrl?.trim().isNotEmpty == true ? other.coverUrl : coverUrl,
       lyricsUrl: other.lyricsUrl?.trim().isNotEmpty == true
           ? other.lyricsUrl
           : lyricsUrl,
@@ -42,8 +51,11 @@ class MusicTrack {
 
   Map<String, dynamic> toJson() {
     return {
+      'uuid': uuid,
       'url': url,
       'title': title,
+      'artist': artist,
+      'cover_url': coverUrl,
       'lyrics_url': lyricsUrl,
     };
   }
@@ -56,8 +68,11 @@ class MusicTrack {
 
     final title = value['title']?.toString().trim() ?? '';
     return MusicTrack(
+      uuid: value['uuid']?.toString().trim().isEmpty == true ? null : value['uuid']?.toString().trim(),
       url: url,
       title: title.isEmpty ? '音乐' : title,
+      artist: value['artist']?.toString().trim() ?? '',
+      coverUrl: value['cover_url']?.toString().trim().isEmpty == true ? null : value['cover_url']?.toString().trim(),
       lyricsUrl: value['lyrics_url']?.toString().trim().isEmpty == true
           ? null
           : value['lyrics_url']?.toString().trim(),
@@ -155,15 +170,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     if (url.isEmpty) return -1;
 
     final normalized = MusicTrack(
+      uuid: track.uuid?.trim().isEmpty == true ? null : track.uuid?.trim(),
       url: url,
       title: track.title.trim().isEmpty ? '音乐' : track.title.trim(),
+      artist: track.artist.trim(),
       coverArt: track.coverArt,
+      coverUrl: track.coverUrl?.trim().isEmpty == true ? null : track.coverUrl?.trim(),
       lyricsUrl: track.lyricsUrl?.trim().isEmpty == true
           ? null
           : track.lyricsUrl?.trim(),
     );
     final tracks = List<MusicTrack>.from(state.playlist);
-    final index = tracks.indexWhere((item) => item.url == url);
+    final index = tracks.indexWhere((item) => item.uuid != null && item.uuid == normalized.uuid || item.url == url);
 
     if (index >= 0) {
       tracks[index] = tracks[index].merge(normalized);
@@ -382,7 +400,8 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
       final currentTrackUrl = state.currentTrack?.url;
       for (final track in state.playlist) {
-        final index = restored.indexWhere((item) => item.url == track.url);
+        final index = restored.indexWhere((item) =>
+            (item.uuid != null && item.uuid == track.uuid) || item.url == track.url);
         if (index >= 0) {
           restored[index] = restored[index].merge(track);
         } else {

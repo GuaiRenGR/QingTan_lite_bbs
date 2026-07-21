@@ -146,6 +146,22 @@ class UploadController
 
             $fileUrl = request_origin() . $relativeFileUrl;
 
+            $music = null;
+            if ($type === 'music') {
+                $music = MusicLibraryController::createFromUpload(
+                    (int)$user['id'],
+                    $attachmentId,
+                    $fileUrl,
+                    $originalName,
+                    [
+                        'lyrics_url' => \Request::str('lyrics_url'),
+                        'cover_url' => \Request::str('cover_url'),
+                        'title' => \Request::str('title'),
+                        'artist' => \Request::str('artist'),
+                    ]
+                );
+            }
+
             \Response::success([
                 'id' => $attachmentId,
                 'type' => $type,
@@ -155,6 +171,8 @@ class UploadController
                 'size' => $result['size'],
                 'mime' => $mime,
                 'onedrive_item_id' => $result['item_id'],
+                'music' => $music ? MusicLibraryController::serialize($music) : null,
+                'music_uuid' => $music['uuid'] ?? null,
             ], '上传成功');
 
         } catch (\Throwable $e) {

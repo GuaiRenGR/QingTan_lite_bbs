@@ -269,16 +269,20 @@ function createTables(PDO $pdo, string $prefix)
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `playlist_id` BIGINT UNSIGNED NOT NULL,
       `user_id` BIGINT UNSIGNED NOT NULL,
+      `music_uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
       `music_key` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
       `music_url` VARCHAR(1000) NOT NULL,
       `lyrics_url` VARCHAR(1000) DEFAULT NULL,
+      `cover_url` VARCHAR(1000) DEFAULT NULL,
       `title` VARCHAR(255) NOT NULL,
+      `artist` VARCHAR(255) DEFAULT NULL,
       `sort_order` INT NOT NULL DEFAULT 0,
       `status` TINYINT NOT NULL DEFAULT 1,
       `created_at` DATETIME NOT NULL,
       `updated_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`),
       UNIQUE KEY `uk_playlist_music` (`playlist_id`, `music_key`),
+      UNIQUE KEY `uk_playlist_music_uuid` (`playlist_id`, `music_uuid`),
       KEY `idx_user_time` (`user_id`, `created_at`),
       KEY `idx_playlist_sort` (`playlist_id`, `status`, `sort_order`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -329,6 +333,28 @@ function createTables(PDO $pdo, string $prefix)
       PRIMARY KEY (`id`),
       KEY `idx_object` (`object_type`, `object_id`),
       KEY `idx_folder` (`folder_id`, `status`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}music_library` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+      `uploader_id` BIGINT UNSIGNED NOT NULL,
+      `attachment_id` BIGINT UNSIGNED DEFAULT NULL,
+      `audio_url` VARCHAR(1000) NOT NULL,
+      `lyrics_url` VARCHAR(1000) DEFAULT NULL,
+      `cover_url` VARCHAR(1000) DEFAULT NULL,
+      `title` VARCHAR(255) NOT NULL,
+      `artist` VARCHAR(255) DEFAULT NULL,
+      `original_name` VARCHAR(255) DEFAULT NULL,
+      `status` TINYINT NOT NULL DEFAULT 1,
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_music_uuid` (`uuid`),
+      KEY `idx_music_search` (`status`, `title`, `artist`),
+      KEY `idx_uploader_time` (`uploader_id`, `created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

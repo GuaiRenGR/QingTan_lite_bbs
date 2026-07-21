@@ -92,9 +92,12 @@ class _FavoriteTrackTileState extends ConsumerState<_FavoriteTrackTile> {
   }
 
   MusicTrack get _track => MusicTrack(
+        uuid: widget.track.uuid,
         url: widget.track.url,
         title: _metadata?.title ?? widget.track.title,
+        artist: widget.track.artist,
         coverArt: _metadata?.coverArt ?? widget.track.coverArt,
+        coverUrl: widget.track.coverUrl,
         lyricsUrl: widget.track.lyricsUrl,
       );
 
@@ -105,14 +108,25 @@ class _FavoriteTrackTileState extends ConsumerState<_FavoriteTrackTile> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: cover == null
+        child: cover == null && (_track.coverUrl == null || _track.coverUrl!.isEmpty)
             ? Container(
                 width: 48,
                 height: 48,
                 color: Theme.of(context).colorScheme.primaryContainer,
                 child: const Icon(Icons.music_note_rounded),
               )
-            : Image.memory(cover, width: 48, height: 48, fit: BoxFit.cover),
+            : cover != null
+                ? Image.memory(cover, width: 48, height: 48, fit: BoxFit.cover)
+                : Image.network(
+                    _track.coverUrl!,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: const Icon(Icons.music_note_rounded),
+                    ),
+                  ),
       ),
       title: Text(
         _track.title,
@@ -120,7 +134,9 @@ class _FavoriteTrackTileState extends ConsumerState<_FavoriteTrackTile> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        _track.lyricsUrl == null ? '已收藏' : '已收藏 · 含歌词',
+        _track.artist.isNotEmpty
+            ? _track.artist
+            : (_track.lyricsUrl == null ? '已收藏' : '已收藏 · 含歌词'),
         style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12),
       ),
       trailing: IconButton(

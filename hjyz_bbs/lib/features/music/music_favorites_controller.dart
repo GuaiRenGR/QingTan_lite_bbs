@@ -23,7 +23,9 @@ class MusicFavoritesState {
     this.error,
   });
 
-  bool contains(String url) => tracks.any((track) => track.url == url);
+  bool contains(MusicTrack track) => track.uuid != null
+      ? tracks.any((item) => item.uuid == track.uuid)
+      : tracks.any((item) => item.url == track.url);
 
   MusicFavoritesState copyWith({
     int? userId,
@@ -89,13 +91,12 @@ class MusicFavoritesController extends StateNotifier<MusicFavoritesState> {
   Future<bool?> toggle(MusicTrack track) async {
     if (state.userId <= 0 || state.loading) return null;
 
-    final wasFavorite = state.contains(track.url);
+    if (track.uuid == null || track.uuid!.isEmpty) return null;
+    final wasFavorite = state.contains(track);
     final result = await ApiClient.instance.post(
       'music/favorites/toggle',
       data: {
-        'music_url': track.url,
-        'title': track.title,
-        'lyrics_url': track.lyricsUrl ?? '',
+        'music_uuid': track.uuid,
       },
     );
     if (!result.success || result.data is! Map<String, dynamic>) {
@@ -106,7 +107,7 @@ class MusicFavoritesController extends StateNotifier<MusicFavoritesState> {
     final favorited = (result.data as Map<String, dynamic>)['is_favorited'] == true ||
         (result.data as Map<String, dynamic>)['is_favorited'] == 1;
     final tracks = List<MusicTrack>.from(state.tracks);
-    final index = tracks.indexWhere((item) => item.url == track.url);
+    final index = tracks.indexWhere((item) => item.uuid == track.uuid);
     if (favorited) {
       if (index >= 0) {
         tracks[index] = tracks[index].merge(track);

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
-import '../thread/widgets/thread_waterfall_grid.dart';
+import 'search_results.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -15,6 +16,7 @@ class _SearchPageState extends State<SearchPage> {
   bool searching = false;
   bool loadingHot = true;
   List<Map<String, dynamic>> results = [];
+  List<Map<String, dynamic>> musicResults = [];
   List<Map<String, dynamic>> hotKeywords = [];
 
   @override
@@ -45,10 +47,18 @@ class _SearchPageState extends State<SearchPage> {
 
     setState(() => searching = true);
 
-    final result = await ApiClient.instance.get(
-      'search/threads',
-      query: {'keyword': keyword, 'page': 1, 'page_size': 50},
-    );
+    final requests = await Future.wait([
+      ApiClient.instance.get(
+        'search/threads',
+        query: {'keyword': keyword, 'page': 1, 'page_size': 50},
+      ),
+      ApiClient.instance.get(
+        'music/search',
+        query: {'keyword': keyword, 'page_size': 20},
+      ),
+    ]);
+    final result = requests[0];
+    final musicResult = requests[1];
 
     if (!mounted) return;
 
@@ -65,6 +75,14 @@ class _SearchPageState extends State<SearchPage> {
       }
     } else {
       results = [];
+    }
+    if (musicResult.success && musicResult.data is Map<String, dynamic>) {
+      final list = (musicResult.data as Map<String, dynamic>)['list'];
+      musicResults = list is List
+          ? list.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+          : [];
+    } else {
+      musicResults = [];
     }
 
     setState(() => searching = false);
@@ -122,12 +140,15 @@ class _SearchPageState extends State<SearchPage> {
       ),
       body: searching
           ? const Center(child: CircularProgressIndicator())
-          : hasQuery && results.isNotEmpty
-              ? ThreadWaterfallGrid(threads: results)
+          : hasQuery && (results.isNotEmpty || musicResults.isNotEmpty)
+              ? SearchResults(
+                  threads: results,
+                  music: musicResults,
+                )
               : hasQuery
                   ? Center(
                       child: Text(
-                        '未找到相关帖子',
+                        '未找到相关内容',
                         style: TextStyle(color: Colors.grey.shade500),
                       ),
                     )

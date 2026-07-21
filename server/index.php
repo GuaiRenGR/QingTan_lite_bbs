@@ -175,6 +175,14 @@ try {
             App\Controllers\MusicPlaylistController::toggleFavorite();
             break;
 
+        case 'music/detail':
+            App\Controllers\MusicLibraryController::detail();
+            break;
+
+        case 'music/search':
+            App\Controllers\MusicLibraryController::search();
+            break;
+
         case 'threads/detail':
             App\Controllers\ThreadReadController::detail();
             break;

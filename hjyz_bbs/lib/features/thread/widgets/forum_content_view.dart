@@ -102,7 +102,11 @@ class ForumContentView extends StatelessWidget {
         return ForumVideoPlayer(url: part.value);
 
       case _ContentPartType.music:
-        return _InlineMusicPlayer(url: part.value, lyricsUrl: part.extra);
+        return _InlineMusicPlayer(
+          url: part.value,
+          lyricsUrl: part.extra,
+          musicUuid: part.identifier,
+        );
 
       case _ContentPartType.thread:
         return _InlineThreadCard(dvCode: part.value);
@@ -398,13 +402,18 @@ class ForumContentView extends StatelessWidget {
         final lyricsUrl = separatorIndex < 0
             ? ''
             : music.substring(separatorIndex + 1).trim();
+        final isUuid = RegExp(
+          r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+          caseSensitive: false,
+        ).hasMatch(musicUrl);
         result.add(
           _ContentPart(
             type: _ContentPartType.music,
-            value: ApiClient.instance.resolveUrl(musicUrl),
+            value: isUuid ? musicUrl.toLowerCase() : ApiClient.instance.resolveUrl(musicUrl),
             extra: lyricsUrl.isEmpty
                 ? null
                 : ApiClient.instance.resolveUrl(lyricsUrl),
+            identifier: isUuid ? musicUrl.toLowerCase() : null,
           ),
         );
       } else if (thread != null) {
@@ -475,11 +484,13 @@ class _ContentPart {
   final _ContentPartType type;
   final String value;
   final String? extra;
+  final String? identifier;
 
   const _ContentPart({
     required this.type,
     required this.value,
     this.extra,
+    this.identifier,
   });
 }
 
@@ -659,8 +670,9 @@ class _InlineThreadCardState extends State<_InlineThreadCard> {
 class _InlineMusicPlayer extends ConsumerStatefulWidget {
   final String url;
   final String? lyricsUrl;
+  final String? musicUuid;
 
-  const _InlineMusicPlayer({required this.url, this.lyricsUrl});
+  const _InlineMusicPlayer({required this.url, this.lyricsUrl, this.musicUuid});
 
   @override
   ConsumerState<_InlineMusicPlayer> createState() => _InlineMusicPlayerState();
@@ -669,13 +681,18 @@ class _InlineMusicPlayer extends ConsumerStatefulWidget {
 class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   Uint8List? _coverArt;
   String _resolvedFilename = '';
-  late String _resolvedUrl;
+  String _resolvedUrl = '';
   String? _resolvedLyricsUrl;
+  String _artist = '';
+  String? _coverUrl;
 
   MusicTrack get _track => MusicTrack(
+        uuid: widget.musicUuid,
         url: _resolvedUrl,
         title: _filename,
+        artist: _artist,
         coverArt: _coverArt,
+        coverUrl: _coverUrl,
         lyricsUrl: _resolvedLyricsUrl,
       );
 
@@ -718,24 +735,36 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   void initState() {
     super.initState();
     _resolveUrls();
-    _syncTrack();
-    _loadCachedMetadata();
-  }
-
-  @override
-  void didUpdateWidget(covariant _InlineMusicPlayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url || oldWidget.lyricsUrl != widget.lyricsUrl) {
-      _coverArt = null;
-      _resolvedFilename = '';
-      _resolveUrls();
+    if (widget.musicUuid != null) {
+      _loadLibraryMusic();
+    } else {
       _syncTrack();
       _loadCachedMetadata();
     }
   }
 
+  @override
+  void didUpdateWidget(covariant _InlineMusicPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url || oldWidget.lyricsUrl != widget.lyricsUrl || oldWidget.musicUuid != widget.musicUuid) {
+      _coverArt = null;
+      _resolvedFilename = '';
+      _artist = '';
+      _coverUrl = null;
+      _resolveUrls();
+      if (widget.musicUuid != null) {
+        _loadLibraryMusic();
+      } else {
+        _syncTrack();
+        _loadCachedMetadata();
+      }
+    }
+  }
+
   void _resolveUrls() {
-    _resolvedUrl = MusicCacheService.instance.resolveUrl(widget.url);
+    _resolvedUrl = widget.musicUuid == null
+        ? MusicCacheService.instance.resolveUrl(widget.url)
+        : '';
     final lyricsUrl = widget.lyricsUrl?.trim() ?? '';
     _resolvedLyricsUrl = lyricsUrl.isEmpty
         ? null
@@ -743,6 +772,7 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
   }
 
   Future<void> _loadCachedMetadata() async {
+    if (_resolvedUrl.isEmpty) return;
     final expectedUrl = _resolvedUrl;
     final metadata = await MusicCacheService.instance.loadMetadata(expectedUrl);
     if (!mounted || expectedUrl != _resolvedUrl) return;
@@ -753,17 +783,45 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
     _syncTrack();
   }
 
+  Future<void> _loadLibraryMusic() async {
+    final uuid = widget.musicUuid;
+    if (uuid == null) return;
+    final result = await ApiClient.instance.get('music/detail', query: {'uuid': uuid});
+    if (!mounted || uuid != widget.musicUuid || !result.success || result.data is! Map<String, dynamic>) return;
+    final raw = (result.data as Map<String, dynamic>)['music'];
+    if (raw is! Map) return;
+    final item = Map<String, dynamic>.from(raw);
+    final url = MusicCacheService.instance.resolveUrl(item['url']?.toString() ?? '');
+    if (url.isEmpty) return;
+    setState(() {
+      _resolvedUrl = url;
+      _resolvedLyricsUrl = item['lyrics_url']?.toString().trim().isEmpty == true
+          ? null
+          : MusicCacheService.instance.resolveUrl(item['lyrics_url']?.toString() ?? '');
+      _resolvedFilename = item['title']?.toString().trim() ?? '';
+      _artist = item['artist']?.toString().trim() ?? '';
+      _coverUrl = item['cover_url']?.toString().trim().isEmpty == true
+          ? null
+          : ApiClient.instance.resolveUrl(item['cover_url']?.toString() ?? '');
+    });
+    _syncTrack();
+    _loadCachedMetadata();
+  }
+
   void _syncTrack() {
+    if (_resolvedUrl.isEmpty) return;
     ref.read(musicPlayerProvider.notifier).upsertTrack(_track);
   }
 
 
   Future<void> _openPlayer() async {
+    if (_resolvedUrl.isEmpty) return;
     await ref.read(musicPlayerProvider.notifier).selectTrack(_track);
     if (mounted) await context.push('/music-player');
   }
 
   Future<void> _togglePlayback() async {
+    if (_resolvedUrl.isEmpty) return;
     await ref.read(musicPlayerProvider.notifier).toggleTrack(_track);
   }
 
@@ -817,10 +875,21 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
                       ),
                     ),
                   ),
+                if (!hasCover && _coverUrl != null)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _openPlayer,
+                    child: SafeNetworkImage(
+                      url: _coverUrl!,
+                      width: 70,
+                      height: 70,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
-                      hasCover ? 12 : 14,
+                      (hasCover || _coverUrl != null) ? 12 : 14,
                       8,
                       8,
                       7,
@@ -876,7 +945,7 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
                                     )
                                   : IconButton(
                                       onPressed:
-                                          failed ? null : _togglePlayback,
+                                      failed || _resolvedUrl.isEmpty ? null : _togglePlayback,
                                       padding: EdgeInsets.zero,
                                       visualDensity: VisualDensity.compact,
                                       tooltip: playing ? '暂停' : '播放',

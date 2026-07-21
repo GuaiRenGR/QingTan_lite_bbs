@@ -35,7 +35,7 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
     }
 
     final current = state.currentTrack;
-    final isFavorite = current != null && favorites.contains(current.url);
+    final isFavorite = current != null && favorites.contains(current);
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(title: const Text('音乐播放器')),
@@ -170,9 +170,13 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                subtitle: selected
-                                    ? Text(state.playing ? '正在播放' : '已暂停')
-                                    : null,
+                                subtitle: Text(
+                                  selected
+                                      ? '${track.artist.isEmpty ? '' : '${track.artist} · '}${state.playing ? '正在播放' : '已暂停'}'
+                                      : track.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 trailing: IconButton(
                                   onPressed: () => controller.removeAt(index),
                                   tooltip: '移除',
@@ -227,6 +231,7 @@ class _LyricsPage extends StatefulWidget {
 
 class _LyricsPageState extends State<_LyricsPage> {
   final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _lineKeys = {};
   Future<MusicLyrics?>? _lyricsFuture;
   var _lastActiveIndex = -1;
 
@@ -252,18 +257,17 @@ class _LyricsPageState extends State<_LyricsPage> {
         : MusicCacheService.instance.loadLyrics(url);
   }
 
-  void _scrollToActive(int activeIndex, double viewportHeight) {
+  void _scrollToActive(int activeIndex) {
     if (activeIndex < 0 || activeIndex == _lastActiveIndex) return;
     _lastActiveIndex = activeIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final target = (activeIndex * 48.0 - viewportHeight / 2 + 24)
-          .clamp(0.0, _scrollController.position.maxScrollExtent)
-          .toDouble();
-      _scrollController.animateTo(
+      final target = _lineKeys[activeIndex]?.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
         target,
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOut,
+        alignment: 0.5,
       );
     });
   }
@@ -306,13 +310,10 @@ class _LyricsPageState extends State<_LyricsPage> {
         final activeIndex = lyrics.activeIndex(widget.position);
         return LayoutBuilder(
           builder: (context, constraints) {
-            _scrollToActive(activeIndex, constraints.maxHeight);
+            _scrollToActive(activeIndex);
             return ListView.builder(
               controller: _scrollController,
-              padding: EdgeInsets.symmetric(
-                horizontal: 28,
-                vertical: max(28.0, constraints.maxHeight / 2 - 30),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
               itemCount: lyrics.lines.length,
               itemBuilder: (context, index) {
                 final active = index == activeIndex;
@@ -327,6 +328,7 @@ class _LyricsPageState extends State<_LyricsPage> {
                     fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                   ),
                   child: Padding(
+                    key: _lineKeys.putIfAbsent(index, () => GlobalKey()),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text(
                       lyrics.lines[index].text,
@@ -387,6 +389,15 @@ class _PlayerControls extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
           ),
+          if (state.currentTrack?.artist.isNotEmpty == true) ...[
+            const SizedBox(height: 2),
+            Text(
+              state.currentTrack!.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+          ],
           if (state.error != null) ...[
             const SizedBox(height: 4),
             Text(
@@ -529,17 +540,25 @@ class _TrackCoverState extends State<_TrackCover> {
         size: widget.size * 0.38,
       ),
     );
-    if (coverArt == null) return fallback;
+    if (coverArt == null && (widget.track.coverUrl == null || widget.track.coverUrl!.isEmpty)) return fallback;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.size > 80 ? 22 : 10),
-      child: Image.memory(
-        coverArt,
-        width: widget.size,
-        height: widget.size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => fallback,
-      ),
+      child: coverArt != null
+          ? Image.memory(
+              coverArt,
+              width: widget.size,
+              height: widget.size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            )
+          : Image.network(
+              widget.track.coverUrl!,
+              width: widget.size,
+              height: widget.size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            ),
     );
   }
 }

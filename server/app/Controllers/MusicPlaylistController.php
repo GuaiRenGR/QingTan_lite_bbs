@@ -24,34 +24,22 @@ class MusicPlaylistController
     public static function toggleFavorite()
     {
         $user = \Auth::requireLogin();
-        $musicUrl = normalize_forum_media_url(\Request::str('music_url'));
-        $lyricsUrl = \Request::str('lyrics_url');
-        $title = \Request::str('title', '音乐');
-
-        if ($musicUrl === '') {
-            \Response::json(422, '音乐链接无效');
+        $uuid = strtolower(trim(\Request::str('music_uuid')));
+        if (!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/', $uuid)) {
+            \Response::json(422, '请选择音乐库中的歌曲');
         }
-        if (strlen($musicUrl) > 1000) {
-            \Response::json(422, '音乐链接过长');
+        $music = MusicLibraryController::find($uuid);
+        if (!$music) {
+            \Response::json(404, '音乐不存在或已下架');
         }
-        if ($lyricsUrl !== '' && !validate_remote_url($lyricsUrl)) {
-            \Response::json(422, '歌词链接无效');
-        }
-        if (strlen($lyricsUrl) > 1000) {
-            \Response::json(422, '歌词链接过长');
-        }
-        $title = function_exists('mb_substr')
-            ? mb_substr($title, 0, 255, 'UTF-8')
-            : substr($title, 0, 255);
 
         $playlist = self::ensureDefaultPlaylist((int)$user['id']);
         $tracks = \Database::table('music_playlist_tracks');
-        $urlHash = hash('sha256', $musicUrl);
         $existing = \Database::fetch(
             "SELECT * FROM {$tracks}
-             WHERE playlist_id = ? AND music_key = ?
+             WHERE playlist_id = ? AND music_uuid = ?
              LIMIT 1",
-            [$playlist['id'], $urlHash]
+            [$playlist['id'], $uuid]
         );
 
         if ($existing) {
@@ -76,22 +64,31 @@ class MusicPlaylistController
              FROM {$tracks} WHERE playlist_id = ?",
             [$playlist['id']]
         );
-        \Database::execute(
-            "INSERT INTO {$tracks}
-             (`playlist_id`,`user_id`,`music_key`,`music_url`,`lyrics_url`,`title`,`sort_order`,`created_at`,`updated_at`)
-             VALUES (?,?,?,?,?,?,?,?,?)",
-            [
-                $playlist['id'],
-                $user['id'],
-                $urlHash,
-                $musicUrl,
-                $lyricsUrl,
-                $title === '' ? '音乐' : $title,
-                (int)($nextSort['next_sort'] ?? 1),
-                now(),
-                now(),
-            ]
-        );
+        try {
+            \Database::execute(
+                "INSERT INTO {$tracks}
+                 (`playlist_id`,`user_id`,`music_uuid`,`music_key`,`music_url`,`lyrics_url`,`cover_url`,`title`,`artist`,`sort_order`,`created_at`,`updated_at`)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    $playlist['id'], $user['id'], $uuid, hash('sha256', $music['audio_url']),
+                    $music['audio_url'], $music['lyrics_url'], $music['cover_url'], $music['title'],
+                    $music['artist'], (int)($nextSort['next_sort'] ?? 1), now(), now(),
+                ]
+            );
+        } catch (\Throwable $e) {
+            // 唯一索引处理并发收藏，避免产生重复歌曲记录。
+            $alreadyAdded = \Database::fetch(
+                "SELECT id FROM {$tracks} WHERE playlist_id = ? AND music_uuid = ? LIMIT 1",
+                [$playlist['id'], $uuid]
+            );
+            if ($alreadyAdded) {
+                \Response::success([
+                    'is_favorited' => true,
+                    'playlist_id' => (int)$playlist['id'],
+                ], '歌曲已在默认歌单中');
+            }
+            throw $e;
+        }
         $trackId = (int)\Database::lastInsertId();
         $track = \Database::fetch("SELECT * FROM {$tracks} WHERE id = ?", [$trackId]);
         record_sync_operation('music_playlist_tracks', $trackId, 'insert', $track);
@@ -145,7 +142,7 @@ class MusicPlaylistController
     {
         $tracks = \Database::table('music_playlist_tracks');
         $rows = \Database::fetchAll(
-            "SELECT id, music_url AS url, lyrics_url, title, sort_order, created_at
+            "SELECT id, music_uuid, music_url AS url, lyrics_url, cover_url, title, artist, sort_order, created_at
              FROM {$tracks}
              WHERE playlist_id = ? AND status = 1
              ORDER BY sort_order ASC, id DESC",
@@ -155,8 +152,11 @@ class MusicPlaylistController
         return array_map(function ($row) {
             return [
                 'id' => (int)$row['id'],
+                'uuid' => $row['music_uuid'] ?: null,
                 'url' => $row['url'],
                 'title' => $row['title'] ?: '音乐',
+                'artist' => $row['artist'] ?: '',
+                'cover_url' => $row['cover_url'] ?: null,
                 'lyrics_url' => $row['lyrics_url'] ?: null,
                 'sort_order' => (int)$row['sort_order'],
                 'created_at' => $row['created_at'],

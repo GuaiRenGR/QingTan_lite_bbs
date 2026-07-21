@@ -10,11 +10,13 @@ import '../api/api_client.dart';
 class MusicMetadata {
   final String url;
   final String title;
+  final String artist;
   final Uint8List? coverArt;
 
   const MusicMetadata({
     required this.url,
     required this.title,
+    this.artist = '',
     this.coverArt,
   });
 
@@ -22,6 +24,7 @@ class MusicMetadata {
     return {
       'url': url,
       'title': title,
+      'artist': artist,
       'cover_art': coverArt == null ? null : base64Encode(coverArt!),
     };
   }
@@ -41,7 +44,12 @@ class MusicMetadata {
       } catch (_) {}
     }
 
-    return MusicMetadata(url: url, title: title, coverArt: coverArt);
+    return MusicMetadata(
+      url: url,
+      title: title,
+      artist: value['artist']?.toString().trim() ?? '',
+      coverArt: coverArt,
+    );
   }
 }
 
@@ -137,6 +145,29 @@ class MusicCacheService {
         _metadataRequests.remove(url);
       }
     });
+  }
+
+  Future<MusicMetadata> readLocalMetadata(File file, {String? fallbackTitle}) async {
+    final fallback = _withoutExtension(fallbackTitle ?? file.path.split('/').last);
+    try {
+      final bytes = await file.openRead(0, 1024 * 1024).fold<List<int>>(
+        <int>[],
+        (value, chunk) => value..addAll(chunk),
+      );
+      if (bytes.length < 10 || bytes[0] != 0x49 || bytes[1] != 0x44 || bytes[2] != 0x33) {
+        return MusicMetadata(url: '', title: fallback.isEmpty ? '未知歌曲' : fallback);
+      }
+      final tagSize = _readSyncSafeInt(bytes, 6);
+      final metadata = _readId3TextMetadata(bytes, tagSize);
+      return MusicMetadata(
+        url: '',
+        title: metadata['title']?.isNotEmpty == true ? metadata['title']! : (fallback.isEmpty ? '未知歌曲' : fallback),
+        artist: metadata['artist'] ?? '',
+        coverArt: _extractApic(bytes, 10, tagSize),
+      );
+    } catch (_) {
+      return MusicMetadata(url: '', title: fallback.isEmpty ? '未知歌曲' : fallback);
+    }
   }
 
   Future<MusicLyrics?> loadLyrics(String source) {
@@ -251,6 +282,7 @@ class MusicCacheService {
       metadata: MusicMetadata(
         url: url,
         title: title,
+        artist: '',
         coverArt: coverResult.coverArt,
       ),
       cacheable: infoLoaded && coverResult.requestCompleted,
@@ -352,6 +384,41 @@ class MusicCacheService {
       position += 10 + frameSize;
     }
     return null;
+  }
+
+  Map<String, String> _readId3TextMetadata(List<int> data, int tagSize) {
+    if (data.length < 10) return const {};
+    final end = (10 + tagSize).clamp(10, data.length);
+    final version = data[3];
+    var position = 10;
+    final values = <String, String>{};
+    while (position + 10 <= end && version >= 3) {
+      final id = String.fromCharCodes(data.sublist(position, position + 4));
+      final size = version >= 4 ? _readSyncSafeInt(data, position + 4) : _readBigEndianInt(data, position + 4);
+      if (size <= 0 || position + 10 + size > end) break;
+      if (id == 'TIT2' || id == 'TPE1') {
+        final text = _decodeId3Text(data.sublist(position + 10, position + 10 + size));
+        if (text.isNotEmpty) values[id == 'TIT2' ? 'title' : 'artist'] = text;
+      }
+      position += 10 + size;
+    }
+    return values;
+  }
+
+  String _decodeId3Text(List<int> value) {
+    if (value.length < 2) return '';
+    final encoding = value.first;
+    final content = value.sublist(1);
+    try {
+      if (encoding == 0 || encoding == 3) return utf8.decode(content, allowMalformed: true).replaceAll('\u0000', '').trim();
+      final codeUnits = <int>[];
+      for (var i = 0; i + 1 < content.length; i += 2) {
+        codeUnits.add(encoding == 2 ? (content[i] << 8) | content[i + 1] : content[i] | (content[i + 1] << 8));
+      }
+      return String.fromCharCodes(codeUnits).replaceAll('\u0000', '').trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   Uint8List? _extractId3v22Cover(List<int> data, int offset, int end) {
