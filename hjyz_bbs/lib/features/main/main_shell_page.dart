@@ -113,7 +113,7 @@ class _ForumBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64 + MediaQuery.of(context).padding.bottom,
+      height: 58 + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).padding.bottom,
       ),
@@ -150,8 +150,8 @@ class _ForumBottomNavBar extends StatelessWidget {
               onTap: onCreateThread,
               child: Center(
                 child: Container(
-                  width: 48,
-                  height: 34,
+                  width: 44,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: const Color(0xFFFB7299),
                     borderRadius: BorderRadius.circular(12),
@@ -166,7 +166,7 @@ class _ForumBottomNavBar extends StatelessWidget {
                   child: const Icon(
                     Icons.add_rounded,
                     color: Colors.white,
-                    size: 28,
+                    size: 26,
                   ),
                 ),
               ),
@@ -227,7 +227,7 @@ class _NavItem extends StatelessWidget {
           children: [
             Icon(
               active ? activeIcon : icon,
-              size: 24,
+              size: 23,
               color: color,
             ),
             const SizedBox(height: 2),

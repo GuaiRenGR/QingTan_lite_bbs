@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/connectivity_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
@@ -14,7 +15,19 @@ class MePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider);
+    return ValueListenableBuilder<bool>(
+      valueListenable: ConnectivityService.instance.offline,
+      builder: (context, offline, _) =>
+          _buildContent(context, ref, auth, offline),
+    );
+  }
 
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState auth,
+    bool offline,
+  ) {
     if (!auth.loggedIn) {
       return Scaffold(
         appBar: AppBar(
@@ -153,12 +166,41 @@ class MePage extends ConsumerWidget {
         title: const Text('我的'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 20),
         children: [
+          if (offline) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFB7299).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.cloud_off_outlined,
+                    size: 18,
+                    color: Color(0xFFFB7299),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '离线模式 · 正在显示本地缓存信息',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.text(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           GestureDetector(
             onTap: userId > 0 ? () => context.push('/user/$userId') : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.card(context),
                 borderRadius: BorderRadius.circular(14),
@@ -167,11 +209,11 @@ class MePage extends ConsumerWidget {
                 children: [
                   SafeNetworkImage(
                     url: avatar,
-                    width: 68,
-                    height: 68,
-                    borderRadius: BorderRadius.circular(34),
+                    width: 62,
+                    height: 62,
+                    borderRadius: BorderRadius.circular(31),
                     errorWidget: CircleAvatar(
-                      radius: 34,
+                      radius: 31,
                       backgroundColor:
                           Theme.of(context).colorScheme.primaryContainer,
                       child: Icon(
@@ -180,7 +222,7 @@ class MePage extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,7 +230,7 @@ class MePage extends ConsumerWidget {
                         Text(
                           nickname,
                           style: const TextStyle(
-                            fontSize: 19,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -215,11 +257,11 @@ class MePage extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           const CheckinCard(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _QuickActionGrid(actions: actions),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _MenuItem(
             icon: Icons.settings_outlined,
             text: '设置',
@@ -269,7 +311,7 @@ class _QuickActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.card(context),
         borderRadius: BorderRadius.circular(14),
@@ -280,7 +322,7 @@ class _QuickActionGrid extends StatelessWidget {
         itemCount: actions.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          mainAxisExtent: 82,
+          mainAxisExtent: 76,
           crossAxisSpacing: 2,
           mainAxisSpacing: 8,
         ),
@@ -301,7 +343,7 @@ class _QuickActionGrid extends StatelessWidget {
                   ),
                   child: Icon(action.icon, color: action.color, size: 23),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 5),
                 Text(
                   action.label,
                   maxLines: 1,

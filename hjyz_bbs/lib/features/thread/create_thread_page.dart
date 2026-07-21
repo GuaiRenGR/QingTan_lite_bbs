@@ -1270,6 +1270,24 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   @override
   Widget build(BuildContext context) {
     final isImageMode = mode == 'image';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final editorFill = isDark ? const Color(0xFF201B1E) : Colors.white;
+    final editorText = isDark ? AppColors.text(context) : Colors.black87;
+    final editorHint = isDark
+        ? AppColors.textSecondary(context)
+        : Colors.black45;
+    final editorBorder = isDark
+        ? OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFFB7299), width: 1),
+          )
+        : InputBorder.none;
+    final editorFocusedBorder = isDark
+        ? OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFFB7299), width: 1.5),
+          )
+        : InputBorder.none;
 
     return Scaffold(
       appBar: AppBar(
@@ -1300,7 +1318,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
         children: [
           _ModeSwitch(
             mode: mode,
@@ -1310,47 +1328,47 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               });
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           TextField(
             controller: titleController,
             maxLength: 80,
-            style: const TextStyle(color: Colors.black87),
+            style: TextStyle(color: editorText),
             decoration: InputDecoration(
               hintText: isImageMode ? '给图片笔记起个标题' : '请输入标题',
-              hintStyle: const TextStyle(color: Colors.black45),
+              hintStyle: TextStyle(color: editorHint),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: editorFill,
               counterText: '',
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
+              border: editorBorder,
+              enabledBorder: editorBorder,
+              focusedBorder: editorFocusedBorder,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (isImageMode)
             _ImageModePanel(
               imageUrls: imageUrls,
               onDelete: (index) => _deleteImage(index),
             ),
-          if (isImageMode) const SizedBox(height: 12),
+          if (isImageMode) const SizedBox(height: 10),
           TextField(
             controller: contentController,
             minLines: isImageMode ? 5 : 12,
             maxLines: null,
-            style: const TextStyle(color: Colors.black87),
+            style: TextStyle(color: editorText),
             decoration: InputDecoration(
               hintText: isImageMode
                   ? '分享这组图片背后的故事...'
                   : '请输入正文，支持 [markdown][/markdown] 和 [img=链接]',
-              hintStyle: const TextStyle(color: Colors.black45),
+              hintStyle: TextStyle(color: editorHint),
               filled: true,
-              fillColor: Colors.white,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
+              fillColor: editorFill,
+              border: editorBorder,
+              enabledBorder: editorBorder,
+              focusedBorder: editorFocusedBorder,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           const Text(
             '标签，最多 5 个',
             style: TextStyle(
@@ -1363,15 +1381,15 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               Expanded(
                 child: TextField(
                   controller: tagController,
-                  style: const TextStyle(color: Colors.black87),
+                  style: TextStyle(color: editorText),
                   decoration: InputDecoration(
                     hintText: '输入标签，例如 校园',
-                    hintStyle: const TextStyle(color: Colors.black45),
+                    hintStyle: TextStyle(color: editorHint),
                     filled: true,
-                    fillColor: Colors.white,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
+                    fillColor: editorFill,
+                    border: editorBorder,
+                    enabledBorder: editorBorder,
+                    focusedBorder: editorFocusedBorder,
                   ),
                   onSubmitted: (_) => _addTag(),
                 ),
@@ -1399,10 +1417,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _ToolButton(
                 icon: Icons.image_outlined,

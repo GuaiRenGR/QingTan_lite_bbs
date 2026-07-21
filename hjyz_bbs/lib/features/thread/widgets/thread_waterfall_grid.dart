@@ -98,11 +98,11 @@ class _ThreadWaterfallSliverState extends State<ThreadWaterfallSliver> {
   Widget build(BuildContext context) {
     _schedulePreload();
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 84),
       sliver: SliverMasonryGrid.count(
         crossAxisCount: _getColumnCount(context),
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
         childCount: widget.threads.length,
         itemBuilder: (context, index) {
           return ThreadWaterfallCard(item: widget.threads[index]);
@@ -166,7 +166,7 @@ class ThreadWaterfallCard extends StatelessWidget {
         '';
 
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(8),
       onTap: () {
         if (id > 0) {
           context.push('/thread/$id');
@@ -175,7 +175,7 @@ class ThreadWaterfallCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card(context),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.035),
@@ -203,7 +203,7 @@ class ThreadWaterfallCard extends StatelessWidget {
                 replyCount: replyCount,
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(9, 8, 9, 7),
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -217,7 +217,7 @@ class ThreadWaterfallCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       SafeNetworkImage(
@@ -351,6 +351,7 @@ class _PlaceholderWithBadges extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Stack(
       children: [
         Container(
@@ -358,10 +359,9 @@ class _PlaceholderWithBadges extends StatelessWidget {
           height: height,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Colors.pink.shade50,
-                Colors.blue.shade50,
-              ],
+              colors: isDark
+                  ? const [Color(0xFF2B2228), Color(0xFF202934)]
+                  : const [Color(0xFFFFF1F5), Color(0xFFF0F7FF)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -370,7 +370,7 @@ class _PlaceholderWithBadges extends StatelessWidget {
             child: Icon(
               Icons.article_outlined,
               size: 38,
-              color: Colors.grey.shade500,
+              color: AppColors.textSecondary(context),
             ),
           ),
         ),

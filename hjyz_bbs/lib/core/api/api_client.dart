@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
+import '../services/api_cache_service.dart';
+import '../services/connectivity_service.dart';
 import '../storage/token_storage.dart';
 import '../utils/app_logger.dart';
 import '../utils/device_helper.dart';
@@ -115,6 +117,7 @@ class ApiClient {
     final servers = ServerManager.instance.activeServers;
     await AppLogger.log('ApiClient', 'get start: route=$route servers=${servers.length}');
     DioException? lastError;
+    ApiResult<dynamic>? lastResponse;
 
     for (final server in servers) {
       try {
@@ -126,10 +129,16 @@ class ApiClient {
             ...?query,
           },
         );
+        ConnectivityService.instance.markOnline();
         ServerManager.instance.reportSuccess(server.id);
         final result = _handleResponse(response);
         await AppLogger.log('ApiClient', 'get OK: route=$route serverId=${server.id} code=${response.statusCode}');
-        return result;
+        if (result.success) {
+          await ApiCacheService.instance.write(route, query, result.data);
+          return result;
+        }
+        if (result.code == 401 || result.code == 403) return result;
+        lastResponse = result;
       } on DioException catch (e) {
         lastError = e;
         ServerManager.instance.reportFailure(server.id);
@@ -142,7 +151,18 @@ class ApiClient {
     }
 
     await AppLogger.log('ApiClient', 'get ALL_FAILED: route=$route');
-    return ApiResult.fail(_dioErrorMessage(lastError!));
+    if (lastError != null || lastResponse == null) {
+      ConnectivityService.instance.markOffline();
+    }
+    final cached = await ApiCacheService.instance.read(route, query);
+    if (cached != null) {
+      return ApiResult.ok(cached, message: '当前为离线模式，已加载本地缓存');
+    }
+    if (lastResponse != null) return lastResponse;
+    return ApiResult.fail(
+      lastError == null ? '当前无可用网络' : _dioErrorMessage(lastError),
+      code: -1,
+    );
   }
 
   Future<ApiResult<dynamic>> post(
@@ -165,6 +185,7 @@ class ApiClient {
           },
           data: formData ?? data,
         );
+        ConnectivityService.instance.markOnline();
         ServerManager.instance.reportSuccess(server.id);
         final result = _handleResponse(response);
         await AppLogger.log('ApiClient', 'post OK: route=$route serverId=${server.id} code=${response.statusCode}');
@@ -180,9 +201,16 @@ class ApiClient {
     }
 
     await AppLogger.log('ApiClient', 'post ALL_FAILED, enqueue: route=$route');
-    await WriteQueue.instance.enqueue(route, data: data);
+    ConnectivityService.instance.markOffline();
+    final canQueue = !route.startsWith('auth/');
+    if (canQueue) {
+      await WriteQueue.instance.enqueue(route, data: data);
+    }
 
-    return ApiResult.fail('所有服务器均不可用，请求已加入重试队列', code: -1);
+    return ApiResult.fail(
+      canQueue ? '所有服务器均不可用，请求已加入重试队列' : '当前网络不可用',
+      code: -1,
+    );
   }
 
   ApiResult<dynamic> _handleResponse(Response response) {
@@ -270,6 +298,7 @@ class ApiClient {
             receiveTimeout: const Duration(seconds: 60),
           ),
         );
+        ConnectivityService.instance.markOnline();
         ServerManager.instance.reportSuccess(server.id);
         return _handleResponse(response);
       } on DioException catch (e) {
@@ -281,6 +310,7 @@ class ApiClient {
       }
     }
 
+    ConnectivityService.instance.markOffline();
     return ApiResult.fail(lastError != null
         ? _dioErrorMessage(lastError)
         : '上传失败，请稍后重试');

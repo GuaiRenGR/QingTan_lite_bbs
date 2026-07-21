@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/services/api_cache_service.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../../thread/widgets/thread_waterfall_grid.dart';
@@ -59,9 +60,36 @@ class _HomeFeedPageState extends State<HomeFeedPage>
   }
 
   Future<void> _refresh() async {
+    final query = queryForPage(1);
+    if (threads.isEmpty) {
+      final cached = await ApiCacheService.instance.read(endpoint, query);
+      if (mounted && cached is Map) {
+        final raw = cached['list'];
+        final list = raw is List
+            ? raw
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+            : <Map<String, dynamic>>[];
+        if (list.isNotEmpty) {
+          setState(() {
+            hasMore = cached['has_more'] == true;
+            threads
+              ..clear()
+              ..addAll(list);
+            _loadedIds
+              ..clear()
+              ..addAll(list.map((item) => (item['id'] as num).toInt()));
+            loading = false;
+            error = null;
+          });
+        }
+      }
+    }
+
     final result = await ApiClient.instance.get(
       endpoint,
-      query: queryForPage(1),
+      query: query,
     );
 
     if (!mounted) return;
@@ -92,7 +120,7 @@ class _HomeFeedPageState extends State<HomeFeedPage>
     } else {
       setState(() {
         loading = false;
-        error = result.message;
+        error = threads.isEmpty ? result.message : null;
       });
     }
   }

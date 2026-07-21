@@ -160,6 +160,8 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
         colorSchemeSeed: const Color(0xFFFB7299),
         brightness: Brightness.light,
         scaffoldBackgroundColor: Colors.white,
+        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         fontFamily: null,
         textTheme: ThemeData.light().textTheme.apply(
               fontFamilyFallback: ForumXApp.fontFallback,
@@ -169,16 +171,42 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
           surfaceTintColor: Colors.white,
           elevation: 0,
           centerTitle: false,
+          toolbarHeight: 52,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        ),
+        listTileTheme: const ListTileThemeData(
+          dense: true,
+          minVerticalPadding: 6,
+          contentPadding: EdgeInsets.symmetric(horizontal: 14),
         ),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFFFB7299),
         brightness: Brightness.dark,
+        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         fontFamily: null,
         textTheme: ThemeData.dark().textTheme.apply(
               fontFamilyFallback: ForumXApp.fontFallback,
             ),
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          centerTitle: false,
+          toolbarHeight: 52,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        ),
+        listTileTheme: const ListTileThemeData(
+          dense: true,
+          minVerticalPadding: 6,
+          contentPadding: EdgeInsets.symmetric(horizontal: 14),
+        ),
       ),
     );
   }

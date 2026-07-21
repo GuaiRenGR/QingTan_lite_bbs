@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/services/api_cache_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/app_logger.dart';
 
@@ -42,6 +46,37 @@ class AuthState {
 class AuthController extends StateNotifier<AuthState> {
   AuthController() : super(const AuthState());
 
+  static const _cachedUserKey = 'auth_cached_user_v1';
+
+  Future<Map<String, dynamic>?> _readCachedUser() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_cachedUserKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _cacheUser(Map<String, dynamic>? user) async {
+    if (user == null || user.isEmpty) return;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_cachedUserKey, jsonEncode(user));
+    } catch (_) {}
+  }
+
+  Future<void> _clearCachedUser() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_cachedUserKey);
+    } catch (_) {}
+  }
+
   Future<void> init() async {
     state = state.copyWith(loading: true);
 
@@ -57,24 +92,42 @@ class AuthController extends StateNotifier<AuthState> {
       return;
     }
 
+    final cachedUser = await _readCachedUser();
+    state = AuthState(
+      loading: true,
+      loggedIn: true,
+      user: cachedUser,
+    );
+
     final result = await ApiClient.instance.get('user/me');
     await AppLogger.log('Auth', 'init: user/me success=${result.success} dataType=${result.data?.runtimeType} message=${result.message}');
 
     if (result.success && result.data is Map<String, dynamic>) {
       final userMap = result.data as Map<String, dynamic>;
       await AppLogger.log('Auth', 'init: loggedIn=true userId=${userMap['id']} nickname=${userMap['nickname']}');
+      await _cacheUser(userMap);
       state = AuthState(
         loading: false,
         loggedIn: true,
         user: userMap,
       );
-    } else {
-      await AppLogger.log('Auth', 'init: failed, clearing token');
+    } else if (result.code == 401 || result.code == 403) {
+      await AppLogger.log('Auth', 'init: token rejected, clearing local session');
       await TokenStorage.instance.clearToken();
+      await ApiCacheService.instance.clear();
+      await _clearCachedUser();
       state = AuthState(
         loading: false,
         loggedIn: false,
         user: null,
+        error: result.message,
+      );
+    } else {
+      await AppLogger.log('Auth', 'init: offline, keeping token and cached user');
+      state = AuthState(
+        loading: false,
+        loggedIn: true,
+        user: cachedUser,
         error: result.message,
       );
     }
@@ -121,15 +174,21 @@ class AuthController extends StateNotifier<AuthState> {
       return false;
     }
 
+    await ApiCacheService.instance.clear();
     await TokenStorage.instance.saveToken(token);
+
+    final normalizedUser = userData is Map
+        ? Map<String, dynamic>.from(userData)
+        : null;
+    await _cacheUser(normalizedUser);
 
     state = AuthState(
       loading: false,
       loggedIn: true,
-      user: userData is Map<String, dynamic> ? userData : null,
+      user: normalizedUser,
     );
 
-    await AppLogger.log('Auth', 'login success: userId=${(userData as Map<String, dynamic>?)?['id']}');
+    await AppLogger.log('Auth', 'login success: userId=${normalizedUser?['id']}');
     return true;
   }
 
@@ -176,14 +235,18 @@ class AuthController extends StateNotifier<AuthState> {
       return false;
     }
 
+    await ApiCacheService.instance.clear();
     await TokenStorage.instance.saveToken(token);
+
+    final normalizedUser = data['user'] is Map
+        ? Map<String, dynamic>.from(data['user'] as Map)
+        : null;
+    await _cacheUser(normalizedUser);
 
     state = AuthState(
       loading: false,
       loggedIn: true,
-      user: data['user'] is Map<String, dynamic>
-          ? data['user'] as Map<String, dynamic>
-          : null,
+      user: normalizedUser,
     );
 
     return true;
@@ -192,6 +255,8 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await ApiClient.instance.post('auth/logout');
     await TokenStorage.instance.clearToken();
+    await ApiCacheService.instance.clear();
+    await _clearCachedUser();
 
     state = const AuthState(
       loading: false,

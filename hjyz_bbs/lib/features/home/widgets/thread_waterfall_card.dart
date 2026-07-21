@@ -20,7 +20,7 @@ class ThreadWaterfallCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card(context),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: AppColors.border(context),
             width: 0.5,
@@ -32,7 +32,7 @@ class ThreadWaterfallCard extends StatelessWidget {
           children: [
             _Cover(thread: thread),
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 3),
               child: Text(
                 thread.title,
                 maxLines: 2,
@@ -46,7 +46,7 @@ class ThreadWaterfallCard extends StatelessWidget {
             ),
             if (thread.summary.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 5),
                 child: Text(
                   thread.summary,
                   maxLines: 2,
@@ -59,7 +59,7 @@ class ThreadWaterfallCard extends StatelessWidget {
                 ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 7),
               child: Row(
                 children: [
                   SafeNetworkImage(
