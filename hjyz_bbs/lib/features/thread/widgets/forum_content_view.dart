@@ -332,7 +332,7 @@ class ForumContentView extends StatelessWidget {
       r'(\[markdown\]([\s\S]*?)\[\/markdown\])'
       r'|(\[img=((?:https?:\/\/|\/)[^\]\s]+)\])'
       r'|(\[video=(https?:\/\/[^\]\s]+)\])'
-      r'|(\[music=((?:https?:\/\/|\/)[^\]]+)\])'
+      r'|(\[music=([^\]\s]+)\])'
       r'|(\[thread=([^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
