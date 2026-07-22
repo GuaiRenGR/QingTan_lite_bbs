@@ -29,6 +29,11 @@ class DiscoverPage extends ConsumerWidget {
         onTap: () => context.push('/music-playlist'),
       ),
       _ToolItem(
+        icon: Icons.cloud_queue_rounded,
+        label: '网易云音乐',
+        onTap: () => context.push('/netease-music'),
+      ),
+      _ToolItem(
         icon: Icons.manage_search_rounded,
         label: '音乐管理器',
         onTap: () => context.push('/music-library'),

@@ -15,6 +15,7 @@ import 'features/message/notification_settings_page.dart';
 import 'features/music/music_player_page.dart';
 import 'features/music/music_playlist_page.dart';
 import 'features/music/music_library_page.dart';
+import 'features/music/netease_music_page.dart';
 import 'features/search/search_page.dart';
 import 'features/thread/create_thread_page.dart';
 import 'features/thread/thread_detail_page.dart';
@@ -161,6 +162,10 @@ final router = GoRouter(
     GoRoute(
       path: '/music-library',
       builder: (_, _) => const MusicLibraryPage(),
+    ),
+    GoRoute(
+      path: '/netease-music',
+      builder: (_, _) => const NeteaseMusicPage(),
     ),
     GoRoute(
       path: '/dv/:code',

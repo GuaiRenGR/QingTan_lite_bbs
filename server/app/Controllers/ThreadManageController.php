@@ -81,10 +81,15 @@ class ThreadManageController
         $cover = '';
 
         if (!empty($allImages[0])) {
-            self::deleteOldCoverThumb($threadId);
-
             $thumb = generate_thumbnail($allImages[0], $user['id']);
             $cover = $thumb ? $thumb['url'] : $allImages[0];
+
+            // Only remove the previous generated thumbnail after its
+            // replacement is ready. Uploaded source images must never be
+            // treated as disposable thumbnails.
+            if ($thumb) {
+                self::deleteOldCoverThumb($threadId);
+            }
         }
 
         $summary = make_summary($content);
@@ -250,7 +255,14 @@ class ThreadManageController
             $attachmentId = (int)$m[1];
 
             $att = \Database::fetch(
-                "SELECT id, onedrive_item_id FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
+                "SELECT id, onedrive_item_id
+                 FROM {$attachments}
+                 WHERE id = ?
+                   AND status = 1
+                   AND file_name = 'thumbnail.jpg'
+                   AND object_type IS NULL
+                   AND object_id IS NULL
+                 LIMIT 1",
                 [$attachmentId]
             );
 

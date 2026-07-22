@@ -27,6 +27,17 @@ class MusicPlaylistPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('我的歌单'),
         actions: [
+          if (favorites.tracks.isNotEmpty)
+            TextButton.icon(
+              onPressed: () async {
+                await ref
+                    .read(musicPlayerProvider.notifier)
+                    .playTracks(favorites.tracks);
+                if (context.mounted) context.push('/music-player');
+              },
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('全部播放'),
+            ),
           if (userId > 0)
             IconButton(
               onPressed: () => ref

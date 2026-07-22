@@ -15,6 +15,44 @@ class SystemController
         ], 'pong');
     }
 
+    public static function servers()
+    {
+        $config = \load_server_config();
+        $configured = $config['servers'] ?? [];
+        $servers = [];
+
+        foreach (is_array($configured) ? $configured : [] as $server) {
+            $url = self::normalizeApiEntry($server['url'] ?? '');
+            $id = (int)($server['id'] ?? 0);
+            if ($id <= 0 || $url === '') {
+                continue;
+            }
+            $servers[] = [
+                'id' => $id,
+                'name' => trim((string)($server['name'] ?? '服务器 ' . $id)),
+                'url' => $url,
+                'weight' => max(1, (int)($server['weight'] ?? 5)),
+            ];
+        }
+
+        if (empty($servers) && $config) {
+            $url = self::normalizeApiEntry($config['server_url'] ?? '');
+            if ($url !== '') {
+                $servers[] = [
+                    'id' => max(1, (int)($config['server_id'] ?? 1)),
+                    'name' => trim((string)($config['server_name'] ?? '默认服务器')),
+                    'url' => $url,
+                    'weight' => 5,
+                ];
+            }
+        }
+
+        \Response::success([
+            'servers' => $servers,
+            'updated_at' => now(),
+        ]);
+    }
+
     public static function health()
     {
         $config = \load_server_config();
@@ -183,5 +221,18 @@ class SystemController
         if ($headerToken !== $token) {
             \Response::json(401, '同步认证失败');
         }
+    }
+
+    private static function normalizeApiEntry($url)
+    {
+        $url = rtrim(trim((string)$url), '/');
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return '';
+        }
+        $path = (string)(parse_url($url, PHP_URL_PATH) ?? '');
+        if (substr($path, -4) !== '.php') {
+            $url .= '/index.php';
+        }
+        return $url;
     }
 }

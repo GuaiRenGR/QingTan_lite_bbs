@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/services/document_picker_service.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
@@ -420,8 +420,18 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> pickMusic() async {
-              final picked = await FilePicker.platform.pickFiles(
-                type: FileType.custom,
+              final file = await DocumentPickerService.instance.pick(
+                mimeType: 'audio/*',
+                mimeTypes: const [
+                  'audio/mpeg',
+                  'audio/mp4',
+                  'audio/aac',
+                  'audio/wav',
+                  'audio/x-wav',
+                  'audio/ogg',
+                  'audio/flac',
+                  'audio/x-flac',
+                ],
                 allowedExtensions: [
                   'mp3',
                   'm4a',
@@ -430,19 +440,15 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   'ogg',
                   'flac',
                 ],
-                allowMultiple: false,
               );
-              final file = picked == null || picked.files.isEmpty
-                  ? null
-                  : picked.files.single;
-              if (file?.path == null || !dialogContext.mounted) return;
+              if (file == null || !dialogContext.mounted) return;
               final metadata = await MusicCacheService.instance.readLocalMetadata(
-                File(file!.path!),
+                File(file.path),
                 fallbackTitle: file.name,
               );
               if (!dialogContext.mounted) return;
               setDialogState(() {
-                musicFile = File(file!.path!);
+                musicFile = File(file.path);
                 musicName = file.name;
                 musicMetadata = metadata;
                 songTitleController.text = metadata.title;
@@ -451,17 +457,17 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
             }
 
             Future<void> pickLyrics() async {
-              final picked = await FilePicker.platform.pickFiles(
-                type: FileType.custom,
+              final file = await DocumentPickerService.instance.pick(
+                mimeType: 'text/plain',
+                mimeTypes: const [
+                  'text/plain',
+                  'application/octet-stream',
+                ],
                 allowedExtensions: ['lrc'],
-                allowMultiple: false,
               );
-              final file = picked == null || picked.files.isEmpty
-                  ? null
-                  : picked.files.single;
-              if (file?.path == null || !dialogContext.mounted) return;
+              if (file == null || !dialogContext.mounted) return;
               setDialogState(() {
-                lyricsFile = File(file!.path!);
+                lyricsFile = File(file.path);
                 lyricsName = file.name;
               });
             }
@@ -653,16 +659,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   Future<void> _pickAndUploadAttachment() async {
     if (uploadingAttachment) return;
 
-    final picked = await FilePicker.platform.pickFiles(
-      allowMultiple: false,
-    );
-
-    if (picked == null || picked.files.isEmpty) return;
-
-    final file = picked.files.single;
+    final file = await DocumentPickerService.instance.pick();
+    if (file == null) return;
     final path = file.path;
-
-    if (path == null || path.isEmpty) return;
 
     setState(() {
       uploadingAttachment = true;
@@ -929,16 +928,19 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   Future<void> _pickAndUploadVideo() async {
     if (uploadingVideo) return;
 
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.video,
-      allowMultiple: false,
+    final file = await DocumentPickerService.instance.pick(
+      mimeType: 'video/*',
+      mimeTypes: const [
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/x-matroska',
+      ],
+      allowedExtensions: const ['mp4', 'webm', 'mov', 'avi', 'mkv'],
     );
-
-    if (picked == null || picked.files.isEmpty) return;
-
-    final path = picked.files.single.path;
-
-    if (path == null || path.isEmpty) return;
+    if (file == null) return;
+    final path = file.path;
 
     setState(() {
       uploadingVideo = true;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/api/server_manager.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/update_service.dart';
@@ -25,6 +26,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool autoCheckUpdate = true;
   bool useHttps = false;
   bool useBuiltinDownloader = true;
+  bool testingServers = false;
   String appVersion = '';
 
   @override
@@ -69,6 +71,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(key, value);
     } catch (_) {}
+  }
+
+  Future<void> _testServers() async {
+    if (testingServers) return;
+    setState(() => testingServers = true);
+    final manager = ServerManager.instance;
+    final refreshed = await manager.refreshServerList();
+    if (!refreshed) await manager.checkAllServers();
+    if (!mounted) return;
+    setState(() => testingServers = false);
+  }
+
+  Future<void> _selectServer(int serverId) async {
+    await ServerManager.instance.selectServer(serverId);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已切换服务器')),
+    );
+  }
+
+  String _serverStatus(int serverId) {
+    final health = ServerManager.instance.healthFor(serverId);
+    if (health == null) return '尚未测速';
+    if (!health.reachable) return '连接失败';
+    return '${health.latencyMs} ms';
   }
 
   void _showInfo(String title, String content) {
@@ -240,6 +268,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   }
                 },
               ),
+            ],
+          ),
+          _Section(
+            title: '服务器',
+            children: [
+              ListTile(
+                leading: const Icon(Icons.speed_rounded),
+                title: const Text('服务器测速'),
+                subtitle: const Text('刷新可用服务器并检测连接速度'),
+                trailing: testingServers
+                    ? const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+                onTap: testingServers ? null : _testServers,
+              ),
+              for (final server in ServerManager.instance.servers)
+                ListTile(
+                  leading: Icon(
+                    ServerManager.instance.currentServer?.id == server.id
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: ServerManager.instance.currentServer?.id == server.id
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  title: Text(server.name),
+                  subtitle: Text(_serverStatus(server.id)),
+                  trailing:
+                      ServerManager.instance.healthFor(server.id)?.reachable ==
+                              true
+                      ? const Icon(Icons.wifi_rounded, size: 20)
+                      : const Icon(Icons.wifi_off_rounded, size: 20),
+                  onTap: () => _selectServer(server.id),
+                ),
             ],
           ),
           _Section(

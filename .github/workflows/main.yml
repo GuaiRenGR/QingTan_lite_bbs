@@ -151,6 +151,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # jni FFI 插件在 Linux CMake 配置阶段需要 JDK 头文件。
+      - name: Setup Java for JNI plugins
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -160,7 +167,13 @@ jobs:
             ninja-build \
             pkg-config \
             libgtk-3-dev \
-            liblzma-dev
+            liblzma-dev \
+            libsecret-1-dev \
+            libnotify-dev \
+            libpulse-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libdbus-1-dev
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -171,11 +184,14 @@ jobs:
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
 
+      - name: Diagnose Linux toolchain
+        run: flutter doctor -v
+
       - name: Get dependencies
         run: flutter pub get
 
       - name: Build Linux
-        run: flutter build linux --release
+        run: flutter build linux --release -v
 
       - name: Package Linux
         shell: bash

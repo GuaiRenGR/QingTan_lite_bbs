@@ -19,7 +19,7 @@ class ApiClient {
 
   static final ApiClient instance = ApiClient._();
 
-  final Map<int, Dio> _dioInstances = {};
+  final Map<String, Dio> _dioInstances = {};
   Dio? _fallbackDio;
 
   Dio _getDio() {
@@ -31,10 +31,11 @@ class ApiClient {
   }
 
   Dio _getDioForServer(int serverId, String baseUrl) {
-    if (!_dioInstances.containsKey(serverId)) {
-      _dioInstances[serverId] = _createDio(baseUrl);
+    final key = '$serverId|$baseUrl';
+    if (!_dioInstances.containsKey(key)) {
+      _dioInstances[key] = _createDio(baseUrl);
     }
-    return _dioInstances[serverId]!;
+    return _dioInstances[key]!;
   }
 
   Dio _getFallbackDio() {
@@ -114,7 +115,7 @@ class ApiClient {
     String route, {
     Map<String, dynamic>? query,
   }) async {
-    final servers = ServerManager.instance.activeServers;
+    final servers = ServerManager.instance.requestServers;
     await AppLogger.log('ApiClient', 'get start: route=$route servers=${servers.length}');
     DioException? lastError;
     ApiResult<dynamic>? lastResponse;
@@ -171,7 +172,7 @@ class ApiClient {
     Map<String, dynamic>? data,
     FormData? formData,
   }) async {
-    final servers = ServerManager.instance.activeServers;
+    final servers = ServerManager.instance.requestServers;
     await AppLogger.log('ApiClient', 'post start: route=$route servers=${servers.length}');
 
     for (final server in servers) {
@@ -276,7 +277,7 @@ class ApiClient {
     required File file,
     Map<String, String>? fields,
   }) async {
-    final servers = ServerManager.instance.activeServers;
+    final servers = ServerManager.instance.requestServers;
     DioException? lastError;
 
     for (final server in servers) {

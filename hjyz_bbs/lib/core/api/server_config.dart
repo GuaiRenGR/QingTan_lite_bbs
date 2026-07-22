@@ -13,19 +13,19 @@ class ServerConfig {
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     return ServerConfig(
-      id: json['id'] as int,
-      name: json['name'] as String? ?? '',
-      url: json['url'] as String,
-      weight: json['weight'] as int? ?? 5,
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      name: json['name']?.toString().trim() ?? '',
+      url: json['url']?.toString().trim() ?? '',
+      weight: int.tryParse(json['weight']?.toString() ?? '') ?? 5,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'url': url,
-    'weight': weight,
-  };
+        'id': id,
+        'name': name,
+        'url': url,
+        'weight': weight,
+      };
 }
 
 class ServerHealth {

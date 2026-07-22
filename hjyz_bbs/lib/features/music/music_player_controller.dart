@@ -214,6 +214,47 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     await _loadIndex(index, autoplay: autoplay);
   }
 
+  Future<void> playTracks(
+    Iterable<MusicTrack> tracks, {
+    bool autoplay = true,
+  }) async {
+    final unique = <MusicTrack>[];
+    final keys = <String>{};
+    for (final track in tracks) {
+      final url = track.url.trim();
+      if (url.isEmpty) continue;
+      final uuid = track.uuid?.trim() ?? '';
+      final key = uuid.isNotEmpty ? 'uuid:$uuid' : 'url:$url';
+      if (!keys.add(key)) continue;
+      unique.add(
+        MusicTrack(
+          uuid: uuid.isEmpty ? null : uuid,
+          url: url,
+          title: track.title.trim().isEmpty ? '音乐' : track.title.trim(),
+          artist: track.artist.trim(),
+          coverArt: track.coverArt,
+          coverUrl: track.coverUrl?.trim().isEmpty == true
+              ? null
+              : track.coverUrl?.trim(),
+          lyricsUrl: track.lyricsUrl?.trim().isEmpty == true
+              ? null
+              : track.lyricsUrl?.trim(),
+        ),
+      );
+    }
+    if (unique.isEmpty) return;
+
+    await _player.stop();
+    _loadedUrl = null;
+    state = MusicPlayerState(
+      playlist: List.unmodifiable(unique),
+      currentIndex: 0,
+      loading: true,
+    );
+    _schedulePersist();
+    await _loadIndex(0, autoplay: autoplay);
+  }
+
   Future<void> toggleTrack(MusicTrack track) async {
     final index = upsertTrack(track);
     if (index < 0) return;

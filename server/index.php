@@ -59,6 +59,10 @@ try {
             App\Controllers\SystemController::ping();
             break;
 
+        case 'system/servers':
+            App\Controllers\SystemController::servers();
+            break;
+
         case 'system/health':
             App\Controllers\SystemController::health();
             break;
@@ -181,6 +185,18 @@ try {
 
         case 'music/search':
             App\Controllers\MusicLibraryController::search();
+            break;
+
+        case 'netease/search':
+            App\Controllers\NeteaseMusicController::search();
+            break;
+
+        case 'netease/play':
+            App\Controllers\NeteaseMusicController::play();
+            break;
+
+        case 'netease/lyrics':
+            App\Controllers\NeteaseMusicController::lyrics();
             break;
 
         case 'threads/detail':
