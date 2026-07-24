@@ -15,6 +15,7 @@ import '../../../core/services/music_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
+import '../../../core/widgets/sensitive_media.dart';
 import '../../music/music_player_controller.dart';
 import 'forum_video_player.dart';
 
@@ -22,12 +23,14 @@ class ForumContentView extends StatelessWidget {
   final String content;
   final bool canViewHidden;
   final VoidCallback? onNeedReply;
+  final List<String> sensitiveLabels;
 
   const ForumContentView({
     super.key,
     required this.content,
     this.canViewHidden = false,
     this.onNeedReply,
+    this.sensitiveLabels = const [],
   });
 
   @override
@@ -82,18 +85,24 @@ class ForumContentView extends StatelessWidget {
 
       case _ContentPartType.image:
         final imgIndex = allImages.indexOf(part.value);
-        return GestureDetector(
-          onTap: () => ImageViewer.open(
-            context,
-            allImages,
-            initialIndex: imgIndex >= 0 ? imgIndex : 0,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SafeNetworkImage(
-              url: part.value,
-              width: double.infinity,
-              fit: BoxFit.cover,
+        return SensitiveMedia(
+          labels: sensitiveLabels,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 180),
+            child: GestureDetector(
+              onTap: () => ImageViewer.open(
+                context,
+                allImages,
+                initialIndex: imgIndex >= 0 ? imgIndex : 0,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SafeNetworkImage(
+                  url: part.value,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
         );
@@ -186,6 +195,7 @@ class ForumContentView extends StatelessWidget {
                   content: part.value,
                   canViewHidden: true,
                   onNeedReply: onNeedReply,
+                  sensitiveLabels: sensitiveLabels,
                 ),
               ],
             ),
@@ -840,6 +850,11 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
                 playerState.duration.inMilliseconds)
             .clamp(0.0, 1.0)
         : 0.0;
+    final bufferedProgress = isCurrent && playerState.duration.inMilliseconds > 0
+        ? (playerState.bufferedPosition.inMilliseconds /
+                playerState.duration.inMilliseconds)
+            .clamp(progress, 1.0)
+        : 0.0;
     final accentColor = theme.colorScheme.primary;
 
     return Padding(
@@ -921,13 +936,23 @@ class _InlineMusicPlayerState extends ConsumerState<_InlineMusicPlayer> {
                             Expanded(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  minHeight: 4,
-                                  color: accentColor,
-                                  backgroundColor: accentColor.withValues(
-                                    alpha: isDark ? 0.25 : 0.12,
-                                  ),
+                                child: Stack(
+                                  children: [
+                                    LinearProgressIndicator(
+                                      value: bufferedProgress,
+                                      minHeight: 4,
+                                      color: accentColor.withValues(alpha: 0.35),
+                                      backgroundColor: accentColor.withValues(
+                                        alpha: isDark ? 0.25 : 0.12,
+                                      ),
+                                    ),
+                                    LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 4,
+                                      color: accentColor,
+                                      backgroundColor: Colors.transparent,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

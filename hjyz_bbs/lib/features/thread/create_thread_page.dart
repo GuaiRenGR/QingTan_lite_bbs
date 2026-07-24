@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,11 +10,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
-import '../../core/services/document_picker_service.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
 import '../../core/widgets/safe_network_image.dart';
+import '../../core/widgets/sensitive_media.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/forum_content_view.dart';
 
@@ -49,6 +50,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
   final List<String> imageUrls = [];
   final List<int> attachmentIds = [];
+  final List<String> sensitiveLabels = [];
 
   int selectedForumId = 0;
 
@@ -153,6 +155,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       'mode': mode,
       'image_urls': imageUrls,
       'attachment_ids': attachmentIds,
+      'sensitive_labels': sensitiveLabels,
       'saved_at': DateTime.now().toIso8601String(),
     };
 
@@ -200,6 +203,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   .where((e) => e > 0)
               : [],
         );
+
+      sensitiveLabels
+        ..clear()
+        ..addAll(parseSensitiveLabels(decoded['sensitive_labels']));
 
     });
   }
@@ -290,6 +297,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   .where((e) => e.isNotEmpty)
               : [],
         );
+
+      sensitiveLabels
+        ..clear()
+        ..addAll(parseSensitiveLabels(thread['sensitive_labels']));
     });
   }
 
@@ -420,18 +431,8 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> pickMusic() async {
-              final file = await DocumentPickerService.instance.pick(
-                mimeType: 'audio/*',
-                mimeTypes: const [
-                  'audio/mpeg',
-                  'audio/mp4',
-                  'audio/aac',
-                  'audio/wav',
-                  'audio/x-wav',
-                  'audio/ogg',
-                  'audio/flac',
-                  'audio/x-flac',
-                ],
+              final picked = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
                 allowedExtensions: [
                   'mp3',
                   'm4a',
@@ -440,15 +441,19 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                   'ogg',
                   'flac',
                 ],
+                allowMultiple: false,
               );
-              if (file == null || !dialogContext.mounted) return;
+              final file = picked == null || picked.files.isEmpty
+                  ? null
+                  : picked.files.single;
+              if (file?.path == null || !dialogContext.mounted) return;
               final metadata = await MusicCacheService.instance.readLocalMetadata(
-                File(file.path),
+                File(file!.path!),
                 fallbackTitle: file.name,
               );
               if (!dialogContext.mounted) return;
               setDialogState(() {
-                musicFile = File(file.path);
+                musicFile = File(file!.path!);
                 musicName = file.name;
                 musicMetadata = metadata;
                 songTitleController.text = metadata.title;
@@ -457,17 +462,17 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
             }
 
             Future<void> pickLyrics() async {
-              final file = await DocumentPickerService.instance.pick(
-                mimeType: 'text/plain',
-                mimeTypes: const [
-                  'text/plain',
-                  'application/octet-stream',
-                ],
+              final picked = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
                 allowedExtensions: ['lrc'],
+                allowMultiple: false,
               );
-              if (file == null || !dialogContext.mounted) return;
+              final file = picked == null || picked.files.isEmpty
+                  ? null
+                  : picked.files.single;
+              if (file?.path == null || !dialogContext.mounted) return;
               setDialogState(() {
-                lyricsFile = File(file.path);
+                lyricsFile = File(file!.path!);
                 lyricsName = file.name;
               });
             }
@@ -659,9 +664,16 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   Future<void> _pickAndUploadAttachment() async {
     if (uploadingAttachment) return;
 
-    final file = await DocumentPickerService.instance.pick();
-    if (file == null) return;
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+    );
+
+    if (picked == null || picked.files.isEmpty) return;
+
+    final file = picked.files.single;
     final path = file.path;
+
+    if (path == null || path.isEmpty) return;
 
     setState(() {
       uploadingAttachment = true;
@@ -928,19 +940,16 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   Future<void> _pickAndUploadVideo() async {
     if (uploadingVideo) return;
 
-    final file = await DocumentPickerService.instance.pick(
-      mimeType: 'video/*',
-      mimeTypes: const [
-        'video/mp4',
-        'video/webm',
-        'video/quicktime',
-        'video/x-msvideo',
-        'video/x-matroska',
-      ],
-      allowedExtensions: const ['mp4', 'webm', 'mov', 'avi', 'mkv'],
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: false,
     );
-    if (file == null) return;
-    final path = file.path;
+
+    if (picked == null || picked.files.isEmpty) return;
+
+    final path = picked.files.single.path;
+
+    if (path == null || path.isEmpty) return;
 
     setState(() {
       uploadingVideo = true;
@@ -1116,6 +1125,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
         'image_urls': imageUrls,
         'attachment_ids': attachmentIds,
         'tags': tags,
+        'sensitive_labels': sensitiveLabels,
       };
 
       final result = await ApiClient.instance.post(endpoint, data: body);
@@ -1487,6 +1497,54 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               onDelete: (index) => _deleteImage(index),
             ),
           ],
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: contentController,
+            builder: (context, value, _) {
+              final hasImages = imageUrls.isNotEmpty ||
+                  _extractRemoteImagesFromContent(value.text).isNotEmpty;
+              if (!hasImages) return const SizedBox.shrink();
+
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 19),
+                        SizedBox(width: 7),
+                        Text(
+                          '标记敏感内容',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final entry in sensitiveLabelNames.entries)
+                          FilterChip(
+                            label: Text(entry.value),
+                            selected: sensitiveLabels.contains(entry.key),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  sensitiveLabels.add(entry.key);
+                                } else {
+                                  sensitiveLabels.remove(entry.key);
+                                }
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
       backgroundColor: AppColors.scaffoldBg(context),

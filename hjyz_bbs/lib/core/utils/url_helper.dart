@@ -3,13 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class UrlHelper {
   UrlHelper._();
 
-  static bool _httpsEnabled = false;
+  static bool _httpsEnabled = true;
 
   static const _targetHost = 'newbbs.hj1bbs.top';
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _httpsEnabled = prefs.getBool('use_https') ?? false;
+    _httpsEnabled = prefs.getBool('use_https') ?? true;
   }
 
   static void setEnabled(bool value) {

@@ -14,6 +14,7 @@ class ThreadManageController
         $mode = \Request::input('mode', 'article');
         $forumId = \Request::int('forum_id', 0);
         $tagNames = \Request::input('tags', []);
+        $sensitiveLabels = \Request::input('sensitive_labels', []);
 
         if ($threadId <= 0) {
             \Response::json(422, '帖子 ID 错误');
@@ -78,6 +79,13 @@ class ThreadManageController
         }
 
         $allImages = array_values(array_unique(array_merge($imageUrls, $remoteImages)));
+        $allowedSensitiveLabels = ['sensitive', 'nudity', 'adult', 'violence', 'politics'];
+        $sensitiveLabels = is_array($sensitiveLabels)
+            ? array_values(array_unique(array_intersect($sensitiveLabels, $allowedSensitiveLabels)))
+            : [];
+        if (empty($allImages)) {
+            $sensitiveLabels = [];
+        }
         $cover = '';
 
         if (!empty($allImages[0])) {
@@ -103,6 +111,7 @@ class ThreadManageController
                  mode = ?,
                  cover = ?,
                  images_json = ?,
+                 sensitive_labels_json = ?,
                  updated_at = ?
              WHERE id = ?",
             [
@@ -113,6 +122,7 @@ class ThreadManageController
                 $mode,
                 $cover,
                 json_encode($allImages, JSON_UNESCAPED_UNICODE),
+                json_encode($sensitiveLabels, JSON_UNESCAPED_UNICODE),
                 now(),
                 $threadId,
             ]

@@ -153,6 +153,7 @@ function createTables(PDO $pdo, string $prefix)
       `cover` VARCHAR(1000) DEFAULT NULL,
       `mode` VARCHAR(20) NOT NULL DEFAULT 'article',
       `images_json` MEDIUMTEXT NULL,
+      `sensitive_labels_json` VARCHAR(255) DEFAULT NULL,
       `music_url` VARCHAR(1000) DEFAULT NULL,
       `music_name` VARCHAR(255) DEFAULT NULL,
       `view_count` INT NOT NULL DEFAULT 0,

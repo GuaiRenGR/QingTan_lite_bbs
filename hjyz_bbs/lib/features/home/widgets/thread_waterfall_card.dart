@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/safe_network_image.dart';
+import '../../../core/widgets/sensitive_media.dart';
 import '../../thread/thread_model.dart';
 
 class ThreadWaterfallCard extends StatelessWidget {
@@ -136,12 +137,16 @@ class _Cover extends StatelessWidget {
     return Stack(
       children: [
         if (hasCover)
-          SafeNetworkImage(
-            url: thread.cover,
-            width: double.infinity,
-            height: height,
-            fit: BoxFit.cover,
-            errorWidget: placeholder,
+          SensitiveMedia(
+            labels: thread.sensitiveLabels,
+            blockedHeight: height,
+            child: SafeNetworkImage(
+              url: thread.cover,
+              width: double.infinity,
+              height: height,
+              fit: BoxFit.cover,
+              errorWidget: placeholder,
+            ),
           )
         else
           placeholder,

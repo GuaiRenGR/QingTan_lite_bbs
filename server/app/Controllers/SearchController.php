@@ -51,6 +51,7 @@ class SearchController
                 t.summary,
                 t.cover,
                 t.mode,
+                t.sensitive_labels_json,
                 t.view_count,
                 t.like_count,
                 t.favorite_count,
@@ -86,6 +87,7 @@ class SearchController
         );
 
         $list = array_map(function ($row) {
+            $sensitiveLabels = json_decode($row['sensitive_labels_json'] ?? '[]', true);
             return [
                 'id' => (int)$row['id'],
                 'forum_id' => (int)$row['forum_id'],
@@ -94,6 +96,7 @@ class SearchController
                 'summary' => $row['summary'] ?? '',
                 'cover' => $row['cover'] ?? '',
                 'mode' => $row['mode'] ?? 'article',
+                'sensitive_labels' => is_array($sensitiveLabels) ? array_values($sensitiveLabels) : [],
                 'view_count' => (int)$row['view_count'],
                 'like_count' => (int)$row['like_count'],
                 'favorite_count' => (int)$row['favorite_count'],

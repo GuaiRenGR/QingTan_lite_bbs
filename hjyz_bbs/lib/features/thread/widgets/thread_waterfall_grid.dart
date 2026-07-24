@@ -6,6 +6,7 @@ import '../../../core/services/image_cache_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/safe_network_image.dart';
+import '../../../core/widgets/sensitive_media.dart';
 
 class ThreadWaterfallGrid extends StatefulWidget {
   final List<Map<String, dynamic>> threads;
@@ -155,6 +156,7 @@ class ThreadWaterfallCard extends StatelessWidget {
     final replyCount = _toInt(item['reply_count']);
     final isTop = _toBool(item['is_top']);
     final isDigest = _toBool(item['is_digest']);
+    final sensitiveLabels = parseSensitiveLabels(item['sensitive_labels']);
 
     final authorName = item['author_name']?.toString() ??
         item['nickname']?.toString() ??
@@ -189,11 +191,15 @@ class ThreadWaterfallCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (cover.isNotEmpty)
-              _CoverWithBadges(
-                cover: cover,
-                isTop: isTop,
-                isDigest: isDigest,
-                replyCount: replyCount,
+              SensitiveMedia(
+                labels: sensitiveLabels,
+                blockedHeight: 120 + (id.abs() % 5) * 15.0,
+                child: _CoverWithBadges(
+                  cover: cover,
+                  isTop: isTop,
+                  isDigest: isDigest,
+                  replyCount: replyCount,
+                ),
               )
             else
               _PlaceholderWithBadges(

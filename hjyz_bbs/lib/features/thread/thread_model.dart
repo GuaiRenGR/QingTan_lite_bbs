@@ -12,6 +12,7 @@ class ThreadModel {
   final int favoriteCount;
   final bool isTop;
   final bool isDigest;
+  final List<String> sensitiveLabels;
   final String createdAt;
 
   final String authorName;
@@ -32,6 +33,7 @@ class ThreadModel {
     required this.favoriteCount,
     required this.isTop,
     required this.isDigest,
+    this.sensitiveLabels = const [],
     required this.createdAt,
     required this.authorName,
     required this.authorAvatar,
@@ -60,6 +62,11 @@ class ThreadModel {
       favoriteCount: _toInt(json['favorite_count']),
       isTop: _toBool(json['is_top']),
       isDigest: _toBool(json['is_digest']),
+      sensitiveLabels: json['sensitive_labels'] is List
+          ? (json['sensitive_labels'] as List)
+              .map((item) => item.toString())
+              .toList()
+          : const [],
       createdAt: _toString(json['created_at']),
       authorName: user is Map
           ? _toString(user['nickname'], fallback: '匿名用户')
@@ -90,6 +97,7 @@ class ThreadModel {
       'author_avatar': authorAvatar,
       'is_top': isTop,
       'is_digest': isDigest,
+      'sensitive_labels': sensitiveLabels,
     };
   }
 
@@ -108,6 +116,7 @@ class ThreadModel {
       favoriteCount: 0,
       isTop: false,
       isDigest: false,
+      sensitiveLabels: const [],
       createdAt: '',
       authorName: '匿名用户',
       authorAvatar: '',

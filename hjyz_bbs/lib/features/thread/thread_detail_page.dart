@@ -9,6 +9,7 @@ import '../../core/widgets/emoji_input_field.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
+import '../../core/widgets/sensitive_media.dart';
 import '../../core/widgets/user_badge.dart';
 import 'widgets/forum_content_view.dart';
 import 'widgets/xhs_image_pager.dart';
@@ -560,7 +561,11 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                 children: [
                   if (data['mode']?.toString() == 'image' &&
                       _images(data['images']).isNotEmpty)
-                    XhsImagePager(images: _images(data['images'])),
+                    SensitiveMedia(
+                      labels: parseSensitiveLabels(data['sensitive_labels']),
+                      blockedHeight: MediaQuery.sizeOf(context).width,
+                      child: XhsImagePager(images: _images(data['images'])),
+                    ),
                   _ThreadMainCard(
                     thread: data,
                     canViewHidden: data['can_view_hidden'] == true,
@@ -733,6 +738,7 @@ class _ThreadMainCard extends StatelessWidget {
           ForumContentView(
             content: content,
             canViewHidden: canViewHidden,
+            sensitiveLabels: parseSensitiveLabels(thread['sensitive_labels']),
           ),
           const SizedBox(height: 8),
           Text(

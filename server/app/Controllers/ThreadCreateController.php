@@ -20,6 +20,7 @@ class ThreadCreateController
         $attachmentIds = parse_json_array_input(\Request::input('attachment_ids', []));
         $tagNames = \Request::input('tags', []);
         $requestedVisibility = \Request::str('visibility', 'public');
+        $sensitiveLabels = \Request::input('sensitive_labels', []);
 
         if (!in_array($mode, ['article', 'image'], true)) {
             $mode = 'article';
@@ -52,6 +53,13 @@ class ThreadCreateController
         }
 
         $allImages = array_values(array_unique(array_merge($imageUrls, $remoteImages)));
+        $allowedSensitiveLabels = ['sensitive', 'nudity', 'adult', 'violence', 'politics'];
+        $sensitiveLabels = is_array($sensitiveLabels)
+            ? array_values(array_unique(array_intersect($sensitiveLabels, $allowedSensitiveLabels)))
+            : [];
+        if (empty($allImages)) {
+            $sensitiveLabels = [];
+        }
 
         $cover = '';
 
@@ -85,11 +93,11 @@ class ThreadCreateController
             \Database::execute(
                 "INSERT INTO {$threads}
                 (`forum_id`, `user_id`, `title`, `content`, `summary`, `cover`,
-                 `mode`, `images_json`, `music_url`, `music_name`,
+                 `mode`, `images_json`, `sensitive_labels_json`, `music_url`, `music_name`,
                  `view_count`, `reply_count`, `like_count`, `favorite_count`, `share_count`,
                  `is_top`, `is_digest`, `status`, `visibility`, `created_at`, `updated_at`)
                 VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?, ?)",
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?, ?)",
                 [
                     $forumId,
                     $user['id'],
@@ -99,6 +107,7 @@ class ThreadCreateController
                     $cover,
                     $mode,
                     json_encode($allImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    json_encode($sensitiveLabels, JSON_UNESCAPED_UNICODE),
                     $musicUrl,
                     $musicName,
                     $visibility,

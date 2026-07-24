@@ -378,6 +378,9 @@ class _PlayerControls extends StatelessWidget {
     final positionMilliseconds = state.position.inMilliseconds
         .clamp(0, durationMilliseconds)
         .toDouble();
+    final bufferedMilliseconds = state.bufferedPosition.inMilliseconds
+        .clamp(positionMilliseconds.round(), durationMilliseconds)
+        .toDouble();
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
       child: Column(
@@ -408,6 +411,7 @@ class _PlayerControls extends StatelessWidget {
           const SizedBox(height: 6),
           Slider(
             value: positionMilliseconds,
+            secondaryTrackValue: bufferedMilliseconds,
             max: durationMilliseconds.toDouble(),
             onChanged: state.duration.inMilliseconds <= 0
                 ? null

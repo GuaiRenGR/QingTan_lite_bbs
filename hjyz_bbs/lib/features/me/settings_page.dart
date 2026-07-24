@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/server_manager.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/sensitive_content_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/url_helper.dart';
@@ -24,7 +25,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool showImagesOnMobile = true;
   bool nativeNotifications = true;
   bool autoCheckUpdate = true;
-  bool useHttps = false;
+  bool useHttps = true;
+  SensitiveContentMode sensitiveContentMode = SensitiveContentMode.warn;
   bool useBuiltinDownloader = true;
   bool testingServers = false;
   String appVersion = '';
@@ -45,7 +47,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         autoPlayVideo = prefs.getBool('auto_play_video') ?? true;
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
-        useHttps = prefs.getBool('use_https') ?? false;
+        useHttps = prefs.getBool('use_https') ?? true;
+        sensitiveContentMode = SensitiveContentService.mode.value;
         useBuiltinDownloader = prefs.getBool('use_builtin_downloader') ?? true;
       });
     } catch (_) {}
@@ -215,9 +218,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   _saveBool('show_images_on_mobile', value);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.warning_amber_outlined),
+                title: const Text('敏感图片'),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SegmentedButton<SensitiveContentMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: SensitiveContentMode.warn,
+                        icon: Icon(Icons.visibility_outlined),
+                        label: Text('警告'),
+                      ),
+                      ButtonSegment(
+                        value: SensitiveContentMode.block,
+                        icon: Icon(Icons.visibility_off_outlined),
+                        label: Text('屏蔽'),
+                      ),
+                    ],
+                    selected: {sensitiveContentMode},
+                    onSelectionChanged: (selection) {
+                      final value = selection.first;
+                      setState(() => sensitiveContentMode = value);
+                      SensitiveContentService.setMode(value);
+                    },
+                  ),
+                ),
+              ),
               SwitchListTile(
                 secondary: const Icon(Icons.lock_outlined),
-                title: const Text('使用HTTPS连接（实验性）'),
+                title: const Text('使用HTTPS连接'),
                 subtitle: const Text('将本站链接转为HTTPS'),
                 value: useHttps,
                 onChanged: (value) {

@@ -165,6 +165,11 @@ class ThreadReadController
             $images = extract_img_tags($thread['content'] ?? '');
         }
 
+        $sensitiveLabels = json_decode($thread['sensitive_labels_json'] ?? '[]', true);
+        if (!is_array($sensitiveLabels)) {
+            $sensitiveLabels = [];
+        }
+
         \Response::success([
             'thread' => [
                 'id' => (int)$thread['id'],
@@ -178,6 +183,7 @@ class ThreadReadController
                 'cover' => $thread['cover'] ?? '',
                 'mode' => $thread['mode'] ?? 'article',
                 'images' => $images,
+                'sensitive_labels' => array_values($sensitiveLabels),
                 'music_url' => $thread['music_url'] ?? '',
                 'music_name' => $thread['music_name'] ?? '',
                 'view_count' => (int)($thread['view_count'] ?? 0),
@@ -363,6 +369,7 @@ class ThreadReadController
                 t.cover,
                 t.mode,
                 t.images_json,
+                t.sensitive_labels_json,
                 t.like_count,
                 t.favorite_count,
                 t.reply_count,
@@ -396,6 +403,8 @@ class ThreadReadController
                 $row['cover'] = $images[0];
             }
 
+            $sensitiveLabels = json_decode($row['sensitive_labels_json'] ?? '[]', true);
+
             return [
                 'id' => (int)$row['id'],
                 'forum_id' => (int)$row['forum_id'],
@@ -404,6 +413,7 @@ class ThreadReadController
                 'summary' => $row['summary'] ?? '',
                 'cover' => $row['cover'] ?? '',
                 'mode' => $row['mode'] ?? 'article',
+                'sensitive_labels' => is_array($sensitiveLabels) ? array_values($sensitiveLabels) : [],
                 'like_count' => (int)($row['like_count'] ?? 0),
                 'favorite_count' => (int)($row['favorite_count'] ?? 0),
                 'reply_count' => (int)($row['reply_count'] ?? 0),

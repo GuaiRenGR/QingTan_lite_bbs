@@ -86,6 +86,7 @@ class MusicPlayerState {
   final bool playing;
   final bool loading;
   final Duration position;
+  final Duration bufferedPosition;
   final Duration duration;
   final String? error;
 
@@ -95,6 +96,7 @@ class MusicPlayerState {
     this.playing = false,
     this.loading = false,
     this.position = Duration.zero,
+    this.bufferedPosition = Duration.zero,
     this.duration = Duration.zero,
     this.error,
   });
@@ -110,6 +112,7 @@ class MusicPlayerState {
     bool? playing,
     bool? loading,
     Duration? position,
+    Duration? bufferedPosition,
     Duration? duration,
     String? error,
     bool clearError = false,
@@ -120,6 +123,7 @@ class MusicPlayerState {
       playing: playing ?? this.playing,
       loading: loading ?? this.loading,
       position: position ?? this.position,
+      bufferedPosition: bufferedPosition ?? this.bufferedPosition,
       duration: duration ?? this.duration,
       error: clearError ? null : (error ?? this.error),
     );
@@ -130,6 +134,9 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   MusicPlayerController() : super(const MusicPlayerState()) {
     _positionSub = _player.positionStream.listen((position) {
       if (mounted) state = state.copyWith(position: position);
+    });
+    _bufferedPositionSub = _player.bufferedPositionStream.listen((position) {
+      if (mounted) state = state.copyWith(bufferedPosition: position);
     });
     _durationSub = _player.durationStream.listen((duration) {
       if (mounted && duration != null) {
@@ -159,6 +166,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration>? _bufferedPositionSub;
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   String? _loadedUrl;
@@ -328,6 +336,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         currentIndex: nextIndex,
         playing: false,
         position: Duration.zero,
+        bufferedPosition: Duration.zero,
         duration: Duration.zero,
         clearError: true,
       );
@@ -363,6 +372,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         playing: false,
         loading: true,
         position: Duration.zero,
+        bufferedPosition: Duration.zero,
         duration: Duration.zero,
         clearError: true,
       );
@@ -376,7 +386,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       _loadedUrl = track.url;
       if (mounted) state = state.copyWith(loading: false, clearError: true);
       if (autoplay) _startPlayback();
-      _preloadNext(index);
+      _preloadUpcoming(index);
     } catch (_) {
       _loadedUrl = null;
       if (mounted) {
@@ -389,15 +399,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     }
   }
 
-  void _preloadNext(int currentIndex) {
+  void _preloadUpcoming(int currentIndex) {
     if (state.playlist.length < 2) return;
-    final nextIndex = (currentIndex + 1) % state.playlist.length;
-    unawaited(
-      MusicCacheService.instance.preloadAudio(state.playlist[nextIndex].url),
-    );
-    final lyricsUrl = state.playlist[nextIndex].lyricsUrl;
-    if (lyricsUrl != null && lyricsUrl.isNotEmpty) {
-      unawaited(MusicCacheService.instance.loadLyrics(lyricsUrl));
+    final preloadCount = state.playlist.length > 2 ? 2 : 1;
+    for (var offset = 1; offset <= preloadCount; offset++) {
+      final nextIndex = (currentIndex + offset) % state.playlist.length;
+      unawaited(
+        MusicCacheService.instance.preloadAudio(state.playlist[nextIndex].url),
+      );
+      final lyricsUrl = state.playlist[nextIndex].lyricsUrl;
+      if (lyricsUrl != null && lyricsUrl.isNotEmpty) {
+        unawaited(MusicCacheService.instance.loadLyrics(lyricsUrl));
+      }
     }
   }
 
@@ -483,6 +496,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   @override
   void dispose() {
     _positionSub?.cancel();
+    _bufferedPositionSub?.cancel();
     _durationSub?.cancel();
     _playerStateSub?.cancel();
     _player.dispose();
