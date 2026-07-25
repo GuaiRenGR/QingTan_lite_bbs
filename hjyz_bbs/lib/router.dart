@@ -6,6 +6,7 @@ import 'features/auth/register_page.dart';
 import 'features/auth/account_security_page.dart';
 import 'features/creator/creator_center_page.dart';
 import 'features/history/history_page.dart';
+import 'features/home/x_feed_page.dart';
 import 'features/main/main_shell_page.dart';
 import 'features/me/settings_page.dart';
 import 'features/message/messages_page.dart';
@@ -146,6 +147,10 @@ final router = GoRouter(
     GoRoute(
       path: '/admin/files',
       builder: (_, _) => const AdminFilesPage(),
+    ),
+    GoRoute(
+      path: '/admin/x-feed',
+      builder: (_, _) => const XFeedPage(),
     ),
     GoRoute(
       path: '/downloads',

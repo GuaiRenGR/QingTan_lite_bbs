@@ -92,6 +92,7 @@ class UpdateService {
 
     // 使用 download.php?os=xxx 作为下载地址
     final downloadUrl = '${AppConfig.downloadBase}?os=$_platformOs';
+    final messenger = ScaffoldMessenger.of(context);
 
     await showDialog<void>(
       context: context,
@@ -123,6 +124,9 @@ class UpdateService {
                   fileName: fileName,
                   taskId: 'update_$version',
                   openOnComplete: true,
+                );
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('已开始下载，可在下载管理中查看进度')),
                 );
               },
               child: const Text('立即更新'),

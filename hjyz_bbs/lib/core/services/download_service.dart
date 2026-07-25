@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +18,9 @@ class DownloadTask {
   final String fileName;
   final String savePath;
   final bool openOnComplete;
+  final DateTime createdAt;
+  String? contentUri;
+  String? displayPath;
   int totalBytes;
   int downloadedBytes;
   DownloadStatus status;
@@ -30,13 +35,17 @@ class DownloadTask {
     required this.fileName,
     required this.savePath,
     this.openOnComplete = false,
+    DateTime? createdAt,
+    this.contentUri,
+    this.displayPath,
     this.totalBytes = 0,
     this.downloadedBytes = 0,
     this.status = DownloadStatus.waiting,
     this.error,
     this.cancelToken,
     List<DownloadChunk>? chunks,
-  })  : chunks = chunks ?? [],
+  })  : createdAt = createdAt ?? DateTime.now(),
+        chunks = chunks ?? [],
         _progressController = StreamController<double>.broadcast();
 
   double get progress =>
@@ -50,6 +59,53 @@ class DownloadTask {
 
   void dispose() {
     _progressController.close();
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        'file_name': fileName,
+        'save_path': savePath,
+        'open_on_complete': openOnComplete,
+        'created_at': createdAt.toIso8601String(),
+        'content_uri': contentUri,
+        'display_path': displayPath,
+        'total_bytes': totalBytes,
+        'downloaded_bytes': downloadedBytes,
+        'status': status.name,
+        'error': error,
+      };
+
+  static DownloadTask? fromJson(dynamic value) {
+    if (value is! Map) return null;
+    final id = value['id']?.toString() ?? '';
+    final url = value['url']?.toString() ?? '';
+    final fileName = value['file_name']?.toString() ?? '';
+    final savePath = value['save_path']?.toString() ?? '';
+    if (id.isEmpty || fileName.isEmpty || savePath.isEmpty) return null;
+
+    final restoredStatus = DownloadStatus.values.firstWhere(
+      (item) => item.name == value['status']?.toString(),
+      orElse: () => DownloadStatus.completed,
+    );
+    return DownloadTask(
+      id: id,
+      url: url,
+      fileName: fileName,
+      savePath: savePath,
+      openOnComplete: value['open_on_complete'] == true,
+      createdAt: DateTime.tryParse(value['created_at']?.toString() ?? ''),
+      contentUri: value['content_uri']?.toString(),
+      displayPath: value['display_path']?.toString(),
+      totalBytes: int.tryParse(value['total_bytes']?.toString() ?? '') ?? 0,
+      downloadedBytes:
+          int.tryParse(value['downloaded_bytes']?.toString() ?? '') ?? 0,
+      status: restoredStatus == DownloadStatus.downloading ||
+              restoredStatus == DownloadStatus.waiting
+          ? DownloadStatus.paused
+          : restoredStatus,
+      error: value['error']?.toString(),
+    );
   }
 }
 
@@ -69,15 +125,23 @@ class DownloadChunk {
 class DownloadService {
   static const _chunkCount = 4;
   static const _historyKey = 'download_history';
+  static const _androidChannel = MethodChannel(
+    'com.qingtan.hjyzbbs/file_actions',
+  );
 
   final Dio _dio = Dio();
   final Map<String, DownloadTask> _tasks = {};
+  Future<void>? _initializing;
 
   DownloadService._();
 
   static final DownloadService instance = DownloadService._();
 
   Map<String, DownloadTask> get tasks => _tasks;
+
+  Future<void> init() {
+    return _initializing ??= _loadHistory();
+  }
 
   /// 获取下载目录
   Future<Directory> getDownloadDir() async {
@@ -110,12 +174,14 @@ class DownloadService {
     bool openOnComplete = false,
     void Function(double progress)? onProgress,
   }) async {
+    await init();
     final id = taskId ?? url.hashCode.toRadixString(16);
 
     // 已存在任务
     if (_tasks.containsKey(id)) {
       final existing = _tasks[id]!;
       if (existing.status == DownloadStatus.completed) {
+        if (openOnComplete) await openFile(existing.id);
         return existing;
       }
       if (existing.status == DownloadStatus.paused) {
@@ -136,6 +202,7 @@ class DownloadService {
     );
 
     _tasks[id] = task;
+    await _persistTasks();
 
     if (onProgress != null) {
       task.progressStream.listen(onProgress);
@@ -157,12 +224,14 @@ class DownloadService {
       }
 
       task.status = DownloadStatus.completed;
+      task.downloadedBytes = task.totalBytes;
       task.updateProgress(1.0);
-      await _saveHistory(task);
+      await _publishToAndroidDownloads(task);
+      await _persistTasks();
 
       // 完成后自动打开
       if (task.openOnComplete) {
-        OpenFile.open(task.savePath);
+        await openFile(task.id);
       }
     } catch (e) {
       if (e is DioException && e.type == DioExceptionType.cancel) {
@@ -171,6 +240,7 @@ class DownloadService {
         task.status = DownloadStatus.failed;
         task.error = e.toString();
       }
+      await _persistTasks();
     }
 
     return task;
@@ -281,6 +351,7 @@ class DownloadService {
     if (task == null) return;
     task.cancelToken?.cancel('user paused');
     task.status = DownloadStatus.paused;
+    unawaited(_persistTasks());
   }
 
   /// 恢复下载
@@ -296,12 +367,14 @@ class DownloadService {
         await _downloadSingle(task);
       }
       task.status = DownloadStatus.completed;
+      task.downloadedBytes = task.totalBytes;
       task.updateProgress(1.0);
-      await _saveHistory(task);
+      await _publishToAndroidDownloads(task);
+      await _persistTasks();
 
       // 完成后自动打开
       if (task.openOnComplete) {
-        OpenFile.open(task.savePath);
+        await openFile(task.id);
       }
     } catch (e) {
       if (e is DioException && e.type == DioExceptionType.cancel) {
@@ -310,6 +383,7 @@ class DownloadService {
         task.status = DownloadStatus.failed;
         task.error = e.toString();
       }
+      await _persistTasks();
     }
   }
 
@@ -320,6 +394,7 @@ class DownloadService {
     task.cancelToken?.cancel('user cancelled');
     task.dispose();
     _tasks.remove(taskId);
+    unawaited(_persistTasks());
   }
 
   /// 打开已下载文件，返回结果消息
@@ -329,6 +404,20 @@ class DownloadService {
       return '文件不存在';
     }
     try {
+      final file = File(task.savePath);
+      if (!await file.exists() && task.contentUri == null) {
+        return '文件已被删除';
+      }
+      if (Platform.isAndroid) {
+        final response = await _androidChannel.invokeMapMethod<String, dynamic>(
+          'openFile',
+          {
+            'path': task.savePath,
+            'contentUri': task.contentUri,
+          },
+        );
+        return response?['message']?.toString() ?? '请选择要使用的应用';
+      }
       final result = await OpenFile.open(task.savePath);
       if (result.type == ResultType.done) {
         return '已打开';
@@ -347,8 +436,16 @@ class DownloadService {
     }
     try {
       final file = File(task.savePath);
-      if (!await file.exists()) {
+      if (!await file.exists() && task.contentUri == null) {
         return '文件已被删除';
+      }
+      if (Platform.isAndroid) {
+        await _publishToAndroidDownloads(task);
+        await _persistTasks();
+        final response = await _androidChannel.invokeMapMethod<String, dynamic>(
+          'openFolder',
+        );
+        return response?['message']?.toString() ?? '已打开下载目录';
       }
       if (Platform.isWindows) {
         await Process.run('explorer', ['/select,', task.savePath]);
@@ -366,14 +463,66 @@ class DownloadService {
     }
   }
 
-  /// 保存下载历史
-  Future<void> _saveHistory(DownloadTask task) async {
+  Future<void> _publishToAndroidDownloads(DownloadTask task) async {
+    if (!Platform.isAndroid || task.contentUri?.isNotEmpty == true) return;
+    try {
+      final response = await _androidChannel.invokeMapMethod<String, dynamic>(
+        'publishDownload',
+        {'path': task.savePath, 'fileName': task.fileName},
+      );
+      task.contentUri = response?['uri']?.toString();
+      task.displayPath = response?['displayPath']?.toString();
+    } catch (_) {}
+  }
+
+  Future<void> _loadHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final history = prefs.getStringList(_historyKey) ?? [];
-      history.add('${task.id}|${task.url}|${task.fileName}|${task.savePath}');
-      if (history.length > 100) history.removeAt(0);
-      await prefs.setStringList(_historyKey, history);
+      final stored = prefs.get(_historyKey);
+      if (stored is String && stored.isNotEmpty) {
+        final raw = stored;
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            final task = DownloadTask.fromJson(item);
+            if (task != null) _tasks[task.id] = task;
+          }
+        }
+        return;
+      }
+
+      final legacy = stored is List
+          ? stored.map((item) => item.toString()).toList()
+          : const <String>[];
+      for (final value in legacy) {
+        final parts = value.split('|');
+        if (parts.length < 4) continue;
+        final task = DownloadTask(
+          id: parts[0],
+          url: parts[1],
+          fileName: parts[2],
+          savePath: parts.sublist(3).join('|'),
+          status: DownloadStatus.completed,
+        );
+        _tasks[task.id] = task;
+      }
+      if (legacy.isNotEmpty) await _persistTasks();
+    } catch (_) {}
+  }
+
+  Future<void> _persistTasks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final history = _tasks.values.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final trimmed = history.length > 100
+          ? history.sublist(history.length - 100)
+          : history;
+      await prefs.remove(_historyKey);
+      await prefs.setString(
+        _historyKey,
+        jsonEncode(trimmed.map((task) => task.toJson()).toList()),
+      );
     } catch (_) {}
   }
 }

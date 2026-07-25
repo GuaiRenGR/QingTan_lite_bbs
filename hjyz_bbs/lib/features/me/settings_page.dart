@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/server_manager.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/feed_display_service.dart';
 import '../../core/services/sensitive_content_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -23,6 +24,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool autoPlayMusic = false;
   bool autoPlayVideo = true;
   bool showImagesOnMobile = true;
+  bool compactTextOnlyPosts = false;
   bool nativeNotifications = true;
   bool autoCheckUpdate = true;
   bool useHttps = true;
@@ -46,6 +48,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         autoPlayMusic = prefs.getBool('auto_play_music') ?? false;
         autoPlayVideo = prefs.getBool('auto_play_video') ?? true;
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
+        compactTextOnlyPosts = FeedDisplayService.compactTextOnlyPosts.value;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
         useHttps = prefs.getBool('use_https') ?? true;
         sensitiveContentMode = SensitiveContentService.mode.value;
@@ -216,6 +219,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     showImagesOnMobile = value;
                   });
                   _saveBool('show_images_on_mobile', value);
+                },
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.compress_rounded),
+                title: const Text('缩小无图帖子占用位置'),
+                subtitle: const Text('瀑布流中的无图帖子不再显示占位图'),
+                value: compactTextOnlyPosts,
+                onChanged: (value) {
+                  setState(() => compactTextOnlyPosts = value);
+                  FeedDisplayService.setCompactTextOnlyPosts(value);
                 },
               ),
               ListTile(

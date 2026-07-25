@@ -159,6 +159,13 @@ class MePage extends ConsumerWidget {
           color: const Color(0xFFEC407A),
           onTap: () => context.push('/admin'),
         ),
+      if (groupId == 99)
+        _MeAction(
+          icon: Icons.view_stream_outlined,
+          label: 'X 信息流',
+          color: const Color(0xFF1D9BF0),
+          onTap: () => context.push('/admin/x-feed'),
+        ),
     ];
 
     return Scaffold(

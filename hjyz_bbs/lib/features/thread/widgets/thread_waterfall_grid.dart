@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../../core/widgets/sensitive_media.dart';
+import '../../../core/services/feed_display_service.dart';
 
 class ThreadWaterfallGrid extends StatefulWidget {
   final List<Map<String, dynamic>> threads;
@@ -190,24 +191,30 @@ class ThreadWaterfallCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (cover.isNotEmpty)
-              SensitiveMedia(
-                labels: sensitiveLabels,
-                blockedHeight: 120 + (id.abs() % 5) * 15.0,
-                child: _CoverWithBadges(
-                  cover: cover,
+            ValueListenableBuilder<bool>(
+              valueListenable: FeedDisplayService.compactTextOnlyPosts,
+              builder: (context, compactTextOnlyPosts, _) {
+                if (cover.isNotEmpty) {
+                  return SensitiveMedia(
+                    labels: sensitiveLabels,
+                    blockedHeight: 120 + (id.abs() % 5) * 15.0,
+                    child: _CoverWithBadges(
+                      cover: cover,
+                      isTop: isTop,
+                      isDigest: isDigest,
+                      replyCount: replyCount,
+                    ),
+                  );
+                }
+                if (compactTextOnlyPosts) return const SizedBox.shrink();
+                return _PlaceholderWithBadges(
+                  height: 120 + (id.abs() % 5) * 15.0,
                   isTop: isTop,
                   isDigest: isDigest,
                   replyCount: replyCount,
-                ),
-              )
-            else
-              _PlaceholderWithBadges(
-                height: 120 + (id.abs() % 5) * 15.0,
-                isTop: isTop,
-                isDigest: isDigest,
-                replyCount: replyCount,
-              ),
+                );
+              },
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 7, 8, 6),
               child: Column(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../../core/widgets/sensitive_media.dart';
+import '../../../core/services/feed_display_service.dart';
 import '../../thread/thread_model.dart';
 
 class ThreadWaterfallCard extends StatelessWidget {
@@ -136,20 +137,26 @@ class _Cover extends StatelessWidget {
 
     return Stack(
       children: [
-        if (hasCover)
-          SensitiveMedia(
-            labels: thread.sensitiveLabels,
-            blockedHeight: height,
-            child: SafeNetworkImage(
-              url: thread.cover,
-              width: double.infinity,
-              height: height,
-              fit: BoxFit.cover,
-              errorWidget: placeholder,
-            ),
-          )
-        else
-          placeholder,
+        ValueListenableBuilder<bool>(
+          valueListenable: FeedDisplayService.compactTextOnlyPosts,
+          builder: (context, compactTextOnlyPosts, _) {
+            if (!hasCover && compactTextOnlyPosts) {
+              return const SizedBox.shrink();
+            }
+            if (!hasCover) return placeholder;
+            return SensitiveMedia(
+              labels: thread.sensitiveLabels,
+              blockedHeight: height,
+              child: SafeNetworkImage(
+                url: thread.cover,
+                width: double.infinity,
+                height: height,
+                fit: BoxFit.cover,
+                errorWidget: placeholder,
+              ),
+            );
+          },
+        ),
         Positioned(
           left: 6,
           top: 6,

@@ -19,7 +19,11 @@ class _DownloadPageState extends State<DownloadPage> {
   @override
   void initState() {
     super.initState();
-    _listenAll();
+    DownloadService.instance.init().then((_) {
+      if (!mounted) return;
+      _listenAll();
+      setState(() {});
+    });
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -226,7 +230,7 @@ class _DownloadPageState extends State<DownloadPage> {
           children: [
             IconButton(
               icon: const Icon(Icons.open_in_new_rounded),
-              tooltip: '打开',
+              tooltip: '使用其他应用打开',
               onPressed: () async {
                 final msg = await service.openFile(task.id);
                 if (mounted) {
@@ -298,7 +302,12 @@ class _DownloadPageState extends State<DownloadPage> {
   Widget build(BuildContext context) {
     final tasks = DownloadService.instance.tasks;
     final entries = tasks.entries.toList()
-      ..sort((a, b) => a.value.status == DownloadStatus.downloading ? -1 : 1);
+      ..sort((a, b) {
+        final aActive = a.value.status == DownloadStatus.downloading;
+        final bActive = b.value.status == DownloadStatus.downloading;
+        if (aActive != bActive) return aActive ? -1 : 1;
+        return b.value.createdAt.compareTo(a.value.createdAt);
+      });
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
@@ -400,7 +409,7 @@ class _DownloadPageState extends State<DownloadPage> {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            task.savePath,
+                            task.displayPath ?? task.savePath,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
