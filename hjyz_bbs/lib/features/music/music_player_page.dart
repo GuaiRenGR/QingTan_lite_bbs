@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/music_cache_service.dart';
+import '../../core/services/music_player_settings_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
 import 'dynamic_music_background.dart';
@@ -23,8 +24,9 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(musicPlayerProvider);
-    final controller = ref.read(musicPlayerProvider.notifier);
+    final current = ref.watch(
+      musicPlayerProvider.select((state) => state.currentTrack),
+    );
     final auth = ref.watch(authControllerProvider);
     final userId = int.tryParse(auth.user?['id']?.toString() ?? '') ?? 0;
     final favorites = ref.watch(musicFavoritesProvider);
@@ -35,7 +37,6 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
       Future.microtask(() => ref.read(musicFavoritesProvider.notifier).load(userId));
     }
 
-    final current = state.currentTrack;
     final isFavorite = current != null && favorites.contains(current);
     return Scaffold(
       extendBodyBehindAppBar: current != null,
@@ -52,11 +53,7 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
           : Stack(
               fit: StackFit.expand,
               children: [
-                DynamicMusicBackground(
-                  track: current,
-                  playing: state.playing,
-                  position: state.position,
-                ),
+                _MusicBackgroundLayer(track: current),
                 SafeArea(
                   child: Column(
                     children: [
@@ -66,10 +63,9 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
                               setState(() => _pageIndex = index),
                           children: [
                             _ArtworkPage(track: current),
-                            _LyricsPage(
+                            _LiveLyricsPage(
                               key: ValueKey(current.url),
                               track: current,
-                              position: state.position,
                             ),
                           ],
                         ),
@@ -95,14 +91,9 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
                           ),
                         ),
                       ),
-                      _PlayerControls(
-                        state: state,
+                      _LivePlayerControls(
                         isFavorite: isFavorite,
-                        onSeek: controller.seek,
                         onShowPlaylist: () => _showPlaylist(context),
-                        onPrevious: controller.playPrevious,
-                        onToggle: controller.toggle,
-                        onNext: controller.playNext,
                         onFavorite: () => _toggleFavorite(
                           context,
                           current,
@@ -215,6 +206,73 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _MusicBackgroundLayer extends ConsumerWidget {
+  final MusicTrack track;
+
+  const _MusicBackgroundLayer({required this.track});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = ref.watch(
+      musicPlayerProvider.select((state) => state.playing),
+    );
+    return ValueListenableBuilder<MusicPlayerVisualSettings>(
+      valueListenable: MusicPlayerSettingsService.settings,
+      builder: (context, settings, _) {
+        return DynamicMusicBackground(
+          track: track,
+          playing: playing,
+          advancedBlur: settings.advancedBlur,
+          musicReactive: settings.musicReactive,
+          dynamicBackground: settings.dynamicBackground,
+        );
+      },
+    );
+  }
+}
+
+class _LiveLyricsPage extends ConsumerWidget {
+  final MusicTrack track;
+
+  const _LiveLyricsPage({super.key, required this.track});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = ref.watch(
+      musicPlayerProvider.select((state) => state.position),
+    );
+    return _LyricsPage(track: track, position: position);
+  }
+}
+
+class _LivePlayerControls extends ConsumerWidget {
+  final bool isFavorite;
+  final VoidCallback onShowPlaylist;
+  final VoidCallback onFavorite;
+
+  const _LivePlayerControls({
+    required this.isFavorite,
+    required this.onShowPlaylist,
+    required this.onFavorite,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(musicPlayerProvider);
+    final controller = ref.read(musicPlayerProvider.notifier);
+    return _PlayerControls(
+      state: state,
+      isFavorite: isFavorite,
+      onSeek: controller.seek,
+      onShowPlaylist: onShowPlaylist,
+      onPrevious: controller.playPrevious,
+      onToggle: controller.toggle,
+      onNext: controller.playNext,
+      onFavorite: onFavorite,
     );
   }
 }

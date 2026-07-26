@@ -7,6 +7,7 @@ import 'core/api/server_manager.dart';
 import 'core/api/write_queue.dart';
 import 'core/services/download_service.dart';
 import 'core/services/feed_display_service.dart';
+import 'core/services/music_player_settings_service.dart';
 import 'core/services/sensitive_content_service.dart';
 import 'core/theme/theme_color_service.dart';
 import 'core/utils/app_logger.dart';
@@ -26,6 +27,7 @@ void main() async {
   await SensitiveContentService.init();
   await DownloadService.instance.init();
   await FeedDisplayService.init();
+  await MusicPlayerSettingsService.init();
   await ThemeColorService.init();
 
   // 初始化多服务器管理器

@@ -7,6 +7,7 @@ import '../../core/api/server_manager.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/feed_display_service.dart';
+import '../../core/services/music_player_settings_service.dart';
 import '../../core/services/sensitive_content_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -270,6 +271,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 onTap: () => context.push('/downloads'),
               ),
             ],
+          ),
+          ValueListenableBuilder<MusicPlayerVisualSettings>(
+            valueListenable: MusicPlayerSettingsService.settings,
+            builder: (context, playerSettings, _) {
+              return _Section(
+                title: '播放器设置',
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.blur_on_rounded),
+                    title: const Text('高级模糊'),
+                    value: playerSettings.advancedBlur,
+                    onChanged: MusicPlayerSettingsService.setAdvancedBlur,
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.graphic_eq_rounded),
+                    title: const Text('音乐律动'),
+                    value: playerSettings.musicReactive,
+                    onChanged: MusicPlayerSettingsService.setMusicReactive,
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.animation_rounded),
+                    title: const Text('动态背景'),
+                    value: playerSettings.dynamicBackground,
+                    onChanged: MusicPlayerSettingsService.setDynamicBackground,
+                  ),
+                ],
+              );
+            },
           ),
           _Section(
             title: '通知',

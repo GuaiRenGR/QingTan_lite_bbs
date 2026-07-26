@@ -10,19 +10,23 @@ import 'music_player_controller.dart';
 
 // Flutter translation/adaptation of NeriPlayer's HyperBackground and
 // BgEffectPainter (GPL-3.0-or-later, Copyright 2025 NeriPlayer developers).
-// The Android RuntimeShader, Palette and audio-reactive flow are represented
-// here by a cross-platform CustomPainter, local palette quantizer and a
-// playback-position envelope.
+// RuntimeShader is replaced by an opt-in cross-platform CustomPainter. The
+// default path is a cached static gradient because Flutter's full-screen blur
+// is substantially more expensive than NeriPlayer's Android GPU shader.
 class DynamicMusicBackground extends StatefulWidget {
   final MusicTrack track;
   final bool playing;
-  final Duration position;
+  final bool advancedBlur;
+  final bool musicReactive;
+  final bool dynamicBackground;
 
   const DynamicMusicBackground({
     super.key,
     required this.track,
     required this.playing,
-    required this.position,
+    required this.advancedBlur,
+    required this.musicReactive,
+    required this.dynamicBackground,
   });
 
   @override
@@ -32,18 +36,18 @@ class DynamicMusicBackground extends StatefulWidget {
 
 class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
     with SingleTickerProviderStateMixin {
-  static const _playingFrameInterval = Duration(milliseconds: 33);
-  static const _idleFrameInterval = Duration(milliseconds: 66);
+  static Future<ui.FragmentProgram>? _shaderProgram;
+  static const _normalFrameInterval = Duration(milliseconds: 33);
+  static const _blurFrameInterval = Duration(milliseconds: 50);
 
   late final AnimationController _motionController;
-  MusicBackgroundPalette? _fromPalette;
+  final _frameRepaint = ChangeNotifier();
+  final _reactiveClock = Stopwatch();
   MusicBackgroundPalette? _targetPalette;
+  ui.FragmentShader? _shader;
+  bool _shaderLoading = false;
   Brightness? _brightness;
-  var _paletteRevision = 0;
   var _loadRevision = 0;
-  final _playbackClock = Stopwatch();
-  Duration _positionAnchor = Duration.zero;
-  Duration _clockAnchor = Duration.zero;
   Duration _lastMotionFrame = Duration.zero;
 
   @override
@@ -52,11 +56,9 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
     _motionController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 62832),
-    )
-      ..addListener(_onMotionTick)
-      ..repeat();
-    _playbackClock.start();
-    _resetPositionAnchor();
+    )..addListener(_onMotionTick);
+    _syncAnimationState();
+    unawaited(_ensureShader());
   }
 
   @override
@@ -71,32 +73,71 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   @override
   void didUpdateWidget(covariant DynamicMusicBackground oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.position != widget.position ||
-        oldWidget.playing != widget.playing ||
-        oldWidget.track.url != widget.track.url) {
-      _resetPositionAnchor();
+    if (oldWidget.track.url != widget.track.url) {
+      _reactiveClock.reset();
     }
     if (oldWidget.track.url != widget.track.url ||
         oldWidget.track.coverUrl != widget.track.coverUrl ||
         oldWidget.track.coverArt != widget.track.coverArt) {
       unawaited(_loadPalette());
     }
+    if (oldWidget.playing != widget.playing ||
+        oldWidget.advancedBlur != widget.advancedBlur ||
+        oldWidget.musicReactive != widget.musicReactive ||
+        oldWidget.dynamicBackground != widget.dynamicBackground) {
+      _syncAnimationState();
+      unawaited(_ensureShader());
+    }
   }
 
-  void _resetPositionAnchor() {
-    _positionAnchor = widget.position;
-    _clockAnchor = _playbackClock.elapsed;
+  bool get _shouldAnimate =>
+      widget.dynamicBackground || (widget.musicReactive && widget.playing);
+
+  void _syncAnimationState() {
+    if (_shouldAnimate) {
+      if (!_motionController.isAnimating) {
+        _lastMotionFrame = Duration.zero;
+        _motionController.repeat();
+      }
+    } else {
+      _motionController.stop();
+    }
+
+    if (widget.musicReactive && widget.playing) {
+      if (!_reactiveClock.isRunning) _reactiveClock.start();
+    } else {
+      _reactiveClock.stop();
+    }
   }
 
   void _onMotionTick() {
     final elapsed = _motionController.lastElapsedDuration;
     if (elapsed == null) return;
-    final interval = widget.playing
-        ? _playingFrameInterval
-        : _idleFrameInterval;
+    final interval = widget.advancedBlur
+        ? _blurFrameInterval
+        : _normalFrameInterval;
     if (elapsed - _lastMotionFrame < interval) return;
     _lastMotionFrame = elapsed;
-    if (mounted) setState(() {});
+    _frameRepaint.notifyListeners();
+  }
+
+  Future<void> _ensureShader() async {
+    final effectsEnabled = widget.advancedBlur ||
+        widget.musicReactive ||
+        widget.dynamicBackground;
+    if (!effectsEnabled || _shader != null || _shaderLoading) return;
+    _shaderLoading = true;
+    try {
+      final program = await (_shaderProgram ??=
+          ui.FragmentProgram.fromAsset('shaders/music_background.frag'));
+      final shader = program.fragmentShader();
+      if (!mounted) return;
+      setState(() => _shader = shader);
+    } catch (_) {
+      _shaderProgram = null;
+    } finally {
+      _shaderLoading = false;
+    }
   }
 
   Future<void> _loadPalette() async {
@@ -120,15 +161,14 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
       dark: dark,
     );
     setState(() {
-      _fromPalette = _targetPalette ?? fallback;
       _targetPalette = palette ?? fallback;
-      _paletteRevision++;
     });
   }
 
   @override
   void dispose() {
     _motionController.dispose();
+    _frameRepaint.dispose();
     super.dispose();
   }
 
@@ -139,84 +179,126 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
       Theme.of(context).colorScheme,
       dark: dark,
     );
-    final from = _fromPalette ?? fallback;
-    final target = _targetPalette ?? fallback;
+    final palette = _targetPalette ?? fallback;
+    final effectsEnabled = widget.advancedBlur ||
+        widget.musicReactive ||
+        widget.dynamicBackground;
+
+    if (!effectsEnabled) {
+      return RepaintBoundary(
+        child: _StaticPaletteBackground(palette: palette, dark: dark),
+      );
+    }
+
+    final shader = _shader;
+    if (shader == null) {
+      return RepaintBoundary(
+        child: _StaticPaletteBackground(palette: palette, dark: dark),
+      );
+    }
+
+    Widget effect = CustomPaint(
+      isComplex: true,
+      willChange: _shouldAnimate,
+      painter: _GpuBackgroundPainter(
+        shader: shader,
+        palette: palette,
+        motion: _motionController,
+        reactiveClock: _reactiveClock,
+        playing: widget.playing,
+        musicReactive: widget.musicReactive,
+        dynamicBackground: widget.dynamicBackground,
+        dark: dark,
+        repaint: _frameRepaint,
+      ),
+    );
+    if (widget.advancedBlur) {
+      effect = _DownsampledBlur(child: effect);
+    }
 
     return RepaintBoundary(
-      child: TweenAnimationBuilder<double>(
-        key: ValueKey(_paletteRevision),
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 520),
-        curve: Curves.easeInOutCubic,
-        builder: (context, fraction, _) {
-          final palette = MusicBackgroundPalette.lerp(from, target, fraction);
-          final reactive = _reactiveValues(
-            _effectivePosition(),
-            playing: widget.playing,
-          );
-          return ClipRect(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _DownsampledBlur(
-                  child: CustomPaint(
-                    isComplex: true,
-                    willChange: true,
-                    painter: _HyperBackgroundPainter(
-                      palette: palette,
-                      time: _motionController.value * math.pi * 20,
-                      level: reactive.$1,
-                      beat: reactive.$2,
-                      dark: dark,
-                    ),
-                  ),
-                ),
-                const RepaintBoundary(
-                  child: CustomPaint(
-                    isComplex: true,
-                    willChange: false,
-                    painter: _BackgroundGrainPainter(),
-                  ),
-                ),
-                RepaintBoundary(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: dark
-                            ? const [
-                                Color(0x30000000),
-                                Color(0x08000000),
-                                Color(0x52000000),
-                              ]
-                            : const [
-                                Color(0x18FFFFFF),
-                                Color(0x06FFFFFF),
-                                Color(0x3DFFFFFF),
-                              ],
-                        stops: const [0, 0.48, 1],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            effect,
+            const RepaintBoundary(
+              child: CustomPaint(
+                isComplex: true,
+                willChange: false,
+                painter: _BackgroundGrainPainter(),
+              ),
             ),
-          );
-        },
+            _BackgroundShade(dark: dark),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Duration _effectivePosition() {
-    if (!widget.playing) return _positionAnchor;
-    return _positionAnchor + (_playbackClock.elapsed - _clockAnchor);
+class _StaticPaletteBackground extends StatelessWidget {
+  final MusicBackgroundPalette palette;
+  final bool dark;
+
+  const _StaticPaletteBackground({required this.palette, required this.dark});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = palette.colors[0];
+    final accent = palette.colors[1];
+    final low = palette.colors[3];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(base, dark ? Colors.black : Colors.white, 0.12)!,
+            Color.lerp(accent, base, 0.58)!,
+            Color.lerp(low, dark ? Colors.black : Colors.white, 0.18)!,
+          ],
+          stops: const [0, 0.52, 1],
+        ),
+      ),
+      child: _BackgroundShade(dark: dark),
+    );
+  }
+}
+
+class _BackgroundShade extends StatelessWidget {
+  final bool dark;
+
+  const _BackgroundShade({required this.dark});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: dark
+              ? const [
+                  Color(0x30000000),
+                  Color(0x08000000),
+                  Color(0x52000000),
+                ]
+              : const [
+                  Color(0x18FFFFFF),
+                  Color(0x06FFFFFF),
+                  Color(0x3DFFFFFF),
+                ],
+          stops: const [0, 0.48, 1],
+        ),
+      ),
+    );
   }
 }
 
 class _DownsampledBlur extends StatelessWidget {
   // Keep the apparent blur radius while rasterizing a much smaller layer.
-  static const _renderScale = 0.36;
+  static const _renderScale = 0.28;
   static const _overscan = 1.18;
 
   final Widget child;
@@ -235,8 +317,8 @@ class _DownsampledBlur extends StatelessWidget {
               scale: _overscan / _renderScale,
               child: ImageFiltered(
                 imageFilter: ui.ImageFilter.blur(
-                  sigmaX: 10.8,
-                  sigmaY: 10.8,
+                  sigmaX: 8.4,
+                  sigmaY: 8.4,
                   tileMode: ui.TileMode.mirror,
                 ),
                 child: child,
@@ -549,97 +631,67 @@ Color _softenColor(
   return hsl.toColor();
 }
 
-class _HyperBackgroundPainter extends CustomPainter {
-  static const _points = <(double, double, double)>[
-    (0.52, 0.46, 0.92),
-    (0.14, 0.32, 0.74),
-    (0.92, 0.30, 0.76),
-    (0.26, 0.88, 0.80),
-    (0.84, 0.86, 0.84),
-  ];
-
+class _GpuBackgroundPainter extends CustomPainter {
+  final ui.FragmentShader shader;
   final MusicBackgroundPalette palette;
-  final double time;
-  final double level;
-  final double beat;
+  final Animation<double> motion;
+  final Stopwatch reactiveClock;
+  final bool playing;
+  final bool musicReactive;
+  final bool dynamicBackground;
   final bool dark;
+  final Paint _paint;
 
-  const _HyperBackgroundPainter({
+  _GpuBackgroundPainter({
+    required this.shader,
     required this.palette,
-    required this.time,
-    required this.level,
-    required this.beat,
+    required this.motion,
+    required this.reactiveClock,
+    required this.playing,
+    required this.musicReactive,
+    required this.dynamicBackground,
     required this.dark,
-  });
+    required Listenable repaint,
+  })  : _paint = (Paint()..shader = shader),
+        super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final levelEase = _smoothStep(0.04, 0.82, level);
-    final beatEase = _smoothStep(0.03, 0.62, beat);
-    final motionEase = (0.42 * levelEase + 0.82 * beatEase)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    final zoom = 1 + 0.024 * levelEase + 0.105 * beatEase;
-    final pointOffset = 0.10 + 0.022 * levelEase + 0.108 * beatEase;
-    final radiusMultiplier = 1 + 0.045 * levelEase + 0.220 * beatEase;
-    final globalX = motionEase * 0.006 * math.sin(time * 1.9);
-    final globalY = motionEase * 0.006 * math.cos(time * 1.6);
-    final maxDimension = math.max(size.width, size.height);
-
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = palette.colors.first,
-    );
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.scale(zoom);
-    canvas.translate(-size.width / 2, -size.height / 2);
-
-    for (var index = 0; index < _points.length; index++) {
-      final point = _points[index];
-      var x = point.$1 + math.sin(time + point.$2) * pointOffset + globalX;
-      var y = point.$2 + math.cos(time + point.$1) * pointOffset + globalY;
-      final pushX = x - 0.5 + 0.0001;
-      final pushY = y - 0.5 + 0.0001;
-      final pushLength = math.sqrt(pushX * pushX + pushY * pushY);
-      if (pushLength > 0) {
-        final pushScale = beatEase * 0.118 / pushLength;
-        x += pushX * pushScale;
-        y += pushY * pushScale;
-      }
-      final radius = point.$3 * radiusMultiplier * maxDimension * 0.70;
-      final center = Offset(x * size.width, y * size.height);
+    final time = motion.value * math.pi * 20;
+    final reactive = musicReactive
+        ? _reactiveValues(reactiveClock.elapsed, playing: playing)
+        : (0.0, 0.0);
+    final level = reactive.$1;
+    final beat = reactive.$2;
+    shader
+      ..setFloat(0, size.width)
+      ..setFloat(1, size.height)
+      ..setFloat(2, time)
+      ..setFloat(3, level)
+      ..setFloat(4, beat)
+      ..setFloat(5, dynamicBackground ? 1 : 0);
+    for (var index = 0; index < palette.colors.length; index++) {
       final color = palette.colors[index];
-      final rect = Rect.fromCircle(center: center, radius: radius);
-      final paint = Paint()
-        ..blendMode = dark ? BlendMode.screen : BlendMode.softLight
-        ..shader = RadialGradient(
-          colors: [
-            color.withValues(alpha: dark ? 0.94 : 0.88),
-            color.withValues(alpha: dark ? 0.34 : 0.28),
-            color.withValues(alpha: 0),
-          ],
-          stops: const [0, 0.46, 1],
-        ).createShader(rect);
-      canvas.drawCircle(center, radius, paint);
+      final offset = 6 + index * 4;
+      shader
+        ..setFloat(offset, color.r)
+        ..setFloat(offset + 1, color.g)
+        ..setFloat(offset + 2, color.b)
+        ..setFloat(offset + 3, color.a);
     }
-    canvas.restore();
-  }
-
-  double _smoothStep(double edge0, double edge1, double value) {
-    final t = ((value - edge0) / (edge1 - edge0))
-        .clamp(0.0, 1.0)
-        .toDouble();
-    return t * t * (3 - 2 * t);
+    canvas.drawRect(Offset.zero & size, _paint);
   }
 
   @override
-  bool shouldRepaint(covariant _HyperBackgroundPainter oldDelegate) =>
-      oldDelegate.time != time ||
-      oldDelegate.level != level ||
-      oldDelegate.beat != beat ||
-      oldDelegate.dark != dark ||
-      oldDelegate.palette != palette;
+  bool shouldRepaint(covariant _GpuBackgroundPainter oldDelegate) =>
+      oldDelegate.shader != shader ||
+      oldDelegate.palette != palette ||
+      oldDelegate.motion != motion ||
+      oldDelegate.reactiveClock != reactiveClock ||
+      oldDelegate.playing != playing ||
+      oldDelegate.musicReactive != musicReactive ||
+      oldDelegate.dynamicBackground != dynamicBackground ||
+      oldDelegate.dark != dark;
 }
 
 class _BackgroundGrainPainter extends CustomPainter {
