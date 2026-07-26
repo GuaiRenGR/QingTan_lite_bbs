@@ -19,6 +19,9 @@ class DynamicMusicBackground extends StatefulWidget {
   final bool advancedBlur;
   final bool musicReactive;
   final bool dynamicBackground;
+  final bool coverBlurBackground;
+  final double coverBlurAmount;
+  final double coverBlurDarken;
 
   const DynamicMusicBackground({
     super.key,
@@ -27,6 +30,9 @@ class DynamicMusicBackground extends StatefulWidget {
     required this.advancedBlur,
     required this.musicReactive,
     required this.dynamicBackground,
+    required this.coverBlurBackground,
+    required this.coverBlurAmount,
+    required this.coverBlurDarken,
   });
 
   @override
@@ -84,7 +90,8 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
     if (oldWidget.playing != widget.playing ||
         oldWidget.advancedBlur != widget.advancedBlur ||
         oldWidget.musicReactive != widget.musicReactive ||
-        oldWidget.dynamicBackground != widget.dynamicBackground) {
+        oldWidget.dynamicBackground != widget.dynamicBackground ||
+        oldWidget.coverBlurBackground != widget.coverBlurBackground) {
       _syncAnimationState();
       unawaited(_ensureShader());
     }
@@ -142,7 +149,7 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
 
   Future<void> _loadPalette() async {
     final revision = ++_loadRevision;
-    final dark = (_brightness ?? Theme.of(context).brightness) == Brightness.dark;
+    const dark = true;
     final loadedImage = await _loadCoverImage(widget.track);
     MusicBackgroundPalette? palette;
     if (loadedImage != null) {
@@ -174,12 +181,27 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    const dark = true;
     final fallback = MusicBackgroundPalette.fallback(
       Theme.of(context).colorScheme,
       dark: dark,
     );
     final palette = _targetPalette ?? fallback;
+    if (widget.coverBlurBackground) {
+      return RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _StaticPaletteBackground(palette: palette, dark: true),
+            _BlurredCoverBackground(
+              track: widget.track,
+              blurAmount: widget.coverBlurAmount,
+              darken: widget.coverBlurDarken,
+            ),
+          ],
+        ),
+      );
+    }
     final effectsEnabled = widget.advancedBlur ||
         widget.musicReactive ||
         widget.dynamicBackground;
@@ -262,6 +284,190 @@ class _StaticPaletteBackground extends StatelessWidget {
         ),
       ),
       child: _BackgroundShade(dark: dark),
+    );
+  }
+}
+
+class _BlurredCoverBackground extends StatefulWidget {
+  final MusicTrack track;
+  final double blurAmount;
+  final double darken;
+
+  const _BlurredCoverBackground({
+    required this.track,
+    required this.blurAmount,
+    required this.darken,
+  });
+
+  @override
+  State<_BlurredCoverBackground> createState() =>
+      _BlurredCoverBackgroundState();
+}
+
+class _BlurredCoverBackgroundState extends State<_BlurredCoverBackground> {
+  _CoverVisual? _visual;
+  var _loadRevision = 0;
+  var _dependenciesReady = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_dependenciesReady) return;
+    _dependenciesReady = true;
+    unawaited(_resolveCover());
+  }
+
+  @override
+  void didUpdateWidget(covariant _BlurredCoverBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.url != widget.track.url ||
+        oldWidget.track.coverUrl != widget.track.coverUrl ||
+        oldWidget.track.coverArt != widget.track.coverArt) {
+      unawaited(_resolveCover());
+    }
+  }
+
+  Future<void> _resolveCover() async {
+    final revision = ++_loadRevision;
+    final track = widget.track;
+    Uint8List? bytes = track.coverArt;
+    ImageProvider<Object>? provider;
+    var key = 'cover:${track.url}';
+
+    if (bytes == null || bytes.isEmpty) {
+      final source = track.coverUrl?.trim() ?? '';
+      if (source.isNotEmpty) {
+        final resolved = MusicCacheService.instance.resolveUrl(source);
+        if (resolved.isNotEmpty) {
+          provider = ResizeImage.resizeIfNeeded(
+            640,
+            640,
+            NetworkImage(resolved),
+          );
+          key = 'network:$resolved';
+        }
+      } else {
+        try {
+          bytes = (await MusicCacheService.instance.loadMetadata(track.url))
+              .coverArt;
+        } catch (_) {}
+      }
+    }
+
+    if (provider == null && bytes != null && bytes.isNotEmpty) {
+      provider = ResizeImage.resizeIfNeeded(
+        384,
+        384,
+        MemoryImage(bytes),
+      );
+      key = 'memory:${track.url}:${bytes.length}:${identityHashCode(bytes)}';
+    }
+
+    if (!mounted || revision != _loadRevision) return;
+    final resolvedProvider = provider;
+    if (resolvedProvider == null) {
+      setState(() => _visual = null);
+      return;
+    }
+
+    try {
+      await precacheImage(resolvedProvider, context);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || revision != _loadRevision) return;
+    setState(() => _visual = _CoverVisual(key, resolvedProvider));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = _visual;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 520),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      child: visual == null
+          ? const SizedBox.expand(key: ValueKey('no-cover'))
+          : _BlurredCoverImage(
+              key: ValueKey(visual.key),
+              provider: visual.provider,
+              blurAmount: widget.blurAmount,
+              darken: widget.darken,
+            ),
+    );
+  }
+}
+
+class _CoverVisual {
+  final String key;
+  final ImageProvider<Object> provider;
+
+  const _CoverVisual(this.key, this.provider);
+}
+
+class _BlurredCoverImage extends StatelessWidget {
+  static const _renderScale = 0.35;
+
+  final ImageProvider<Object> provider;
+  final double blurAmount;
+  final double darken;
+
+  const _BlurredCoverImage({
+    super.key,
+    required this.provider,
+    required this.blurAmount,
+    required this.darken,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedBlur = blurAmount.clamp(0.0, 500.0).toDouble();
+    final normalizedDarken = darken.clamp(0.0, 0.8).toDouble();
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Center(
+                child: SizedBox(
+                  width: constraints.maxWidth * _renderScale,
+                  height: constraints.maxHeight * _renderScale,
+                  child: Transform.scale(
+                    scale: 1 / _renderScale,
+                    child: ImageFiltered(
+                      imageFilter: ui.ImageFilter.blur(
+                        sigmaX: normalizedBlur * _renderScale,
+                        sigmaY: normalizedBlur * _renderScale,
+                        tileMode: ui.TileMode.clamp,
+                      ),
+                      child: Image(
+                        image: provider,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.low,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          if (normalizedDarken > 0)
+            ColoredBox(
+              color: Colors.black.withValues(alpha: normalizedDarken),
+            ),
+        ],
+      ),
     );
   }
 }

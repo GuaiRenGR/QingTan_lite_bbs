@@ -285,16 +285,63 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     onChanged: MusicPlayerSettingsService.setAdvancedBlur,
                   ),
                   SwitchListTile(
+                    secondary: const Icon(Icons.wallpaper_rounded),
+                    title: const Text('正在播放模糊封面背景'),
+                    subtitle: const Text('使用当前封面作为正在播放页面背景'),
+                    value: playerSettings.coverBlurBackground,
+                    onChanged:
+                        MusicPlayerSettingsService.setCoverBlurBackground,
+                  ),
+                  if (playerSettings.coverBlurBackground) ...[
+                    _PlayerEffectSliderTile(
+                      title: '封面模糊强度',
+                      valueLabel:
+                          '当前模糊：${playerSettings.coverBlurAmount.toStringAsFixed(1)}',
+                      value: playerSettings.coverBlurAmount,
+                      max: 500,
+                      divisions: 100,
+                      onChanged:
+                          MusicPlayerSettingsService.setCoverBlurAmount,
+                    ),
+                    _PlayerEffectSliderTile(
+                      title: '背景调暗',
+                      valueLabel:
+                          '调暗强度：${playerSettings.coverBlurDarken.toStringAsFixed(2)}',
+                      value: playerSettings.coverBlurDarken,
+                      max: 0.8,
+                      divisions: 16,
+                      onChanged:
+                          MusicPlayerSettingsService.setCoverBlurDarken,
+                    ),
+                  ],
+                  SwitchListTile(
                     secondary: const Icon(Icons.graphic_eq_rounded),
-                    title: const Text('音乐律动'),
+                    title: const Text('正在播放音频律动'),
+                    subtitle: Text(
+                      playerSettings.coverBlurBackground
+                          ? '需关闭模糊封面背景'
+                          : playerSettings.dynamicBackground
+                              ? '控制正在播放页面的音频律动效果'
+                              : '需先开启正在播放动态背景',
+                    ),
                     value: playerSettings.musicReactive,
-                    onChanged: MusicPlayerSettingsService.setMusicReactive,
+                    onChanged: playerSettings.dynamicBackground &&
+                            !playerSettings.coverBlurBackground
+                        ? MusicPlayerSettingsService.setMusicReactive
+                        : null,
                   ),
                   SwitchListTile(
                     secondary: const Icon(Icons.animation_rounded),
-                    title: const Text('动态背景'),
+                    title: const Text('正在播放动态背景'),
+                    subtitle: Text(
+                      playerSettings.coverBlurBackground
+                          ? '需关闭模糊封面背景'
+                          : '控制正在播放页面的动态背景效果',
+                    ),
                     value: playerSettings.dynamicBackground,
-                    onChanged: MusicPlayerSettingsService.setDynamicBackground,
+                    onChanged: playerSettings.coverBlurBackground
+                        ? null
+                        : MusicPlayerSettingsService.setDynamicBackground,
                   ),
                 ],
               );
@@ -408,6 +455,49 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 },
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlayerEffectSliderTile extends StatelessWidget {
+  final String title;
+  final String valueLabel;
+  final double value;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+
+  const _PlayerEffectSliderTile({
+    required this.title,
+    required this.valueLabel,
+    required this.value,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(56, 4, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.bodyLarge),
+          Text(
+            valueLabel,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary(context),
+                ),
+          ),
+          Slider(
+            value: value.clamp(0.0, max).toDouble(),
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
           ),
         ],
       ),

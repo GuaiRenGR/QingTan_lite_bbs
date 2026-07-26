@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,7 +47,10 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
       appBar: AppBar(
         title: const Text('音乐播放器'),
         backgroundColor: current == null ? null : Colors.transparent,
+        foregroundColor: current == null ? null : Colors.white,
         surfaceTintColor: Colors.transparent,
+        systemOverlayStyle:
+            current == null ? null : SystemUiOverlayStyle.light,
       ),
       body: current == null
           ? const _EmptyPlaylist()
@@ -54,53 +58,55 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
               fit: StackFit.expand,
               children: [
                 _MusicBackgroundLayer(track: current),
-                SafeArea(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: PageView(
-                          onPageChanged: (index) =>
-                              setState(() => _pageIndex = index),
-                          children: [
-                            _ArtworkPage(track: current),
-                            _LiveLyricsPage(
-                              key: ValueKey(current.url),
-                              track: current,
-                            ),
-                          ],
+                _NowPlayingForegroundTheme(
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: PageView(
+                            onPageChanged: (index) =>
+                                setState(() => _pageIndex = index),
+                            children: [
+                              _ArtworkPage(track: current),
+                              _LiveLyricsPage(
+                                key: ValueKey(current.url),
+                                track: current,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          2,
-                          (index) => AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: index == _pageIndex ? 16 : 6,
-                            height: 6,
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: BoxDecoration(
-                              color: index == _pageIndex
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context)
-                                      .colorScheme
-                                      .outlineVariant
-                                      .withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            2,
+                            (index) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: index == _pageIndex ? 16 : 6,
+                              height: 6,
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color: index == _pageIndex
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .outlineVariant
+                                        .withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      _LivePlayerControls(
-                        isFavorite: isFavorite,
-                        onShowPlaylist: () => _showPlaylist(context),
-                        onFavorite: () => _toggleFavorite(
-                          context,
-                          current,
-                          userId,
+                        _LivePlayerControls(
+                          isFavorite: isFavorite,
+                          onShowPlaylist: () => _showPlaylist(context),
+                          onFavorite: () => _toggleFavorite(
+                            context,
+                            current,
+                            userId,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -229,8 +235,42 @@ class _MusicBackgroundLayer extends ConsumerWidget {
           advancedBlur: settings.advancedBlur,
           musicReactive: settings.musicReactive,
           dynamicBackground: settings.dynamicBackground,
+          coverBlurBackground: settings.coverBlurBackground,
+          coverBlurAmount: settings.coverBlurAmount,
+          coverBlurDarken: settings.coverBlurDarken,
         );
       },
+    );
+  }
+}
+
+class _NowPlayingForegroundTheme extends StatelessWidget {
+  final Widget child;
+
+  const _NowPlayingForegroundTheme({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final inherited = Theme.of(context);
+    final colors = ColorScheme.fromSeed(
+      seedColor: inherited.colorScheme.primary,
+      brightness: Brightness.dark,
+    );
+    return Theme(
+      data: inherited.copyWith(
+        brightness: Brightness.dark,
+        colorScheme: colors,
+        iconTheme: inherited.iconTheme.copyWith(color: colors.onSurface),
+        textTheme: inherited.textTheme.apply(
+          bodyColor: colors.onSurface,
+          displayColor: colors.onSurface,
+        ),
+        primaryTextTheme: inherited.primaryTextTheme.apply(
+          bodyColor: colors.onSurface,
+          displayColor: colors.onSurface,
+        ),
+      ),
+      child: child,
     );
   }
 }
