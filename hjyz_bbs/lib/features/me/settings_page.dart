@@ -150,7 +150,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
-    final appBar = const AppBar(title: Text('设置'));
+    final appBar = AppBar(title: const Text('设置'));
 
     if (!settingsLoaded) {
       return Scaffold(

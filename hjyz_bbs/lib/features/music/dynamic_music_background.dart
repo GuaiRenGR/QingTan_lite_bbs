@@ -388,7 +388,7 @@ List<_ColorSwatch> _quantize(Uint8List pixels) {
     final key = (red >> 4) << 8 | (green >> 4) << 4 | (blue >> 4);
     final bin = bins.putIfAbsent(key, _ColorBin.new);
     bin
-      ..count++
+      ..count += 1
       ..red += red
       ..green += green
       ..blue += blue;
@@ -608,7 +608,7 @@ class _BackgroundGrainPainter extends CustomPainter {
       paint.color = (light ? Colors.white : Colors.black).withValues(
         alpha: light ? 0.020 : 0.014,
       );
-      canvas.drawPoint(Offset(x, y), paint);
+      canvas.drawCircle(Offset(x, y), 0.4, paint);
     }
   }
 
