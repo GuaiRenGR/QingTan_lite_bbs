@@ -358,6 +358,7 @@ class ThreadReadController
         $threads = \Database::table('threads');
         $users = \Database::table('users');
         $follows = \Database::table('user_follows');
+        $likes = \Database::table('likes');
 
         $rows = \Database::fetchAll(
             "SELECT
@@ -370,13 +371,21 @@ class ThreadReadController
                 t.mode,
                 t.images_json,
                 t.sensitive_labels_json,
+                t.view_count,
                 t.like_count,
                 t.favorite_count,
                 t.reply_count,
                 t.share_count,
                 t.created_at,
                 u.nickname AS author_name,
-                u.avatar AS author_avatar
+                u.username AS author_username,
+                u.avatar AS author_avatar,
+                EXISTS(
+                    SELECT 1 FROM {$likes} l
+                    WHERE l.user_id = ?
+                      AND l.object_type = 'thread'
+                      AND l.object_id = t.id
+                ) AS is_liked
              FROM {$threads} t
              INNER JOIN {$follows} f ON f.following_id = t.user_id
              LEFT JOIN {$users} u ON u.id = t.user_id
@@ -385,6 +394,7 @@ class ThreadReadController
              ORDER BY t.created_at DESC
              LIMIT {$offset}, {$pageSize}",
             [
+                $user['id'],
                 $user['id'],
             ]
         );
@@ -418,9 +428,12 @@ class ThreadReadController
                 'favorite_count' => (int)($row['favorite_count'] ?? 0),
                 'reply_count' => (int)($row['reply_count'] ?? 0),
                 'share_count' => (int)($row['share_count'] ?? 0),
+                'view_count' => (int)($row['view_count'] ?? 0),
                 'created_at' => $row['created_at'],
                 'author_name' => $row['author_name'] ?: '用户',
+                'author_username' => $row['author_username'] ?: '',
                 'author_avatar' => $row['author_avatar'] ?: '',
+                'is_liked' => (bool)($row['is_liked'] ?? false),
             ];
         }, $rows);
 

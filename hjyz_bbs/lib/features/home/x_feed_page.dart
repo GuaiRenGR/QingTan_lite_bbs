@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -163,6 +165,7 @@ class _XFeedPageState extends ConsumerState<XFeedPage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/thread/create'),
         tooltip: '发布帖子',
+        shape: const CircleBorder(),
         child: const Icon(Icons.add_rounded),
       ),
       body: loading
@@ -194,7 +197,11 @@ class _XFeedPageState extends ConsumerState<XFeedPage> {
                           ),
                         );
                       }
-                      return _XFeedItem(item: items[index]);
+                      final item = items[index];
+                      return _XFeedItem(
+                        key: ValueKey(item['id']),
+                        item: item,
+                      );
                     },
                   ),
                 ),
@@ -246,12 +253,99 @@ class _FeedTab extends StatelessWidget {
   }
 }
 
-class _XFeedItem extends StatelessWidget {
+class _XFeedItem extends StatefulWidget {
   final Map<String, dynamic> item;
 
-  const _XFeedItem({required this.item});
+  const _XFeedItem({super.key, required this.item});
+
+  @override
+  State<_XFeedItem> createState() => _XFeedItemState();
+}
+
+class _XFeedItemState extends State<_XFeedItem> {
+  late bool _liked;
+  late int _likeCount;
+  late int _shareCount;
+  bool _actionLoading = false;
+
+  Map<String, dynamic> get item => widget.item;
+
+  @override
+  void initState() {
+    super.initState();
+    _readItemState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _XFeedItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item != widget.item) _readItemState();
+  }
+
+  void _readItemState() {
+    _liked = item['is_liked'] == true;
+    _likeCount = _number('like_count');
+    _shareCount = _number('share_count');
+  }
 
   int _number(String key) => int.tryParse(item[key]?.toString() ?? '') ?? 0;
+
+  Future<void> _toggleLike() async {
+    final id = _number('id');
+    if (id <= 0 || _actionLoading) return;
+    setState(() => _actionLoading = true);
+    final result = await ApiClient.instance.post(
+      _liked ? 'threads/unlike' : 'threads/like',
+      data: {'thread_id': id},
+    );
+    if (!mounted) return;
+    setState(() => _actionLoading = false);
+    if (result.success && result.data is Map) {
+      final data = result.data as Map;
+      setState(() {
+        _liked = data['is_liked'] == true;
+        _likeCount = int.tryParse(data['like_count']?.toString() ?? '') ?? 0;
+        item['is_liked'] = _liked;
+        item['like_count'] = _likeCount;
+      });
+      return;
+    }
+    _showMessage(result.message);
+  }
+
+  Future<void> _shareThread({required bool openShareSheet}) async {
+    final id = _number('id');
+    if (id <= 0 || _actionLoading) return;
+    setState(() => _actionLoading = true);
+    final result = await ApiClient.instance.post(
+      'threads/share',
+      data: {'thread_id': id},
+    );
+    if (!mounted) return;
+    setState(() => _actionLoading = false);
+    if (!result.success || result.data is! Map) {
+      _showMessage(result.message);
+      return;
+    }
+    final data = result.data as Map;
+    final url = data['share_url']?.toString() ?? '';
+    setState(() {
+      _shareCount++;
+      item['share_count'] = _shareCount;
+    });
+    if (openShareSheet && url.isNotEmpty) {
+      await Share.share(url);
+    } else {
+      _showMessage('已转发');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted || message.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +355,8 @@ class _XFeedItem extends StatelessWidget {
     final title = item['title']?.toString() ?? '';
     final summary = item['summary']?.toString() ?? '';
     final cover = item['cover']?.toString() ?? '';
-    final createdAt = item['created_at']?.toString() ?? '';
+    final username = item['author_username']?.toString().trim() ?? '';
+    final createdAt = formatXFeedTime(item['created_at']?.toString() ?? '');
 
     return InkWell(
       onTap: id > 0 ? () => context.push('/thread/$id') : null,
@@ -274,10 +369,13 @@ class _XFeedItem extends StatelessWidget {
               url: avatar,
               width: 42,
               height: 42,
-              borderRadius: BorderRadius.circular(21),
-              errorWidget: const CircleAvatar(
-                radius: 21,
-                child: Icon(Icons.person_outline_rounded),
+              borderRadius: BorderRadius.circular(6),
+              errorWidget: Container(
+                width: 42,
+                height: 42,
+                color: AppColors.inputFill(context),
+                alignment: Alignment.center,
+                child: const Icon(Icons.person_outline_rounded),
               ),
             ),
             const SizedBox(width: 10),
@@ -298,7 +396,7 @@ class _XFeedItem extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          '@u${item['user_id'] ?? ''} · $createdAt',
+                          '${username.isEmpty ? '@用户' : '@$username'} · $createdAt',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -312,14 +410,19 @@ class _XFeedItem extends StatelessWidget {
                   ),
                   if (title.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(
+                    _ExpandableFeedText(
                       title,
+                      maxLines: 2,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ],
                   if (summary.isNotEmpty) ...[
                     const SizedBox(height: 3),
-                    Text(summary, style: const TextStyle(height: 1.35)),
+                    _ExpandableFeedText(
+                      summary,
+                      maxLines: 4,
+                      style: const TextStyle(height: 1.35),
+                    ),
                   ],
                   if (cover.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -344,14 +447,41 @@ class _XFeedItem extends StatelessWidget {
                       _Metric(
                         Icons.chat_bubble_outline_rounded,
                         _number('reply_count'),
+                        tooltip: '回复',
+                        onTap: id > 0
+                            ? () => context.push('/thread/$id?reply=1')
+                            : null,
                       ),
-                      const _Metric(Icons.repeat_rounded, 0),
                       _Metric(
-                        Icons.favorite_border_rounded,
-                        _number('like_count'),
+                        Icons.repeat_rounded,
+                        _shareCount,
+                        tooltip: '转发',
+                        onTap: _actionLoading
+                            ? null
+                            : () => _shareThread(openShareSheet: false),
                       ),
-                      _Metric(Icons.bar_chart_rounded, _number('view_count')),
-                      const _Metric(Icons.ios_share_rounded, 0),
+                      _Metric(
+                        _liked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        _likeCount,
+                        tooltip: _liked ? '取消点赞' : '点赞',
+                        active: _liked,
+                        onTap: _actionLoading ? null : _toggleLike,
+                      ),
+                      _Metric(
+                        Icons.bar_chart_rounded,
+                        _number('view_count'),
+                        tooltip: '浏览量',
+                      ),
+                      _Metric(
+                        Icons.ios_share_rounded,
+                        0,
+                        tooltip: '分享',
+                        onTap: _actionLoading
+                            ? null
+                            : () => _shareThread(openShareSheet: true),
+                      ),
                     ],
                   ),
                 ],
@@ -367,25 +497,176 @@ class _XFeedItem extends StatelessWidget {
 class _Metric extends StatelessWidget {
   final IconData icon;
   final int value;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool active;
 
-  const _Metric(this.icon, this.value);
+  const _Metric(
+    this.icon,
+    this.value, {
+    required this.tooltip,
+    this.onTap,
+    this.active = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: AppColors.textSecondary(context)),
-        if (value > 0) ...[
-          const SizedBox(width: 4),
-          Text(
-            '$value',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary(context),
-            ),
+    final color = active
+        ? Theme.of(context).colorScheme.primary
+        : AppColors.textSecondary(context);
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 22,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17, color: color),
+              if (value > 0) ...[
+                const SizedBox(width: 4),
+                Text('$value', style: TextStyle(fontSize: 12, color: color)),
+              ],
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
+}
+
+class _ExpandableFeedText extends StatefulWidget {
+  final String text;
+  final int maxLines;
+  final TextStyle? style;
+
+  const _ExpandableFeedText(
+    this.text, {
+    required this.maxLines,
+    this.style,
+  });
+
+  @override
+  State<_ExpandableFeedText> createState() => _ExpandableFeedTextState();
+}
+
+class _ExpandableFeedTextState extends State<_ExpandableFeedText> {
+  late final TapGestureRecognizer _moreRecognizer;
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _moreRecognizer = TapGestureRecognizer()
+      ..onTap = () => setState(() => _expanded = true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExpandableFeedText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) _expanded = false;
+  }
+
+  @override
+  void dispose() {
+    _moreRecognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(widget.style);
+    if (_expanded) return Text(widget.text, style: style);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fullPainter = _painter(context, widget.text, style);
+        fullPainter.layout(maxWidth: constraints.maxWidth);
+        if (!fullPainter.didExceedMaxLines) {
+          return Text(widget.text, style: style);
+        }
+
+        const suffix = '… 显示更多';
+        var low = 0;
+        var high = widget.text.length;
+        while (low < high) {
+          final middle = (low + high + 1) ~/ 2;
+          final candidate = '${widget.text.substring(0, middle).trimRight()}$suffix';
+          final painter = _painter(context, candidate, style)
+            ..layout(maxWidth: constraints.maxWidth);
+          if (painter.didExceedMaxLines) {
+            high = middle - 1;
+          } else {
+            low = middle;
+          }
+        }
+
+        if (low > 0 &&
+            low < widget.text.length &&
+            widget.text.codeUnitAt(low) >= 0xDC00 &&
+            widget.text.codeUnitAt(low) <= 0xDFFF) {
+          low--;
+        }
+        final visible = widget.text.substring(0, low).trimRight();
+        return Text.rich(
+          TextSpan(
+            style: style,
+            children: [
+              TextSpan(text: '$visible… '),
+              TextSpan(
+                text: '显示更多',
+                style: const TextStyle(color: Color(0xFF1D9BF0)),
+                recognizer: _moreRecognizer,
+              ),
+            ],
+          ),
+          maxLines: widget.maxLines,
+          overflow: TextOverflow.clip,
+        );
+      },
+    );
+  }
+
+  TextPainter _painter(
+    BuildContext context,
+    String text,
+    TextStyle style,
+  ) {
+    return TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: widget.maxLines,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+  }
+}
+
+String formatXFeedTime(String value, {DateTime? now}) {
+  var createdAt = DateTime.tryParse(value.trim());
+  if (createdAt == null) return value;
+  if (createdAt.isUtc) createdAt = createdAt.toLocal();
+
+  final current = now ?? DateTime.now();
+  var difference = current.difference(createdAt);
+  if (difference.isNegative) difference = Duration.zero;
+  final isToday = current.year == createdAt.year &&
+      current.month == createdAt.month &&
+      current.day == createdAt.day;
+
+  if (isToday) {
+    if (difference.inMinutes < 1) return '刚刚';
+    if (difference.inHours < 1) return '${difference.inMinutes}分钟';
+    return '${difference.inHours}小时';
+  }
+  if (difference < const Duration(days: 3)) {
+    return '${difference.inDays < 1 ? 1 : difference.inDays}天';
+  }
+
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+  return '${createdAt.year}-${twoDigits(createdAt.month)}-'
+      '${twoDigits(createdAt.day)} ${twoDigits(createdAt.hour)}:'
+      '${twoDigits(createdAt.minute)}';
 }

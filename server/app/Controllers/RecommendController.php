@@ -23,17 +23,17 @@ class RecommendController
         $excludeIds = array_filter(array_map('intval', $excludeIds));
 
         if ($channel === 'latest') {
-            self::latest($threads, $users, $page, $pageSize, $excludeIds);
+            self::latest($threads, $users, $page, $pageSize, $excludeIds, $userId);
             return;
         }
 
         if ($channel === 'hot') {
-            self::hot($threads, $users, $page, $pageSize, $excludeIds);
+            self::hot($threads, $users, $page, $pageSize, $excludeIds, $userId);
             return;
         }
 
         if ($channel === 'digest') {
-            self::digest($threads, $users, $page, $pageSize, $excludeIds);
+            self::digest($threads, $users, $page, $pageSize, $excludeIds, $userId);
             return;
         }
 
@@ -41,7 +41,7 @@ class RecommendController
         self::recommend($threads, $users, $userId, $page, $pageSize, $excludeIds);
     }
 
-    private static function latest($threads, $users, $page, $pageSize, $excludeIds)
+    private static function latest($threads, $users, $page, $pageSize, $excludeIds, $userId)
     {
         $offset = ($page - 1) * $pageSize;
         $exclude = self::buildExcludeClause($excludeIds);
@@ -51,7 +51,7 @@ class RecommendController
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
-                u.nickname AS author_name, u.avatar AS author_avatar
+                u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
@@ -59,10 +59,10 @@ class RecommendController
              LIMIT {$offset}, {$pageSize}"
         );
 
-        self::respond($rows, $pageSize);
+        self::respond($rows, $pageSize, $userId);
     }
 
-    private static function hot($threads, $users, $page, $pageSize, $excludeIds)
+    private static function hot($threads, $users, $page, $pageSize, $excludeIds, $userId)
     {
         $offset = ($page - 1) * $pageSize;
         $exclude = self::buildExcludeClause($excludeIds);
@@ -72,7 +72,7 @@ class RecommendController
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
-                u.nickname AS author_name, u.avatar AS author_avatar
+                u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE t.status = 1 AND t.visibility = 'public' {$exclude}
@@ -82,10 +82,10 @@ class RecommendController
              LIMIT {$offset}, {$pageSize}"
         );
 
-        self::respond($rows, $pageSize);
+        self::respond($rows, $pageSize, $userId);
     }
 
-    private static function digest($threads, $users, $page, $pageSize, $excludeIds)
+    private static function digest($threads, $users, $page, $pageSize, $excludeIds, $userId)
     {
         $offset = ($page - 1) * $pageSize;
         $exclude = self::buildExcludeClause($excludeIds);
@@ -95,7 +95,7 @@ class RecommendController
                 t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
-                u.nickname AS author_name, u.avatar AS author_avatar
+                u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
              FROM {$threads} t
              LEFT JOIN {$users} u ON u.id = t.user_id
              WHERE t.status = 1 AND t.visibility = 'public' AND t.is_digest = 1 {$exclude}
@@ -103,7 +103,7 @@ class RecommendController
              LIMIT {$offset}, {$pageSize}"
         );
 
-        self::respond($rows, $pageSize);
+        self::respond($rows, $pageSize, $userId);
     }
 
     private static function recommend($threads, $users, $userId, $page, $pageSize, $excludeIds)
@@ -126,7 +126,7 @@ class RecommendController
                     t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
                     t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                     t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
-                    u.nickname AS author_name, u.avatar AS author_avatar,
+                    u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar,
                     h.id AS history_id,
                     COALESCE(SUM(s.view_count), 0) AS recent_views,
                     COALESCE(SUM(s.like_count), 0) AS recent_likes,
@@ -155,7 +155,7 @@ class RecommendController
                     t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
                     t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                     t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
-                    u.nickname AS author_name, u.avatar AS author_avatar,
+                    u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar,
                     NULL AS history_id,
                     COALESCE(SUM(s.view_count), 0) AS recent_views,
                     COALESCE(SUM(s.like_count), 0) AS recent_likes,
@@ -225,7 +225,7 @@ class RecommendController
         $result = array_merge($topped, $sampled);
 
         $resultRows = array_map(fn($item) => $item['row'], $result);
-        self::respond($resultRows, $pageSize);
+        self::respond($resultRows, $pageSize, $userId);
     }
 
     /**
@@ -303,9 +303,31 @@ class RecommendController
         return " AND t.id NOT IN ({$ids})";
     }
 
-    private static function respond($rows, $pageSize)
+    private static function respond($rows, $pageSize, $userId = 0)
     {
-        $list = array_map(function ($row) {
+        $likedIds = [];
+        if ($userId > 0 && !empty($rows)) {
+            $threadIds = array_values(array_filter(array_map(
+                fn($row) => (int)($row['id'] ?? 0),
+                $rows
+            )));
+            if (!empty($threadIds)) {
+                $likes = \Database::table('likes');
+                $idList = implode(',', $threadIds);
+                $likedRows = \Database::fetchAll(
+                    "SELECT object_id FROM {$likes}
+                     WHERE user_id = ? AND object_type = 'thread'
+                       AND object_id IN ({$idList})",
+                    [$userId]
+                );
+                $likedIds = array_fill_keys(
+                    array_map('intval', array_column($likedRows, 'object_id')),
+                    true
+                );
+            }
+        }
+
+        $list = array_map(function ($row) use ($likedIds) {
             $images = [];
 
             if (!empty($row['images_json'])) {
@@ -339,7 +361,9 @@ class RecommendController
                 'is_digest' => (int)($row['is_digest'] ?? 0),
                 'created_at' => $row['created_at'],
                 'author_name' => $row['author_name'] ?: '用户',
+                'author_username' => $row['author_username'] ?: '',
                 'author_avatar' => $row['author_avatar'] ?: '',
+                'is_liked' => isset($likedIds[(int)$row['id']]),
             ];
         }, $rows);
 

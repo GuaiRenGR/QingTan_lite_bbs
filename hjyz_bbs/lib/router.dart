@@ -95,7 +95,10 @@ final router = GoRouter(
       path: '/thread/:id',
       builder: (_, state) {
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-        return ThreadDetailPage(threadId: id);
+        return ThreadDetailPage(
+          threadId: id,
+          focusReply: state.uri.queryParameters['reply'] == '1',
+        );
       },
     ),
     GoRoute(

@@ -234,6 +234,7 @@ class _LyricsPageState extends State<_LyricsPage> {
   final Map<int, GlobalKey> _lineKeys = {};
   Future<MusicLyrics?>? _lyricsFuture;
   var _lastActiveIndex = -1;
+  var _scrollRequest = 0;
 
   @override
   void initState() {
@@ -246,6 +247,7 @@ class _LyricsPageState extends State<_LyricsPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.track.lyricsUrl != widget.track.lyricsUrl) {
       _lastActiveIndex = -1;
+      _scrollRequest++;
       _loadLyrics();
     }
   }
@@ -257,18 +259,44 @@ class _LyricsPageState extends State<_LyricsPage> {
         : MusicCacheService.instance.loadLyrics(url);
   }
 
-  void _scrollToActive(int activeIndex) {
+  void _scrollToActive(int activeIndex, int lineCount) {
     if (activeIndex < 0 || activeIndex == _lastActiveIndex) return;
-    _lastActiveIndex = activeIndex;
+    final request = ++_scrollRequest;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || request != _scrollRequest) return;
       final target = _lineKeys[activeIndex]?.currentContext;
-      if (target == null) return;
-      Scrollable.ensureVisible(
-        target,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOut,
-        alignment: 0.5,
+      if (target != null) {
+        _lastActiveIndex = activeIndex;
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOut,
+          alignment: 0.5,
+        );
+        return;
+      }
+
+      if (!_scrollController.hasClients || lineCount < 2) return;
+      final position = _scrollController.position;
+      final approximateOffset =
+          position.maxScrollExtent * activeIndex / (lineCount - 1);
+      _scrollController.jumpTo(
+        approximateOffset
+            .clamp(0.0, position.maxScrollExtent)
+            .toDouble(),
       );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || request != _scrollRequest) return;
+        final visibleTarget = _lineKeys[activeIndex]?.currentContext;
+        if (visibleTarget == null) return;
+        _lastActiveIndex = activeIndex;
+        Scrollable.ensureVisible(
+          visibleTarget,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          alignment: 0.5,
+        );
+      });
     });
   }
 
@@ -310,7 +338,7 @@ class _LyricsPageState extends State<_LyricsPage> {
         final activeIndex = lyrics.activeIndex(widget.position);
         return LayoutBuilder(
           builder: (context, constraints) {
-            _scrollToActive(activeIndex);
+            _scrollToActive(activeIndex, lyrics.lines.length);
             return ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
@@ -379,8 +407,11 @@ class _PlayerControls extends StatelessWidget {
         .clamp(0, durationMilliseconds)
         .toDouble();
     final bufferedMilliseconds = state.bufferedPosition.inMilliseconds
-        .clamp(positionMilliseconds.round(), durationMilliseconds)
+        .clamp(0, durationMilliseconds)
         .toDouble();
+    final secondaryTrackValue = bufferedMilliseconds >= positionMilliseconds
+        ? bufferedMilliseconds
+        : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
       child: Column(
@@ -411,7 +442,7 @@ class _PlayerControls extends StatelessWidget {
           const SizedBox(height: 6),
           Slider(
             value: positionMilliseconds,
-            secondaryTrackValue: bufferedMilliseconds,
+            secondaryTrackValue: secondaryTrackValue,
             max: durationMilliseconds.toDouble(),
             onChanged: state.duration.inMilliseconds <= 0
                 ? null

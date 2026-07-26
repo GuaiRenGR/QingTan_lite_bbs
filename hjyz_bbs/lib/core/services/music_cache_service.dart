@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../api/api_client.dart';
 
@@ -203,6 +204,18 @@ class MusicCacheService {
     final url = resolveUrl(source);
     if (url.isEmpty) return null;
     return (await audioCache.getFileFromCache(url))?.file;
+  }
+
+  Future<File> getPersistentStreamCacheFile(String source) async {
+    final url = resolveUrl(source);
+    final supportDirectory = await getApplicationSupportDirectory();
+    final cacheDirectory = Directory(
+      '${supportDirectory.path}${Platform.pathSeparator}music_audio_cache',
+    );
+    await cacheDirectory.create(recursive: true);
+    return File(
+      '${cacheDirectory.path}${Platform.pathSeparator}${_stableUrlHash(url)}.audio',
+    );
   }
 
   Future<void> preloadAudio(String source) async {
@@ -565,6 +578,15 @@ class MusicCacheService {
     if (name.isEmpty) return '';
     final dot = name.lastIndexOf('.');
     return dot > 0 ? name.substring(0, dot) : name;
+  }
+
+  String _stableUrlHash(String value) {
+    var hash = 0x811c9dc5;
+    for (final byte in utf8.encode(value)) {
+      hash ^= byte;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
   }
 }
 

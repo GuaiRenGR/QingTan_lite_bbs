@@ -16,10 +16,12 @@ import 'widgets/xhs_image_pager.dart';
 
 class ThreadDetailPage extends StatefulWidget {
   final int threadId;
+  final bool focusReply;
 
   const ThreadDetailPage({
     super.key,
     required this.threadId,
+    this.focusReply = false,
   });
 
   @override
@@ -99,6 +101,11 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
             : [];
         loading = false;
       });
+      if (widget.focusReply) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) commentFocus.requestFocus();
+        });
+      }
     } else {
       setState(() {
         error = result.message;

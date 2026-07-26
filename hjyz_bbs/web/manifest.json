@@ -1,11 +1,11 @@
 {
-    "name": "hjyz_bbs",
-    "short_name": "hjyz_bbs",
+    "name": "轻坛",
+    "short_name": "轻坛",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "轻坛社区",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

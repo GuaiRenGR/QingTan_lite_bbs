@@ -146,7 +146,7 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
     });
 
     return MaterialApp.router(
-      title: '获嘉一中论坛',
+      title: '轻坛',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       locale: const Locale('zh', 'CN'),

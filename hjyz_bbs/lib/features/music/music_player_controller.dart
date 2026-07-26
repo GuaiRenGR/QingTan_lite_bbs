@@ -133,13 +133,19 @@ class MusicPlayerState {
 class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   MusicPlayerController() : super(const MusicPlayerState()) {
     _positionSub = _player.positionStream.listen((position) {
-      if (mounted) state = state.copyWith(position: position);
+      if (mounted && _loadedUrl != null) {
+        state = state.copyWith(position: position);
+      }
     });
     _bufferedPositionSub = _player.bufferedPositionStream.listen((position) {
-      if (mounted) state = state.copyWith(bufferedPosition: position);
+      if (!mounted || _loadedUrl == null) return;
+      if (position > _furthestBufferedPosition) {
+        _furthestBufferedPosition = position;
+        state = state.copyWith(bufferedPosition: position);
+      }
     });
     _durationSub = _player.durationStream.listen((duration) {
-      if (mounted && duration != null) {
+      if (mounted && _loadedUrl != null && duration != null) {
         state = state.copyWith(duration: duration);
       }
     });
@@ -154,6 +160,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       );
 
       if (processingState == ProcessingState.completed &&
+          _loadedUrl != null &&
           !_handlingCompletion) {
         _handlingCompletion = true;
         unawaited(_handleCompletion());
@@ -170,6 +177,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   String? _loadedUrl;
+  Duration _furthestBufferedPosition = Duration.zero;
   bool _handlingCompletion = false;
   Future<void> _storageQueue = Future.value();
 
@@ -300,6 +308,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   }
 
   Future<void> seek(Duration position) async {
+    if (mounted) state = state.copyWith(position: position);
     await _player.seek(position);
   }
 
@@ -367,6 +376,8 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     final track = state.playlist[index];
     try {
       await _player.pause();
+      _loadedUrl = null;
+      _furthestBufferedPosition = Duration.zero;
       state = state.copyWith(
         currentIndex: index,
         playing: false,
@@ -379,12 +390,28 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       _schedulePersist();
       final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
       if (cachedFile == null) {
-        await _player.setUrl(track.url);
+        final streamCacheFile = await MusicCacheService.instance
+            .getPersistentStreamCacheFile(track.url);
+        await _player.setAudioSource(
+          LockCachingAudioSource(
+            Uri.parse(track.url),
+            cacheFile: streamCacheFile,
+          ),
+        );
       } else {
         await _player.setFilePath(cachedFile.path);
       }
       _loadedUrl = track.url;
-      if (mounted) state = state.copyWith(loading: false, clearError: true);
+      _furthestBufferedPosition = _player.bufferedPosition;
+      if (mounted) {
+        state = state.copyWith(
+          loading: false,
+          position: _player.position,
+          bufferedPosition: _furthestBufferedPosition,
+          duration: _player.duration ?? Duration.zero,
+          clearError: true,
+        );
+      }
       if (autoplay) _startPlayback();
       _preloadUpcoming(index);
     } catch (_) {
