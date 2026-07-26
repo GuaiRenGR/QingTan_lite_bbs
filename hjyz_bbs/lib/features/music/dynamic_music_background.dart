@@ -32,6 +32,9 @@ class DynamicMusicBackground extends StatefulWidget {
 
 class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
     with SingleTickerProviderStateMixin {
+  static const _playingFrameInterval = Duration(milliseconds: 33);
+  static const _idleFrameInterval = Duration(milliseconds: 66);
+
   late final AnimationController _motionController;
   MusicBackgroundPalette? _fromPalette;
   MusicBackgroundPalette? _targetPalette;
@@ -41,6 +44,7 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   final _playbackClock = Stopwatch();
   Duration _positionAnchor = Duration.zero;
   Duration _clockAnchor = Duration.zero;
+  Duration _lastMotionFrame = Duration.zero;
 
   @override
   void initState() {
@@ -48,7 +52,9 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
     _motionController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 62832),
-    )..repeat();
+    )
+      ..addListener(_onMotionTick)
+      ..repeat();
     _playbackClock.start();
     _resetPositionAnchor();
   }
@@ -80,6 +86,17 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   void _resetPositionAnchor() {
     _positionAnchor = widget.position;
     _clockAnchor = _playbackClock.elapsed;
+  }
+
+  void _onMotionTick() {
+    final elapsed = _motionController.lastElapsedDuration;
+    if (elapsed == null) return;
+    final interval = widget.playing
+        ? _playingFrameInterval
+        : _idleFrameInterval;
+    if (elapsed - _lastMotionFrame < interval) return;
+    _lastMotionFrame = elapsed;
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadPalette() async {
@@ -133,63 +150,58 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
         curve: Curves.easeInOutCubic,
         builder: (context, fraction, _) {
           final palette = MusicBackgroundPalette.lerp(from, target, fraction);
-          return AnimatedBuilder(
-            animation: _motionController,
-            builder: (context, _) {
-              final reactive = _reactiveValues(
-                _effectivePosition(),
-                playing: widget.playing,
-              );
-              return ClipRect(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Transform.scale(
-                      scale: 1.18,
-                      child: ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(
-                          sigmaX: 30,
-                          sigmaY: 30,
-                          tileMode: ui.TileMode.mirror,
-                        ),
-                        child: CustomPaint(
-                          isComplex: true,
-                          willChange: true,
-                          painter: _HyperBackgroundPainter(
-                            palette: palette,
-                            time: _motionController.value * math.pi * 20,
-                            level: reactive.$1,
-                            beat: reactive.$2,
-                            dark: dark,
-                          ),
-                        ),
-                      ),
+          final reactive = _reactiveValues(
+            _effectivePosition(),
+            playing: widget.playing,
+          );
+          return ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _DownsampledBlur(
+                  child: CustomPaint(
+                    isComplex: true,
+                    willChange: true,
+                    painter: _HyperBackgroundPainter(
+                      palette: palette,
+                      time: _motionController.value * math.pi * 20,
+                      level: reactive.$1,
+                      beat: reactive.$2,
+                      dark: dark,
                     ),
-                    const CustomPaint(painter: _BackgroundGrainPainter()),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: dark
-                              ? const [
-                                  Color(0x30000000),
-                                  Color(0x08000000),
-                                  Color(0x52000000),
-                                ]
-                              : const [
-                                  Color(0x18FFFFFF),
-                                  Color(0x06FFFFFF),
-                                  Color(0x3DFFFFFF),
-                                ],
-                          stops: const [0, 0.48, 1],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              );
-            },
+                const RepaintBoundary(
+                  child: CustomPaint(
+                    isComplex: true,
+                    willChange: false,
+                    painter: _BackgroundGrainPainter(),
+                  ),
+                ),
+                RepaintBoundary(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: dark
+                            ? const [
+                                Color(0x30000000),
+                                Color(0x08000000),
+                                Color(0x52000000),
+                              ]
+                            : const [
+                                Color(0x18FFFFFF),
+                                Color(0x06FFFFFF),
+                                Color(0x3DFFFFFF),
+                              ],
+                        stops: const [0, 0.48, 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -199,6 +211,41 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   Duration _effectivePosition() {
     if (!widget.playing) return _positionAnchor;
     return _positionAnchor + (_playbackClock.elapsed - _clockAnchor);
+  }
+}
+
+class _DownsampledBlur extends StatelessWidget {
+  // Keep the apparent blur radius while rasterizing a much smaller layer.
+  static const _renderScale = 0.36;
+  static const _overscan = 1.18;
+
+  final Widget child;
+
+  const _DownsampledBlur({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Center(
+          child: SizedBox(
+            width: constraints.maxWidth * _renderScale,
+            height: constraints.maxHeight * _renderScale,
+            child: Transform.scale(
+              scale: _overscan / _renderScale,
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(
+                  sigmaX: 10.8,
+                  sigmaY: 10.8,
+                  tileMode: ui.TileMode.mirror,
+                ),
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
