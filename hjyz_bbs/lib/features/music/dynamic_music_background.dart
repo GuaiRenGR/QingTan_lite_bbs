@@ -613,6 +613,52 @@ Future<_LoadedCoverImage?> _loadCoverImage(MusicTrack track) async {
   );
 }
 
+final _musicCoverSeedCache = <String, Color>{};
+final _musicCoverSeedLoads = <String, Future<Color?>>{};
+
+Future<Color?> loadMusicCoverSeedColor(MusicTrack track) {
+  final coverArt = track.coverArt;
+  final key = [
+    track.url,
+    track.coverUrl ?? '',
+    coverArt?.length ?? 0,
+    coverArt == null ? 0 : identityHashCode(coverArt),
+  ].join('|');
+  final cached = _musicCoverSeedCache[key];
+  if (cached != null) return Future.value(cached);
+
+  return _musicCoverSeedLoads.putIfAbsent(key, () async {
+    try {
+      final loadedImage = await _loadCoverImage(track);
+      if (loadedImage == null) return null;
+      try {
+        final data = await loadedImage.image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
+        if (data == null) return null;
+        final swatches = _quantize(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        );
+        if (swatches.isEmpty) return null;
+
+        final dominant = swatches.first.color;
+        final muted = _pickSwatch(swatches, (hsl) => 1 - hsl.saturation);
+        final vibrant = _pickSwatch(swatches, (hsl) => hsl.saturation);
+        final seed = vibrant ?? muted ?? dominant;
+        _musicCoverSeedCache[key] = seed;
+        if (_musicCoverSeedCache.length > 64) {
+          _musicCoverSeedCache.remove(_musicCoverSeedCache.keys.first);
+        }
+        return seed;
+      } finally {
+        if (loadedImage.owned) loadedImage.image.dispose();
+      }
+    } finally {
+      _musicCoverSeedLoads.remove(key);
+    }
+  });
+}
+
 enum _PaletteRole { base, accent, light, dark, bridge }
 
 class MusicBackgroundPalette {

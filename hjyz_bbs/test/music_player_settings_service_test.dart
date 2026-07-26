@@ -16,8 +16,8 @@ void main() {
     expect(settings.dynamicBackground, isFalse);
     expect(settings.musicReactive, isFalse);
     expect(settings.coverBlurBackground, isTrue);
-    expect(settings.coverBlurAmount, 1.5);
-    expect(settings.coverBlurDarken, 0.2);
+    expect(settings.coverBlurAmount, 40.0);
+    expect(settings.coverBlurDarken, 0.4);
   });
 
   test('cover blur disables dynamic background and audio reactivity', () async {

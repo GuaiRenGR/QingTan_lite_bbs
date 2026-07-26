@@ -14,8 +14,8 @@ class MusicPlayerVisualSettings {
     this.musicReactive = false,
     this.dynamicBackground = false,
     this.coverBlurBackground = true,
-    this.coverBlurAmount = 1.5,
-    this.coverBlurDarken = 0.2,
+    this.coverBlurAmount = 40.0,
+    this.coverBlurDarken = 0.4,
   });
 
   MusicPlayerVisualSettings copyWith({
@@ -71,8 +71,8 @@ class MusicPlayerSettingsService {
         dynamicBackground: prefs.getBool(_dynamicBackgroundKey) ?? false,
         coverBlurBackground:
             prefs.getBool(_coverBlurBackgroundKey) ?? true,
-        coverBlurAmount: prefs.getDouble(_coverBlurAmountKey) ?? 1.5,
-        coverBlurDarken: prefs.getDouble(_coverBlurDarkenKey) ?? 0.2,
+        coverBlurAmount: prefs.getDouble(_coverBlurAmountKey) ?? 40.0,
+        coverBlurDarken: prefs.getDouble(_coverBlurDarkenKey) ?? 0.4,
       ).normalized();
       settings.value = loaded;
       await _persistVisualState(prefs, loaded);

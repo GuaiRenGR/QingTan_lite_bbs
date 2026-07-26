@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -59,6 +60,7 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
               children: [
                 _MusicBackgroundLayer(track: current),
                 _NowPlayingForegroundTheme(
+                  track: current,
                   child: SafeArea(
                     child: Column(
                       children: [
@@ -75,27 +77,7 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
                             ],
                           ),
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            2,
-                            (index) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              width: index == _pageIndex ? 16 : 6,
-                              height: 6,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(
-                                color: index == _pageIndex
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .outlineVariant
-                                        .withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            ),
-                          ),
-                        ),
+                        _PlayerPageIndicator(pageIndex: _pageIndex),
                         _LivePlayerControls(
                           isFavorite: isFavorite,
                           onShowPlaylist: () => _showPlaylist(context),
@@ -244,19 +226,58 @@ class _MusicBackgroundLayer extends ConsumerWidget {
   }
 }
 
-class _NowPlayingForegroundTheme extends StatelessWidget {
+class _NowPlayingForegroundTheme extends StatefulWidget {
+  final MusicTrack track;
   final Widget child;
 
-  const _NowPlayingForegroundTheme({required this.child});
+  const _NowPlayingForegroundTheme({
+    required this.track,
+    required this.child,
+  });
+
+  @override
+  State<_NowPlayingForegroundTheme> createState() =>
+      _NowPlayingForegroundThemeState();
+}
+
+class _NowPlayingForegroundThemeState
+    extends State<_NowPlayingForegroundTheme> {
+  Color? _coverSeed;
+  var _loadRevision = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCoverSeed());
+  }
+
+  @override
+  void didUpdateWidget(covariant _NowPlayingForegroundTheme oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.url != widget.track.url ||
+        oldWidget.track.coverUrl != widget.track.coverUrl ||
+        oldWidget.track.coverArt != widget.track.coverArt) {
+      unawaited(_loadCoverSeed());
+    }
+  }
+
+  Future<void> _loadCoverSeed() async {
+    final revision = ++_loadRevision;
+    final seed = await loadMusicCoverSeedColor(widget.track);
+    if (!mounted || revision != _loadRevision || seed == _coverSeed) return;
+    setState(() => _coverSeed = seed);
+  }
 
   @override
   Widget build(BuildContext context) {
     final inherited = Theme.of(context);
     final colors = ColorScheme.fromSeed(
-      seedColor: inherited.colorScheme.primary,
+      seedColor: _coverSeed ?? inherited.colorScheme.primary,
       brightness: Brightness.dark,
     );
-    return Theme(
+    return AnimatedTheme(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.fastOutSlowIn,
       data: inherited.copyWith(
         brightness: Brightness.dark,
         colorScheme: colors,
@@ -270,7 +291,36 @@ class _NowPlayingForegroundTheme extends StatelessWidget {
           displayColor: colors.onSurface,
         ),
       ),
-      child: child,
+      child: widget.child,
+    );
+  }
+}
+
+class _PlayerPageIndicator extends StatelessWidget {
+  final int pageIndex;
+
+  const _PlayerPageIndicator({required this.pageIndex});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        2,
+        (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: index == pageIndex ? 16 : 6,
+          height: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: index == pageIndex
+                ? colors.primary
+                : colors.onSurfaceVariant.withValues(alpha: 0.42),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -519,6 +569,7 @@ class _PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final durationMilliseconds = max(1, state.duration.inMilliseconds);
     final positionMilliseconds = state.position.inMilliseconds
         .clamp(0, durationMilliseconds)
@@ -538,7 +589,11 @@ class _PlayerControls extends StatelessWidget {
             state.currentTrack?.title ?? '音乐',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           if (state.currentTrack?.artist.isNotEmpty == true) ...[
             const SizedBox(height: 2),
@@ -546,7 +601,7 @@ class _PlayerControls extends StatelessWidget {
               state.currentTrack!.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: AppColors.textSecondary(context)),
+              style: TextStyle(color: colors.onSurfaceVariant),
             ),
           ],
           if (state.error != null) ...[
@@ -557,21 +612,42 @@ class _PlayerControls extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 6),
-          Slider(
-            value: positionMilliseconds,
-            secondaryTrackValue: secondaryTrackValue,
-            max: durationMilliseconds.toDouble(),
-            onChanged: state.duration.inMilliseconds <= 0
-                ? null
-                : (value) => onSeek(Duration(milliseconds: value.round())),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: colors.primary,
+              inactiveTrackColor: colors.onSurface.withValues(alpha: 0.24),
+              secondaryActiveTrackColor:
+                  colors.primary.withValues(alpha: 0.42),
+              thumbColor: colors.primary,
+              overlayColor: colors.primary.withValues(alpha: 0.16),
+              disabledActiveTrackColor:
+                  colors.onSurface.withValues(alpha: 0.38),
+              disabledInactiveTrackColor:
+                  colors.onSurface.withValues(alpha: 0.12),
+              disabledThumbColor: colors.onSurface.withValues(alpha: 0.38),
+            ),
+            child: Slider(
+              value: positionMilliseconds,
+              secondaryTrackValue: secondaryTrackValue,
+              max: durationMilliseconds.toDouble(),
+              onChanged: state.duration.inMilliseconds <= 0
+                  ? null
+                  : (value) => onSeek(Duration(milliseconds: value.round())),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(_formatDuration(state.position)),
-                Text(_formatDuration(state.duration)),
+                Text(
+                  _formatDuration(state.position),
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+                Text(
+                  _formatDuration(state.duration),
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
               ],
             ),
           ),
@@ -583,12 +659,14 @@ class _PlayerControls extends StatelessWidget {
                 onPressed: onShowPlaylist,
                 tooltip: '播放列表',
                 iconSize: 28,
+                color: colors.onSurface,
                 icon: const Icon(Icons.queue_music_rounded),
               ),
               IconButton(
                 onPressed: onPrevious,
                 tooltip: '上一曲',
                 iconSize: 34,
+                color: colors.onSurface,
                 icon: const Icon(Icons.skip_previous_rounded),
               ),
               SizedBox(
@@ -597,16 +675,22 @@ class _PlayerControls extends StatelessWidget {
                 child: FilledButton(
                   onPressed: state.loading ? null : onToggle,
                   style: FilledButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    disabledBackgroundColor:
+                        colors.onSurface.withValues(alpha: 0.12),
+                    disabledForegroundColor:
+                        colors.onSurface.withValues(alpha: 0.38),
                     shape: const CircleBorder(),
                     padding: EdgeInsets.zero,
                   ),
                   child: state.loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: colors.onPrimary,
                           ),
                         )
                       : Icon(
@@ -621,13 +705,14 @@ class _PlayerControls extends StatelessWidget {
                 onPressed: onNext,
                 tooltip: '下一曲',
                 iconSize: 34,
+                color: colors.onSurface,
                 icon: const Icon(Icons.skip_next_rounded),
               ),
               IconButton(
                 onPressed: onFavorite,
                 tooltip: isFavorite ? '取消收藏' : '收藏',
                 iconSize: 28,
-                color: isFavorite ? Theme.of(context).colorScheme.primary : null,
+                color: isFavorite ? colors.primary : colors.onSurface,
                 icon: Icon(
                   isFavorite
                       ? Icons.favorite_rounded
