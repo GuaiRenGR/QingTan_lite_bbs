@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -283,7 +282,7 @@ class _XFeedItemState extends State<_XFeedItem> {
   }
 
   void _readItemState() {
-    _liked = item['is_liked'] == true;
+    _liked = parseXFeedLiked(item['is_liked']);
     _likeCount = _number('like_count');
     _shareCount = _number('share_count');
   }
@@ -303,7 +302,7 @@ class _XFeedItemState extends State<_XFeedItem> {
     if (result.success && result.data is Map) {
       final data = result.data as Map;
       setState(() {
-        _liked = data['is_liked'] == true;
+        _liked = parseXFeedLiked(data['is_liked']);
         _likeCount = int.tryParse(data['like_count']?.toString() ?? '') ?? 0;
         item['is_liked'] = _liked;
         item['like_count'] = _likeCount;
@@ -347,6 +346,47 @@ class _XFeedItemState extends State<_XFeedItem> {
     );
   }
 
+  void _showViewCountSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '观看次数',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '这个帖子被查看的次数。要了解更多信息，请访问帮助中心。',
+                style: TextStyle(fontSize: 15, height: 1.45),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: Theme.of(context).colorScheme.onSurface,
+                    foregroundColor: Theme.of(context).colorScheme.surface,
+                  ),
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: const Text('忽略'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final id = _number('id');
@@ -385,32 +425,52 @@ class _XFeedItemState extends State<_XFeedItem> {
                 children: [
                   Row(
                     children: [
-                      Flexible(
-                        child: Text(
-                          author,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
                       Expanded(
-                        child: Text(
-                          '${username.isEmpty ? '@用户' : '@$username'} · $createdAt',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.textSecondary(context),
-                            fontSize: 13,
-                          ),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                username.isEmpty ? '@用户' : '@$username',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary(context),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              ' · $createdAt',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: AppColors.textSecondary(context),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const Icon(Icons.more_horiz_rounded, size: 19),
+                      Icon(
+                        Icons.more_horiz_rounded,
+                        size: 19,
+                        color: AppColors.textSecondary(context),
+                      ),
                     ],
                   ),
                   if (title.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    _ExpandableFeedText(
+                    _FeedPreviewText(
                       title,
                       maxLines: 2,
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -418,7 +478,7 @@ class _XFeedItemState extends State<_XFeedItem> {
                   ],
                   if (summary.isNotEmpty) ...[
                     const SizedBox(height: 3),
-                    _ExpandableFeedText(
+                    _FeedPreviewText(
                       summary,
                       maxLines: 4,
                       style: const TextStyle(height: 1.35),
@@ -472,7 +532,8 @@ class _XFeedItemState extends State<_XFeedItem> {
                       _Metric(
                         Icons.bar_chart_rounded,
                         _number('view_count'),
-                        tooltip: '浏览量',
+                        tooltip: '观看次数',
+                        onTap: _showViewCountSheet,
                       ),
                       _Metric(
                         Icons.ios_share_rounded,
@@ -538,64 +599,36 @@ class _Metric extends StatelessWidget {
   }
 }
 
-class _ExpandableFeedText extends StatefulWidget {
+class _FeedPreviewText extends StatelessWidget {
   final String text;
   final int maxLines;
   final TextStyle? style;
 
-  const _ExpandableFeedText(
+  const _FeedPreviewText(
     this.text, {
     required this.maxLines,
     this.style,
   });
 
   @override
-  State<_ExpandableFeedText> createState() => _ExpandableFeedTextState();
-}
-
-class _ExpandableFeedTextState extends State<_ExpandableFeedText> {
-  late final TapGestureRecognizer _moreRecognizer;
-  bool _expanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _moreRecognizer = TapGestureRecognizer()
-      ..onTap = () => setState(() => _expanded = true);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ExpandableFeedText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text) _expanded = false;
-  }
-
-  @override
-  void dispose() {
-    _moreRecognizer.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final style = DefaultTextStyle.of(context).style.merge(widget.style);
-    if (_expanded) return Text(widget.text, style: style);
+    final mergedStyle = DefaultTextStyle.of(context).style.merge(style);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final fullPainter = _painter(context, widget.text, style);
+        final fullPainter = _painter(context, text, mergedStyle);
         fullPainter.layout(maxWidth: constraints.maxWidth);
         if (!fullPainter.didExceedMaxLines) {
-          return Text(widget.text, style: style);
+          return Text(text, style: mergedStyle);
         }
 
         const suffix = '… 显示更多';
         var low = 0;
-        var high = widget.text.length;
+        var high = text.length;
         while (low < high) {
           final middle = (low + high + 1) ~/ 2;
-          final candidate = '${widget.text.substring(0, middle).trimRight()}$suffix';
-          final painter = _painter(context, candidate, style)
+          final candidate = '${text.substring(0, middle).trimRight()}$suffix';
+          final painter = _painter(context, candidate, mergedStyle)
             ..layout(maxWidth: constraints.maxWidth);
           if (painter.didExceedMaxLines) {
             high = middle - 1;
@@ -605,25 +638,24 @@ class _ExpandableFeedTextState extends State<_ExpandableFeedText> {
         }
 
         if (low > 0 &&
-            low < widget.text.length &&
-            widget.text.codeUnitAt(low) >= 0xDC00 &&
-            widget.text.codeUnitAt(low) <= 0xDFFF) {
+            low < text.length &&
+            text.codeUnitAt(low) >= 0xDC00 &&
+            text.codeUnitAt(low) <= 0xDFFF) {
           low--;
         }
-        final visible = widget.text.substring(0, low).trimRight();
+        final visible = text.substring(0, low).trimRight();
         return Text.rich(
           TextSpan(
-            style: style,
+            style: mergedStyle,
             children: [
               TextSpan(text: '$visible… '),
-              TextSpan(
+              const TextSpan(
                 text: '显示更多',
-                style: const TextStyle(color: Color(0xFF1D9BF0)),
-                recognizer: _moreRecognizer,
+                style: TextStyle(color: Color(0xFF1D9BF0)),
               ),
             ],
           ),
-          maxLines: widget.maxLines,
+          maxLines: maxLines,
           overflow: TextOverflow.clip,
         );
       },
@@ -637,7 +669,7 @@ class _ExpandableFeedTextState extends State<_ExpandableFeedText> {
   ) {
     return TextPainter(
       text: TextSpan(text: text, style: style),
-      maxLines: widget.maxLines,
+      maxLines: maxLines,
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     );
@@ -669,4 +701,10 @@ String formatXFeedTime(String value, {DateTime? now}) {
   return '${createdAt.year}-${twoDigits(createdAt.month)}-'
       '${twoDigits(createdAt.day)} ${twoDigits(createdAt.hour)}:'
       '${twoDigits(createdAt.minute)}';
+}
+
+bool parseXFeedLiked(dynamic value) {
+  if (value is bool) return value;
+  final normalized = value?.toString().toLowerCase();
+  return normalized == '1' || normalized == 'true';
 }

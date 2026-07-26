@@ -18,4 +18,13 @@ void main() {
       '2026-07-20 08:05',
     );
   });
+
+  test('accepts boolean and legacy numeric liked states', () {
+    expect(parseXFeedLiked(true), isTrue);
+    expect(parseXFeedLiked(1), isTrue);
+    expect(parseXFeedLiked('1'), isTrue);
+    expect(parseXFeedLiked('true'), isTrue);
+    expect(parseXFeedLiked(false), isFalse);
+    expect(parseXFeedLiked(0), isFalse);
+  });
 }

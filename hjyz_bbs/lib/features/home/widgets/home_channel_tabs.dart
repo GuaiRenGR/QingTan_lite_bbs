@@ -61,8 +61,8 @@ class HomeChannelTabs extends StatelessWidget {
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
                         color: selected
-                            ? const Color(0xFFFB7299)
-                            : Colors.grey.shade800,
+                            ? Theme.of(context).colorScheme.primary
+                            : AppColors.textSecondary(context),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -71,7 +71,7 @@ class HomeChannelTabs extends StatelessWidget {
                       width: selected ? 18 : 0,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFB7299),
+                        color: Theme.of(context).colorScheme.primary,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),

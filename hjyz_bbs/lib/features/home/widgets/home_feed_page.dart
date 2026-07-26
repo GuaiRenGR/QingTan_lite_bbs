@@ -229,7 +229,7 @@ class _HomeFeedPageState extends State<HomeFeedPage>
     return RefreshIndicator.adaptive(
       displacement: 48,
       edgeOffset: 0,
-      color: const Color(0xFFFB7299),
+      color: Theme.of(context).colorScheme.primary,
       onRefresh: _refresh,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,

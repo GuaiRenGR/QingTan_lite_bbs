@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/auth_controller.dart';
+import 'dynamic_music_background.dart';
 import 'music_favorites_controller.dart';
 import 'music_player_controller.dart';
 
@@ -37,63 +38,81 @@ class _MusicPlayerPageState extends ConsumerState<MusicPlayerPage> {
     final current = state.currentTrack;
     final isFavorite = current != null && favorites.contains(current);
     return Scaffold(
-      backgroundColor: AppColors.scaffoldBg(context),
-      appBar: AppBar(title: const Text('音乐播放器')),
+      extendBodyBehindAppBar: current != null,
+      backgroundColor: current == null
+          ? AppColors.scaffoldBg(context)
+          : Colors.transparent,
+      appBar: AppBar(
+        title: const Text('音乐播放器'),
+        backgroundColor: current == null ? null : Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
       body: current == null
           ? const _EmptyPlaylist()
-          : SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: PageView(
-                      onPageChanged: (index) => setState(() => _pageIndex = index),
-                      children: [
-                        _ArtworkPage(track: current),
-                        _LyricsPage(
-                          key: ValueKey(current.url),
-                          track: current,
-                          position: state.position,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      2,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: index == _pageIndex ? 16 : 6,
-                        height: 6,
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        decoration: BoxDecoration(
-                          color: index == _pageIndex
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .outlineVariant
-                                  .withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(3),
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                DynamicMusicBackground(
+                  track: current,
+                  playing: state.playing,
+                  position: state.position,
+                ),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: PageView(
+                          onPageChanged: (index) =>
+                              setState(() => _pageIndex = index),
+                          children: [
+                            _ArtworkPage(track: current),
+                            _LyricsPage(
+                              key: ValueKey(current.url),
+                              track: current,
+                              position: state.position,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          2,
+                          (index) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: index == _pageIndex ? 16 : 6,
+                            height: 6,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: BoxDecoration(
+                              color: index == _pageIndex
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant
+                                      .withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _PlayerControls(
+                        state: state,
+                        isFavorite: isFavorite,
+                        onSeek: controller.seek,
+                        onShowPlaylist: () => _showPlaylist(context),
+                        onPrevious: controller.playPrevious,
+                        onToggle: controller.toggle,
+                        onNext: controller.playNext,
+                        onFavorite: () => _toggleFavorite(
+                          context,
+                          current,
+                          userId,
+                        ),
+                      ),
+                    ],
                   ),
-                  _PlayerControls(
-                    state: state,
-                    isFavorite: isFavorite,
-                    onSeek: controller.seek,
-                    onShowPlaylist: () => _showPlaylist(context),
-                    onPrevious: controller.playPrevious,
-                    onToggle: controller.toggle,
-                    onNext: controller.playNext,
-                    onFavorite: () => _toggleFavorite(
-                      context,
-                      current,
-                      userId,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
     );
   }

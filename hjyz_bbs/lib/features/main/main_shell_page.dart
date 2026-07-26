@@ -153,19 +153,22 @@ class _ForumBottomNavBar extends StatelessWidget {
                   width: 44,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFB7299),
+                    color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFB7299).withValues(alpha: 0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.add_rounded,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     size: 26,
                   ),
                 ),
@@ -215,7 +218,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = index == currentIndex;
     final color = active
-        ? const Color(0xFFFB7299)
+        ? Theme.of(context).colorScheme.primary
         : AppColors.textSecondary(context);
 
     return Expanded(

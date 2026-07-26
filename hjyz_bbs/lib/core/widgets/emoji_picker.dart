@@ -17,11 +17,11 @@ class EmojiPicker extends StatelessWidget {
           children: [
             Container(
               color: Colors.grey.shade100,
-              child: const TabBar(
-                labelColor: Color(0xFFFB7299),
+              child: TabBar(
+                labelColor: Theme.of(context).colorScheme.primary,
                 unselectedLabelColor: Colors.grey,
-                indicatorColor: Color(0xFFFB7299),
-                tabs: [
+                indicatorColor: Theme.of(context).colorScheme.primary,
+                tabs: const [
                   Tab(text: 'B站'),
                   Tab(text: 'QQ'),
                 ],

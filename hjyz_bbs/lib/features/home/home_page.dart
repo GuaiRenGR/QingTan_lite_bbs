@@ -77,9 +77,9 @@ class HomePageState extends ConsumerState<HomePage>
               controller: tabController,
               isScrollable: true,
               tabAlignment: TabAlignment.start,
-              labelColor: const Color(0xFFFB7299),
+              labelColor: Theme.of(context).colorScheme.primary,
               unselectedLabelColor: AppColors.textSecondary(context),
-              indicatorColor: const Color(0xFFFB7299),
+              indicatorColor: Theme.of(context).colorScheme.primary,
               indicatorWeight: 3,
               tabs: [
                 for (final tab in tabs) Tab(text: tab.title),

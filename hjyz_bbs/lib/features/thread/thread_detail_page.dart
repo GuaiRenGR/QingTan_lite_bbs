@@ -867,7 +867,11 @@ class _CommentItem extends StatelessWidget {
                       PopupMenuButton<String>(
                         tooltip: '更多操作',
                         padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.more_horiz, size: 20),
+                        icon: Icon(
+                          Icons.more_horiz,
+                          size: 20,
+                          color: Colors.grey.shade400,
+                        ),
                         onSelected: (value) {
                           if (value == 'delete') onDelete?.call();
                         },

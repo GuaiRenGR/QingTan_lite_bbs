@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/services/notification_service.dart';
+import 'core/theme/theme_color_service.dart';
 import 'core/utils/deep_link_helper.dart';
 import 'features/auth/auth_controller.dart';
 import 'router.dart';
@@ -138,6 +140,39 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
     }
   }
 
+  ThemeData _buildTheme(Color seedColor, Brightness brightness) {
+    final light = brightness == Brightness.light;
+    final baseTextTheme = light ? ThemeData.light() : ThemeData.dark();
+    return ThemeData(
+      useMaterial3: true,
+      colorSchemeSeed: seedColor,
+      brightness: brightness,
+      scaffoldBackgroundColor: light ? Colors.white : null,
+      visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      fontFamily: null,
+      textTheme: baseTextTheme.textTheme.apply(
+        fontFamilyFallback: ForumXApp.fontFallback,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: light ? Colors.white : null,
+        surfaceTintColor: light ? Colors.white : null,
+        elevation: 0,
+        centerTitle: false,
+        toolbarHeight: 52,
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      ),
+      listTileTheme: const ListTileThemeData(
+        dense: true,
+        minVerticalPadding: 6,
+        contentPadding: EdgeInsets.symmetric(horizontal: 14),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // 监听登录状态变化
@@ -145,68 +180,38 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
       _checkAuthAndPoll();
     });
 
-    return MaterialApp.router(
-      title: '轻坛',
-      debugShowCheckedModeBanner: false,
-      routerConfig: router,
-      locale: const Locale('zh', 'CN'),
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      supportedLocales: const [
-        Locale('zh', 'CN'),
-      ],
-      themeMode: ThemeMode.system,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFFFB7299),
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Colors.white,
-        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
-        materialTapTargetSize: MaterialTapTargetSize.padded,
-        fontFamily: null,
-        textTheme: ThemeData.light().textTheme.apply(
-              fontFamilyFallback: ForumXApp.fontFallback,
+    return ValueListenableBuilder<ThemeColorChoice>(
+      valueListenable: ThemeColorService.selected,
+      builder: (context, themeColor, _) => MaterialApp.router(
+        title: '轻坛',
+        debugShowCheckedModeBanner: false,
+        routerConfig: router,
+        locale: const Locale('zh', 'CN'),
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        supportedLocales: const [
+          Locale('zh', 'CN'),
+        ],
+        themeMode: ThemeMode.system,
+        builder: (context, child) {
+          final theme = Theme.of(context);
+          final dark = theme.brightness == Brightness.dark;
+          final background = theme.scaffoldBackgroundColor;
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness:
+                  dark ? Brightness.light : Brightness.dark,
+              systemNavigationBarColor: background,
+              systemNavigationBarDividerColor: background,
+              systemNavigationBarIconBrightness:
+                  dark ? Brightness.light : Brightness.dark,
+              systemNavigationBarContrastEnforced: false,
             ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          elevation: 0,
-          centerTitle: false,
-          toolbarHeight: 52,
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        ),
-        listTileTheme: const ListTileThemeData(
-          dense: true,
-          minVerticalPadding: 6,
-          contentPadding: EdgeInsets.symmetric(horizontal: 14),
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFFFB7299),
-        brightness: Brightness.dark,
-        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
-        materialTapTargetSize: MaterialTapTargetSize.padded,
-        fontFamily: null,
-        textTheme: ThemeData.dark().textTheme.apply(
-              fontFamilyFallback: ForumXApp.fontFallback,
-            ),
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          centerTitle: false,
-          toolbarHeight: 52,
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        ),
-        listTileTheme: const ListTileThemeData(
-          dense: true,
-          minVerticalPadding: 6,
-          contentPadding: EdgeInsets.symmetric(horizontal: 14),
-        ),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
+        theme: _buildTheme(themeColor.color, Brightness.light),
+        darkTheme: _buildTheme(themeColor.color, Brightness.dark),
       ),
     );
   }

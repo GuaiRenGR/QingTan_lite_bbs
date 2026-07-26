@@ -8,6 +8,7 @@ import 'core/api/write_queue.dart';
 import 'core/services/download_service.dart';
 import 'core/services/feed_display_service.dart';
 import 'core/services/sensitive_content_service.dart';
+import 'core/theme/theme_color_service.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/url_helper.dart';
 
@@ -25,6 +26,7 @@ void main() async {
   await SensitiveContentService.init();
   await DownloadService.instance.init();
   await FeedDisplayService.init();
+  await ThemeColorService.init();
 
   // 初始化多服务器管理器
   await AppLogger.log('main', 'ServerManager.init start');

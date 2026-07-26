@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/services/connectivity_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_color_service.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 import '../auth/login_page.dart';
@@ -11,6 +12,92 @@ import '../checkin/checkin_card.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
+
+  void _showThemeColors(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '主题色',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 18),
+              ValueListenableBuilder<ThemeColorChoice>(
+                valueListenable: ThemeColorService.selected,
+                builder: (context, selected, _) => Wrap(
+                  spacing: 18,
+                  runSpacing: 18,
+                  children: ThemeColorService.choices.map((choice) {
+                    final active = selected.id == choice.id;
+                    return SizedBox(
+                      width: 72,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          ThemeColorService.select(choice);
+                          Navigator.pop(sheetContext);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: choice.color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: active
+                                        ? Theme.of(context).colorScheme.onSurface
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: active
+                                    ? const Icon(Icons.check, color: Colors.white)
+                                    : null,
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                choice.label,
+                                maxLines: 2,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _appBarActions(BuildContext context) => [
+        IconButton(
+          tooltip: '主题色',
+          onPressed: () => _showThemeColors(context),
+          icon: const Icon(Icons.checkroom_outlined),
+        ),
+      ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,6 +119,7 @@ class MePage extends ConsumerWidget {
       return Scaffold(
         appBar: AppBar(
           title: const Text('我的'),
+          actions: _appBarActions(context),
         ),
         body: Center(
           child: Padding(
@@ -171,6 +259,7 @@ class MePage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的'),
+        actions: _appBarActions(context),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 20),

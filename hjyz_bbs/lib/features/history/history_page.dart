@@ -37,10 +37,13 @@ class _HistoryPageState extends State<HistoryPage> {
       final data = result.data as Map<String, dynamic>;
       final list = data['list'];
       if (list is List) {
-        items = list
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        final uniqueItems = <int, Map<String, dynamic>>{};
+        for (final rawItem in list.whereType<Map>()) {
+          final item = Map<String, dynamic>.from(rawItem);
+          final id = _toInt(item['thread_id'] ?? item['id']);
+          if (id > 0) uniqueItems.putIfAbsent(id, () => item);
+        }
+        items = uniqueItems.values.toList();
       }
     }
 
@@ -192,7 +195,11 @@ class _HistoryItem extends StatelessWidget {
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            item['viewed_at']?.toString() ?? '',
+            '查看于 ${formatHistoryViewedAt(
+              item['last_viewed_at']?.toString() ??
+                  item['viewed_at']?.toString() ??
+                  '',
+            )}',
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
           trailing: const Icon(Icons.chevron_right, size: 20),
@@ -200,4 +207,15 @@ class _HistoryItem extends StatelessWidget {
       ),
     );
   }
+}
+
+String formatHistoryViewedAt(String value) {
+  var viewedAt = DateTime.tryParse(value.trim());
+  if (viewedAt == null) return value;
+  if (viewedAt.isUtc) viewedAt = viewedAt.toLocal();
+
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+  return '${viewedAt.year}-${twoDigits(viewedAt.month)}-'
+      '${twoDigits(viewedAt.day)} ${twoDigits(viewedAt.hour)}:'
+      '${twoDigits(viewedAt.minute)}';
 }

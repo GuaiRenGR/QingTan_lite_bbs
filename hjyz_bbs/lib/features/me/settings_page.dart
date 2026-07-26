@@ -21,8 +21,6 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  bool autoPlayMusic = false;
-  bool autoPlayVideo = true;
   bool showImagesOnMobile = true;
   bool compactTextOnlyPosts = false;
   bool nativeNotifications = true;
@@ -31,6 +29,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   SensitiveContentMode sensitiveContentMode = SensitiveContentMode.warn;
   bool useBuiltinDownloader = true;
   bool testingServers = false;
+  bool settingsLoaded = false;
   String appVersion = '';
 
   @override
@@ -43,24 +42,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
+      final enabled = await UpdateService.isAutoCheckEnabled();
+      if (!mounted) return;
       setState(() {
-        autoPlayMusic = prefs.getBool('auto_play_music') ?? false;
-        autoPlayVideo = prefs.getBool('auto_play_video') ?? true;
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
         compactTextOnlyPosts = FeedDisplayService.compactTextOnlyPosts.value;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
         useHttps = prefs.getBool('use_https') ?? true;
         sensitiveContentMode = SensitiveContentService.mode.value;
         useBuiltinDownloader = prefs.getBool('use_builtin_downloader') ?? true;
-      });
-    } catch (_) {}
-
-    final enabled = await UpdateService.isAutoCheckEnabled();
-    if (mounted) {
-      setState(() {
         autoCheckUpdate = enabled;
+        settingsLoaded = true;
       });
+    } catch (_) {
+      if (mounted) setState(() => settingsLoaded = true);
     }
   }
 
@@ -155,12 +150,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    final appBar = const AppBar(title: Text('设置'));
+
+    if (!settingsLoaded) {
+      return Scaffold(
+        backgroundColor: AppColors.scaffoldBg(context),
+        appBar: appBar,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
-      appBar: AppBar(
-        title: const Text('设置'),
-      ),
+      appBar: appBar,
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -188,28 +190,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _Section(
             title: '浏览设置',
             children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.music_note_outlined),
-                title: const Text('自动播放帖子中的音乐'),
-                value: autoPlayMusic,
-                onChanged: (value) {
-                  setState(() {
-                    autoPlayMusic = value;
-                  });
-                  _saveBool('auto_play_music', value);
-                },
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.play_circle_outline),
-                title: const Text('自动播放视频'),
-                value: autoPlayVideo,
-                onChanged: (value) {
-                  setState(() {
-                    autoPlayVideo = value;
-                  });
-                  _saveBool('auto_play_video', value);
-                },
-              ),
               SwitchListTile(
                 secondary: const Icon(Icons.image_outlined),
                 title: const Text('移动网络下显示图片'),
