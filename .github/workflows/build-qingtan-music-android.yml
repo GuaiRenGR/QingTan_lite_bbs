@@ -1,0 +1,64 @@
+name: Build QingTan Music Android
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "music-v*"
+
+env:
+  PROJECT_DIR: qingtan_music
+  FLUTTER_CHANNEL: stable
+  JAVA_VERSION: "17"
+
+jobs:
+  android:
+    name: Android APK / AAB
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: qingtan_music
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build universal APK
+        run: flutter build apk --release
+
+      - name: Build split ABI APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      - name: Collect Android artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/*.apk dist/android/
+          cp build/app/outputs/bundle/release/*.aab dist/android/
+          ls -lah dist/android
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingtan-music-android
+          path: ${{ env.PROJECT_DIR }}/dist/android/*
+          retention-days: 14

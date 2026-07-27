@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'app.dart';
@@ -15,6 +16,12 @@ import 'core/utils/url_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.qingtan.hjyzbbs.playback',
+    androidNotificationChannelName: '音乐播放',
+    androidNotificationOngoing: true,
+  );
 
   // 初始化文件日志
   await AppLogger.init();

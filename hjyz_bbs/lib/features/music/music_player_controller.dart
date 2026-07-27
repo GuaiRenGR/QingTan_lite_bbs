@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -389,6 +390,12 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       );
       _schedulePersist();
       final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
+      final mediaItem = MediaItem(
+        id: track.uuid?.trim().isNotEmpty == true ? track.uuid!.trim() : track.url,
+        title: track.title,
+        artist: track.artist,
+        artUri: track.coverUrl == null ? null : Uri.tryParse(track.coverUrl!),
+      );
       if (cachedFile == null) {
         final streamCacheFile = await MusicCacheService.instance
             .getPersistentStreamCacheFile(track.url);
@@ -396,10 +403,13 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
           LockCachingAudioSource(
             Uri.parse(track.url),
             cacheFile: streamCacheFile,
+            tag: mediaItem,
           ),
         );
       } else {
-        await _player.setFilePath(cachedFile.path);
+        await _player.setAudioSource(
+          AudioSource.uri(Uri.file(cachedFile.path), tag: mediaItem),
+        );
       }
       _loadedUrl = track.url;
       _furthestBufferedPosition = _player.bufferedPosition;

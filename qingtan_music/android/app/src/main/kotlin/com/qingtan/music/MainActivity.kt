@@ -1,4 +1,4 @@
-package com.qingtan.hjyzbbs
+package com.qingtan.music
 
 import android.content.ContentValues
 import android.content.Intent
@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
-import android.provider.Settings
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -17,13 +16,9 @@ import java.io.File
 
 class MainActivity : AudioServiceActivity() {
     companion object {
-        private const val CHANNEL = "com.qingtan.hjyzbbs/file_actions"
-        private const val DOWNLOAD_FOLDER = "QingTan"
+        private const val CHANNEL = "com.qingtan.music/file_actions"
+        private const val DOWNLOAD_FOLDER = "QingTanMusic"
     }
-
-    private data class PendingApk(val path: String, val contentUri: String?)
-
-    private var pendingApk: PendingApk? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -81,20 +76,6 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        val pending = pendingApk ?: return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-            packageManager.canRequestPackageInstalls()
-        ) {
-            pendingApk = null
-            try {
-                launchFile(pending.path, pending.contentUri, isApk = true)
-            } catch (_: Throwable) {
-            }
-        }
-    }
-
     private fun publishDownload(path: String, fileName: String): Uri {
         val source = File(path)
         require(source.isFile) { "下载文件不存在" }
@@ -146,28 +127,11 @@ class MainActivity : AudioServiceActivity() {
     }
 
     private fun openFile(path: String, contentUri: String?): Map<String, String> {
-        val isApk = path.endsWith(".apk", ignoreCase = true)
-        if (isApk && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !packageManager.canRequestPackageInstalls()
-        ) {
-            pendingApk = PendingApk(path, contentUri)
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:$packageName"),
-                ),
-            )
-            return mapOf(
-                "status" to "permission_requested",
-                "message" to "请允许安装未知应用，授权后将自动继续",
-            )
-        }
-
-        launchFile(path, contentUri, isApk)
+        launchFile(path, contentUri)
         return mapOf("status" to "done", "message" to "请选择要使用的应用")
     }
 
-    private fun launchFile(path: String, contentUri: String?, isApk: Boolean) {
+    private fun launchFile(path: String, contentUri: String?) {
         val uri = contentUri
             ?.takeIf { it.startsWith("content://") }
             ?.let(Uri::parse)
@@ -176,11 +140,7 @@ class MainActivity : AudioServiceActivity() {
                 "$packageName.file_provider",
                 File(path),
             )
-        val type = if (isApk) {
-            "application/vnd.android.package-archive"
-        } else {
-            mimeType(path)
-        }
+        val type = mimeType(path)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, type)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
