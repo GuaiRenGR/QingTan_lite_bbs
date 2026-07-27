@@ -19,4 +19,36 @@ void main() {
     expect(activeLyricIndex(lines, const Duration(milliseconds: 500)), -1);
     expect(activeLyricIndex(lines, const Duration(milliseconds: 2500)), 1);
   });
+
+  test('merges translated lyrics by timestamp with a small tolerance', () {
+    final lines = parseBilingualLrc(
+      '[00:01.00]Hello\n[00:03.00]Goodbye',
+      '[00:01.20]你好\n[00:03.40]再见',
+    );
+
+    expect(lines.map((line) => line.text), ['Hello', 'Goodbye']);
+    expect(lines.map((line) => line.translation), ['你好', '再见']);
+  });
+
+  test('uses translated lyrics as primary when original lyrics are absent', () {
+    final lines = parseBilingualLrc('', '[00:01.00]只有翻译');
+
+    expect(lines.single.text, '只有翻译');
+    expect(lines.single.translation, isEmpty);
+  });
+
+  test('exports original and translated lines in timestamp order', () {
+    final result = buildBilingualLrc(
+      '[00:01.00]Hello\n[00:03.00]Goodbye',
+      '[00:01.00]你好\n[00:03.20]再见',
+    );
+
+    expect(
+      result,
+      '[00:01.000]Hello\n'
+      '[00:01.000]你好\n'
+      '[00:03.000]Goodbye\n'
+      '[00:03.200]再见',
+    );
+  });
 }

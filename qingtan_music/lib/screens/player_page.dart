@@ -452,7 +452,11 @@ class _LyricsPageState extends State<_LyricsPage> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
-        final lines = parseLrc(snapshot.data?.preferred ?? '');
+        final payload = snapshot.data ?? const LyricsPayload();
+        final lines = parseBilingualLrc(
+          payload.original,
+          payload.translated,
+        );
         if (lines.isEmpty) {
           return Center(
             child: Column(
@@ -491,10 +495,12 @@ class _SyncedLyrics extends StatefulWidget {
 }
 
 class _SyncedLyricsState extends State<_SyncedLyrics> {
-  static const _itemExtent = 58.0;
   final _controller = ScrollController();
   var _lastIndex = -2;
   var _scrollRequest = 0;
+
+  double get _itemExtent =>
+      widget.lines.any((line) => line.translation.isNotEmpty) ? 88 : 58;
 
   void _scrollToActive(int index) {
     if (index < 0 || index == _lastIndex) return;
@@ -548,11 +554,44 @@ class _SyncedLyricsState extends State<_SyncedLyrics> {
                     : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               child: Center(
-                child: Text(
-                  widget.lines[index].text,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.lines[index].text,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (widget.lines[index].translation.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 180),
+                        style: TextStyle(
+                          fontSize: selected ? 15 : 14,
+                          height: 1.3,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
+                          color: selected
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.86)
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant
+                                  .withValues(alpha: 0.78),
+                        ),
+                        child: Text(
+                          widget.lines[index].translation,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             );

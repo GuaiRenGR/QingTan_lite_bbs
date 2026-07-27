@@ -39,6 +39,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Run tests
+        run: flutter test
+
       - name: Build split ABI APKs
         run: flutter build apk --release --split-per-abi
 

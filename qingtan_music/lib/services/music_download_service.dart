@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/music.dart';
 import '../utils/file_name.dart';
+import '../utils/lrc.dart';
 import 'music_api_service.dart';
 
 final musicDownloadProvider =
@@ -193,7 +194,10 @@ class MusicDownloadService extends ChangeNotifier {
       entry.progress = 1;
       notifyListeners();
       final lyrics = await MusicApiService.instance.lyrics(track);
-      final lyricText = lyrics.preferred;
+      final lyricText = buildBilingualLrc(
+        lyrics.original,
+        lyrics.translated,
+      );
       final cover = await MusicApiService.instance.coverBytes(track);
       final tagged = await writeMetadataAsync(
         path: audioFile.path,
