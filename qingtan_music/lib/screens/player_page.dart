@@ -529,7 +529,7 @@ class _SyncedLyricsState extends State<_SyncedLyrics> {
         final centerPadding = math.max(
           0,
           (constraints.maxHeight - _itemExtent) / 2,
-        );
+        ).toDouble();
         return ListView.builder(
           controller: _controller,
           padding: EdgeInsets.fromLTRB(28, centerPadding, 28, centerPadding),
