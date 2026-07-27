@@ -4,19 +4,193 @@ namespace App\Controllers;
 
 class NeteaseMusicController
 {
-    private const API_BASE = 'https://music.163.com';
+    private const OFFICIAL_API_BASE = 'https://music.163.com';
+    private const MUSIC_API_BASE = 'https://music-api.gdstudio.xyz/api.php';
+    private const OFFICIAL_SOURCE = 'netease_official';
+    private const MUSIC_SOURCES = [
+        'netease',
+        'tencent',
+        'kuwo',
+        'tidal',
+        'qobuz',
+        'joox',
+        'bilibili',
+        'apple',
+        'ytmusic',
+        'spotify',
+    ];
 
     public static function search()
     {
         $keyword = trim(\Request::str('keyword'));
         $page = max(1, \Request::int('page', 1));
         $limit = min(50, max(1, \Request::int('limit', 30)));
+        $source = self::searchSource();
 
         if ($keyword === '') {
             \Response::json(422, '请输入歌曲名或歌手');
         }
 
-        $payload = self::requestJson('/api/cloudsearch/pc', [
+        if ($source === self::OFFICIAL_SOURCE) {
+            return self::searchOfficial($keyword, $page, $limit);
+        }
+
+        $payload = self::requestMusicApi([
+            'types' => 'search',
+            'source' => $source,
+            'name' => $keyword,
+            'count' => $limit,
+            'pages' => $page,
+        ]);
+        $songs = self::extractList($payload);
+        $items = [];
+
+        foreach ($songs as $song) {
+            if (!is_array($song)) {
+                continue;
+            }
+            $id = trim((string)($song['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $artists = $song['artist'] ?? [];
+            if (is_array($artists)) {
+                $artists = implode(' / ', array_values(array_filter(array_map('strval', $artists))));
+            }
+            $picId = trim((string)($song['pic_id'] ?? ''));
+            $lyricId = trim((string)($song['lyric_id'] ?? $id));
+            $query = '&source=' . rawurlencode($source);
+            $coverUrl = self::directMediaUrl($picId);
+            if ($coverUrl === '' && $picId !== '') {
+                $coverUrl = request_origin() . '/index.php?route=netease/cover&id='
+                    . rawurlencode($picId) . $query;
+            }
+            $items[] = [
+                'id' => $id,
+                'title' => (string)($song['name'] ?? '未知歌曲'),
+                'artist' => trim((string)$artists),
+                'album' => (string)($song['album'] ?? ''),
+                'cover_url' => $coverUrl,
+                'duration_ms' => 0,
+                'playable' => true,
+                'url' => request_origin() . '/index.php?route=netease/play&id='
+                    . rawurlencode($id) . $query,
+                'lyrics_url' => request_origin() . '/index.php?route=netease/lyrics&id='
+                    . rawurlencode($lyricId) . $query,
+            ];
+        }
+
+        \Response::success([
+            'list' => $items,
+            'page' => $page,
+            'has_more' => count($items) >= $limit,
+        ]);
+    }
+
+    public static function play()
+    {
+        // Media players may probe the URL with HEAD before issuing GET.
+        $id = trim((string)($_GET['id'] ?? ''));
+        $source = self::mediaSource();
+        if ($id === '') {
+            http_response_code(422);
+            exit;
+        }
+
+        try {
+            if ($source === self::OFFICIAL_SOURCE) {
+                if (!preg_match('/^\d+$/D', $id) || (int)$id <= 0) {
+                    http_response_code(422);
+                    exit;
+                }
+                $payload = self::requestOfficialJson('/api/song/enhance/player/url', [
+                    'ids' => '[' . (int)$id . ']',
+                    'br' => 320000,
+                ]);
+                $url = trim((string)($payload['data'][0]['url'] ?? ''));
+            } else {
+                $payload = self::requestMusicApi([
+                    'types' => 'url',
+                    'source' => $source,
+                    'id' => $id,
+                    'br' => 999,
+                ]);
+                $url = trim((string)($payload['url'] ?? ''));
+            }
+            self::redirectToMedia($url);
+        } catch (\Throwable $e) {
+            log_error('[MusicPlay] ' . $e->getMessage());
+            http_response_code(502);
+        }
+        exit;
+    }
+
+    public static function cover()
+    {
+        $id = trim((string)($_GET['id'] ?? ''));
+        $source = self::musicApiSource();
+        if ($id === '') {
+            http_response_code(422);
+            exit;
+        }
+
+        try {
+            $payload = self::requestMusicApi([
+                'types' => 'pic',
+                'source' => $source,
+                'id' => $id,
+                'size' => 500,
+            ]);
+            self::redirectToMedia(trim((string)($payload['url'] ?? '')), 86400);
+        } catch (\Throwable $e) {
+            log_error('[MusicCover] ' . $e->getMessage());
+            http_response_code(502);
+        }
+        exit;
+    }
+
+    public static function lyrics()
+    {
+        $id = trim((string)($_GET['id'] ?? ''));
+        $source = self::mediaSource();
+        if ($id === '') {
+            http_response_code(422);
+            exit;
+        }
+
+        try {
+            if ($source === self::OFFICIAL_SOURCE) {
+                if (!preg_match('/^\d+$/D', $id) || (int)$id <= 0) {
+                    http_response_code(422);
+                    exit;
+                }
+                $payload = self::requestOfficialJson('/api/song/lyric', [
+                    'id' => (int)$id,
+                    'lv' => -1,
+                    'tv' => -1,
+                ]);
+                $lyrics = trim((string)($payload['lrc']['lyric'] ?? ''));
+            } else {
+                $payload = self::requestMusicApi([
+                    'types' => 'lyric',
+                    'source' => $source,
+                    'id' => $id,
+                ]);
+                $lyrics = trim((string)($payload['lyric'] ?? ''));
+            }
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Cache-Control: public, max-age=86400');
+            echo $lyrics;
+        } catch (\Throwable $e) {
+            log_error('[MusicLyrics] ' . $e->getMessage());
+            http_response_code(502);
+        }
+        exit;
+    }
+
+    private static function searchOfficial($keyword, $page, $limit)
+    {
+        $payload = self::requestOfficialJson('/api/cloudsearch/pc', [
             's' => $keyword,
             'type' => 1,
             'limit' => $limit,
@@ -30,7 +204,7 @@ class NeteaseMusicController
         }, is_array($songs) ? $songs : [])));
         if (!empty($songIds)) {
             try {
-                $playback = self::requestJson('/api/song/enhance/player/url', [
+                $playback = self::requestOfficialJson('/api/song/enhance/player/url', [
                     'ids' => '[' . implode(',', $songIds) . ']',
                     'br' => 320000,
                 ]);
@@ -61,6 +235,7 @@ class NeteaseMusicController
             }
             $album = $song['album'] ?? $song['al'] ?? [];
             $playable = !$availabilityLoaded || isset($playableIds[$id]);
+            $sourceQuery = '&source=' . self::OFFICIAL_SOURCE;
             $items[] = [
                 'id' => $id,
                 'title' => (string)($song['name'] ?? '未知歌曲'),
@@ -73,8 +248,8 @@ class NeteaseMusicController
                 ),
                 'duration_ms' => (int)($song['duration'] ?? $song['dt'] ?? 0),
                 'playable' => $playable,
-                'url' => request_origin() . '/index.php?route=netease/play&id=' . $id,
-                'lyrics_url' => request_origin() . '/index.php?route=netease/lyrics&id=' . $id,
+                'url' => request_origin() . '/index.php?route=netease/play&id=' . $id . $sourceQuery,
+                'lyrics_url' => request_origin() . '/index.php?route=netease/lyrics&id=' . $id . $sourceQuery,
             ];
         }
 
@@ -85,73 +260,92 @@ class NeteaseMusicController
         ]);
     }
 
-    public static function play()
+    private static function searchSource()
     {
-        // Media players may probe the URL with HEAD before issuing GET.
-        $id = (int)($_GET['id'] ?? \Request::int('id'));
-        if ($id <= 0) {
-            http_response_code(422);
-            exit;
+        $source = trim((string)($_GET['source'] ?? 'netease'));
+        if ($source === self::OFFICIAL_SOURCE || in_array($source, self::MUSIC_SOURCES, true)) {
+            return $source;
         }
+        \Response::json(422, '不支持的音乐源');
+    }
 
-        try {
-            $payload = self::requestJson('/api/song/enhance/player/url', [
-                'ids' => '[' . $id . ']',
-                'br' => 320000,
-            ]);
-            $url = trim((string)($payload['data'][0]['url'] ?? ''));
-            if ($url === '') {
-                http_response_code(404);
-                exit;
-            }
-            $url = preg_replace('#^http://#i', 'https://', $url);
-            if (!filter_var($url, FILTER_VALIDATE_URL)) {
-                http_response_code(502);
-                exit;
-            }
-            header('Cache-Control: no-store');
-            header('Location: ' . $url, true, 302);
-        } catch (\Throwable $e) {
-            log_error('[NeteasePlay] ' . $e->getMessage());
-            http_response_code(502);
+    private static function mediaSource()
+    {
+        // Keep source-less legacy playback URLs on the original official API.
+        $source = trim((string)($_GET['source'] ?? self::OFFICIAL_SOURCE));
+        if ($source === self::OFFICIAL_SOURCE || in_array($source, self::MUSIC_SOURCES, true)) {
+            return $source;
         }
+        http_response_code(422);
         exit;
     }
 
-    public static function lyrics()
+    private static function musicApiSource()
     {
-        $id = \Request::int('id');
-        if ($id <= 0) {
-            http_response_code(422);
-            exit;
+        $source = trim((string)($_GET['source'] ?? 'netease'));
+        if (in_array($source, self::MUSIC_SOURCES, true)) {
+            return $source;
         }
-
-        try {
-            $payload = self::requestJson('/api/song/lyric', [
-                'id' => $id,
-                'lv' => -1,
-                'tv' => -1,
-            ]);
-            $lyrics = trim((string)($payload['lrc']['lyric'] ?? ''));
-            header('Content-Type: text/plain; charset=utf-8');
-            header('Cache-Control: public, max-age=86400');
-            echo $lyrics;
-        } catch (\Throwable $e) {
-            log_error('[NeteaseLyrics] ' . $e->getMessage());
-            http_response_code(502);
-        }
+        http_response_code(422);
         exit;
     }
 
-    private static function requestJson($path, array $query)
+    private static function extractList($payload)
     {
-        $url = self::API_BASE . $path . '?' . http_build_query($query);
-        $headers = [
+        if (!is_array($payload)) {
+            return [];
+        }
+        if (isset($payload['data']) && is_array($payload['data'])) {
+            return $payload['data'];
+        }
+        if (isset($payload['list']) && is_array($payload['list'])) {
+            return $payload['list'];
+        }
+        return array_values($payload) === $payload ? $payload : [];
+    }
+
+    private static function redirectToMedia($url, $maxAge = 0)
+    {
+        $url = self::directMediaUrl($url);
+        if ($url === '') {
+            http_response_code(404);
+            exit;
+        }
+        header($maxAge > 0 ? 'Cache-Control: public, max-age=' . $maxAge : 'Cache-Control: no-store');
+        header('Location: ' . $url, true, 302);
+        exit;
+    }
+
+    private static function directMediaUrl($url)
+    {
+        $url = trim((string)$url);
+        if (strpos($url, '//') === 0) {
+            $url = 'https:' . $url;
+        }
+        $url = preg_replace('#^http://#i', 'https://', $url);
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : '';
+    }
+
+    private static function requestMusicApi(array $query)
+    {
+        return self::requestJson(self::MUSIC_API_BASE . '?' . http_build_query($query), [
+            'Accept: application/json',
+            'Referer: https://music.gdstudio.xyz/',
+            'User-Agent: Mozilla/5.0 (Linux; Android 10; Qingtan) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36',
+        ]);
+    }
+
+    private static function requestOfficialJson($path, array $query)
+    {
+        return self::requestJson(self::OFFICIAL_API_BASE . $path . '?' . http_build_query($query), [
             'Accept: application/json',
             'Referer: https://music.163.com/',
             'User-Agent: Mozilla/5.0 (Linux; Android 10; Qingtan) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36',
-        ];
+        ]);
+    }
 
+    private static function requestJson($url, array $headers)
+    {
         if (function_exists('curl_init')) {
             $curl = curl_init($url);
             curl_setopt_array($curl, [
@@ -178,13 +372,13 @@ class NeteaseMusicController
             ]);
             $body = @file_get_contents($url, false, $context);
             if ($body === false) {
-                throw new \RuntimeException('网易云音乐接口不可用');
+                throw new \RuntimeException('音乐接口不可用');
             }
         }
 
         $decoded = json_decode($body, true);
         if (!is_array($decoded)) {
-            throw new \RuntimeException('网易云音乐返回格式异常');
+            throw new \RuntimeException('音乐接口返回格式异常');
         }
         return $decoded;
     }

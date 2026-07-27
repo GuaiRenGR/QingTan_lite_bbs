@@ -14,11 +14,34 @@ class NeteaseMusicPage extends ConsumerStatefulWidget {
   ConsumerState<NeteaseMusicPage> createState() => _NeteaseMusicPageState();
 }
 
+class _MusicSource {
+  const _MusicSource(this.value, this.label);
+
+  final String value;
+  final String label;
+}
+
 class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
+  static const _sources = [
+    _MusicSource('netease', '网易云音乐'),
+    _MusicSource('netease_official', '网易云音乐官方'),
+    _MusicSource('tencent', 'QQ音乐'),
+    _MusicSource('kuwo', '酷我音乐'),
+    _MusicSource('tidal', 'Tidal'),
+    _MusicSource('qobuz', 'Qobuz'),
+    _MusicSource('joox', 'JOOX'),
+    _MusicSource('bilibili', '哔哩哔哩'),
+    _MusicSource('apple', 'Apple Music'),
+    _MusicSource('ytmusic', 'Youtube Music'),
+    _MusicSource('spotify', 'Spotify'),
+  ];
+
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _songs = const [];
+  _MusicSource _source = _sources.first;
   bool _loading = false;
   String? _error;
+  int _searchGeneration = 0;
 
   @override
   void dispose() {
@@ -30,15 +53,17 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
     final keyword = _searchController.text.trim();
     if (keyword.isEmpty || _loading) return;
 
+    final generation = ++_searchGeneration;
+    final source = _source;
     setState(() {
       _loading = true;
       _error = null;
     });
     final result = await ApiClient.instance.get(
       'netease/search',
-      query: {'keyword': keyword, 'limit': 40},
+      query: {'keyword': keyword, 'limit': 20, 'source': source.value},
     );
-    if (!mounted) return;
+    if (!mounted || generation != _searchGeneration) return;
 
     final raw = result.success && result.data is Map<String, dynamic>
         ? (result.data as Map<String, dynamic>)['list']
@@ -53,6 +78,18 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
           : const [];
       _error = result.success ? null : result.message;
     });
+  }
+
+  void _selectSource(_MusicSource source) {
+    if (source.value == _source.value) return;
+    _searchGeneration++;
+    setState(() {
+      _source = source;
+      _songs = const [];
+      _loading = false;
+      _error = null;
+    });
+    if (_searchController.text.trim().isNotEmpty) _search();
   }
 
   Future<void> _play(Map<String, dynamic> song) async {
@@ -82,25 +119,52 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('网易云音乐')),
+      appBar: AppBar(title: const Text('搜索音乐')),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-              decoration: InputDecoration(
-                hintText: '搜索歌曲名或歌手',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: IconButton(
-                  tooltip: '搜索',
-                  onPressed: _search,
-                  icon: const Icon(Icons.arrow_forward_rounded),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                MenuAnchor(
+                  menuChildren: [
+                    for (final source in _sources)
+                      MenuItemButton(
+                        leadingIcon: source.value == _source.value
+                            ? const Icon(Icons.check_rounded)
+                            : const SizedBox(width: 24),
+                        onPressed: () => _selectSource(source),
+                        child: Text(source.label),
+                      ),
+                  ],
+                  builder: (context, controller, child) {
+                    return OutlinedButton.icon(
+                      onPressed: () => controller.isOpen
+                          ? controller.close()
+                          : controller.open(),
+                      icon: const Icon(Icons.library_music_outlined),
+                      label: Text(_source.label),
+                    );
+                  },
                 ),
-              ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _search(),
+                  decoration: InputDecoration(
+                    hintText: '搜索歌曲名、歌手或专辑',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: IconButton(
+                      tooltip: '搜索',
+                      onPressed: _search,
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(child: _buildResults()),
@@ -126,7 +190,7 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
     if (_songs.isEmpty) {
       return Center(
         child: Text(
-          '搜索网易云音乐',
+          '搜索${_source.label}',
           style: TextStyle(color: AppColors.textSecondary(context)),
         ),
       );
@@ -141,6 +205,8 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
         final title = song['title']?.toString() ?? '未知歌曲';
         final artist = song['artist']?.toString().trim() ?? '';
         final album = song['album']?.toString().trim() ?? '';
+        final durationMs =
+            int.tryParse(song['duration_ms']?.toString() ?? '') ?? 0;
         final playable = song['playable'] != false && song['playable'] != 0;
         final details = [
           if (artist.isNotEmpty) artist,
@@ -166,20 +232,21 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage> {
           ),
           title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
-            details.isEmpty ? '网易云音乐' : details,
+            details.isEmpty ? _source.label : details,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _duration(song['duration_ms']),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary(context),
+              if (durationMs > 0)
+                Text(
+                  _duration(durationMs),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary(context),
+                  ),
                 ),
-              ),
               IconButton(
                 tooltip: playable ? '播放' : '暂不可播放',
                 onPressed: playable ? () => _play(song) : null,

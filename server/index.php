@@ -195,6 +195,10 @@ try {
             App\Controllers\NeteaseMusicController::play();
             break;
 
+        case 'netease/cover':
+            App\Controllers\NeteaseMusicController::cover();
+            break;
+
         case 'netease/lyrics':
             App\Controllers\NeteaseMusicController::lyrics();
             break;
