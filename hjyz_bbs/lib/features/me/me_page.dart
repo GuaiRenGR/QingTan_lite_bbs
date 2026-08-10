@@ -27,9 +27,9 @@ class MePage extends ConsumerWidget {
             children: [
               Text(
                 '主题色',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 18),
               ValueListenableBuilder<ThemeColorChoice>(
@@ -60,13 +60,18 @@ class MePage extends ConsumerWidget {
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: active
-                                        ? Theme.of(context).colorScheme.onSurface
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface
                                         : Colors.transparent,
                                     width: 2,
                                   ),
                                 ),
                                 child: active
-                                    ? const Icon(Icons.check, color: Colors.white)
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                      )
                                     : null,
                               ),
                               const SizedBox(height: 7),
@@ -92,12 +97,12 @@ class MePage extends ConsumerWidget {
   }
 
   List<Widget> _appBarActions(BuildContext context) => [
-        IconButton(
-          tooltip: '主题色',
-          onPressed: () => _showThemeColors(context),
-          icon: const Icon(Icons.checkroom_outlined),
-        ),
-      ];
+    IconButton(
+      tooltip: '主题色',
+      onPressed: () => _showThemeColors(context),
+      icon: const Icon(Icons.checkroom_outlined),
+    ),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -129,8 +134,9 @@ class MePage extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 42,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
                   child: Icon(
                     Icons.person_outline,
                     size: 44,
@@ -140,25 +146,18 @@ class MePage extends ConsumerWidget {
                 const SizedBox(height: 18),
                 const Text(
                   '当前为游客模式',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '登录后可发帖、回复、收藏、签到',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const LoginPage(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
                     );
                   },
                   child: const Text('登录 / 注册'),
@@ -257,10 +256,7 @@ class MePage extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的'),
-        actions: _appBarActions(context),
-      ),
+      appBar: AppBar(title: const Text('我的'), actions: _appBarActions(context)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 20),
         children: [
@@ -310,8 +306,9 @@ class MePage extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(31),
                     errorWidget: CircleAvatar(
                       radius: 31,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
                       child: Icon(
                         Icons.person,
                         color: Theme.of(context).colorScheme.primary,
@@ -364,6 +361,12 @@ class MePage extends ConsumerWidget {
             onTap: () {
               context.push('/settings');
             },
+          ),
+          const SizedBox(height: 8),
+          _MenuItem(
+            icon: Icons.volunteer_activism_outlined,
+            text: '赞助名单',
+            onTap: () => context.push('/sponsors'),
           ),
         ],
       ),

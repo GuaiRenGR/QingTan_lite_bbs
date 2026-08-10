@@ -63,6 +63,14 @@ try {
             App\Controllers\SystemController::servers();
             break;
 
+        case 'system/public-config':
+            App\Controllers\SystemController::publicConfig();
+            break;
+
+        case 'sponsors/list':
+            App\Controllers\SponsorController::index();
+            break;
+
         case 'system/health':
             App\Controllers\SystemController::health();
             break;
@@ -425,6 +433,18 @@ try {
 
         case 'admin/settings/update':
             App\Controllers\AdminController::settingsUpdate();
+            break;
+
+        case 'admin/sponsors/create':
+            App\Controllers\SponsorController::create();
+            break;
+
+        case 'admin/sponsors/update':
+            App\Controllers\SponsorController::update();
+            break;
+
+        case 'admin/sponsors/delete':
+            App\Controllers\SponsorController::delete();
             break;
 
         case 'admin/user/update':

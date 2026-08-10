@@ -9,6 +9,7 @@ import 'features/history/history_page.dart';
 import 'features/home/x_feed_page.dart';
 import 'features/main/main_shell_page.dart';
 import 'features/me/settings_page.dart';
+import 'features/me/sponsor_list_page.dart';
 import 'features/message/messages_page.dart';
 import 'features/message/notification_list_page.dart';
 import 'features/message/chat_page.dart';
@@ -27,36 +28,23 @@ import 'features/admin/admin_review_page.dart';
 import 'features/admin/admin_users_page.dart';
 import 'features/admin/admin_threads_page.dart';
 import 'features/admin/admin_files_page.dart';
+import 'features/admin/admin_sponsors_page.dart';
 import 'features/download/download_page.dart';
 import 'features/user/user_home_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
   routes: [
-    GoRoute(
-      path: '/',
-      builder: (_, _) => const MainShellPage(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (_, _) => const LoginPage(),
-    ),
-    GoRoute(
-      path: '/register',
-      builder: (_, _) => const RegisterPage(),
-    ),
-    GoRoute(
-      path: '/settings',
-      builder: (_, _) => const SettingsPage(),
-    ),
+    GoRoute(path: '/', builder: (_, _) => const MainShellPage()),
+    GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+    GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
+    GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
+    GoRoute(path: '/sponsors', builder: (_, _) => const SponsorListPage()),
     GoRoute(
       path: '/account-security',
       builder: (_, _) => const AccountSecurityPage(),
     ),
-    GoRoute(
-      path: '/messages',
-      builder: (_, _) => const MessagesPage(),
-    ),
+    GoRoute(path: '/messages', builder: (_, _) => const MessagesPage()),
     GoRoute(
       path: '/notifications',
       builder: (_, state) {
@@ -115,54 +103,25 @@ final router = GoRouter(
         return CreateThreadPage(editThreadId: id);
       },
     ),
-    GoRoute(
-      path: '/profile/edit',
-      builder: (_, _) => const EditProfilePage(),
-    ),
-    GoRoute(
-      path: '/search',
-      builder: (_, _) => const SearchPage(),
-    ),
-    GoRoute(
-      path: '/history',
-      builder: (_, _) => const HistoryPage(),
-    ),
-    GoRoute(
-      path: '/creator',
-      builder: (_, _) => const CreatorCenterPage(),
-    ),
-    GoRoute(
-      path: '/admin',
-      builder: (_, _) => const AdminCenterPage(),
-    ),
-    GoRoute(
-      path: '/admin/users',
-      builder: (_, _) => const AdminUsersPage(),
-    ),
-    GoRoute(
-      path: '/admin/review',
-      builder: (_, _) => const AdminReviewPage(),
-    ),
+    GoRoute(path: '/profile/edit', builder: (_, _) => const EditProfilePage()),
+    GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
+    GoRoute(path: '/history', builder: (_, _) => const HistoryPage()),
+    GoRoute(path: '/creator', builder: (_, _) => const CreatorCenterPage()),
+    GoRoute(path: '/admin', builder: (_, _) => const AdminCenterPage()),
+    GoRoute(path: '/admin/users', builder: (_, _) => const AdminUsersPage()),
+    GoRoute(path: '/admin/review', builder: (_, _) => const AdminReviewPage()),
     GoRoute(
       path: '/admin/threads',
       builder: (_, _) => const AdminThreadsPage(),
     ),
+    GoRoute(path: '/admin/files', builder: (_, _) => const AdminFilesPage()),
     GoRoute(
-      path: '/admin/files',
-      builder: (_, _) => const AdminFilesPage(),
+      path: '/admin/sponsors',
+      builder: (_, _) => const AdminSponsorsPage(),
     ),
-    GoRoute(
-      path: '/admin/x-feed',
-      builder: (_, _) => const XFeedPage(),
-    ),
-    GoRoute(
-      path: '/downloads',
-      builder: (_, _) => const DownloadPage(),
-    ),
-    GoRoute(
-      path: '/music-player',
-      builder: (_, _) => const MusicPlayerPage(),
-    ),
+    GoRoute(path: '/admin/x-feed', builder: (_, _) => const XFeedPage()),
+    GoRoute(path: '/downloads', builder: (_, _) => const DownloadPage()),
+    GoRoute(path: '/music-player', builder: (_, _) => const MusicPlayerPage()),
     GoRoute(
       path: '/music-playlist',
       builder: (_, _) => const MusicPlaylistPage(),
@@ -184,10 +143,6 @@ final router = GoRouter(
     ),
   ],
   errorBuilder: (_, _) {
-    return const Scaffold(
-      body: Center(
-        child: Text('页面不存在'),
-      ),
-    );
+    return const Scaffold(body: Center(child: Text('页面不存在')));
   },
 );

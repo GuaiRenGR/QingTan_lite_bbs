@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/api/api_client.dart';
 import '../../core/api/server_manager.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/notification_service.dart';
@@ -32,12 +34,40 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool testingServers = false;
   bool settingsLoaded = false;
   String appVersion = '';
+  String contactUrl = '';
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _loadVersion();
+    _loadPublicConfig();
+  }
+
+  Future<void> _loadPublicConfig() async {
+    final result = await ApiClient.instance.get('system/public-config');
+    if (!mounted || !result.success || result.data is! Map) return;
+    setState(() {
+      contactUrl = ((result.data as Map)['contact_url'] ?? '')
+          .toString()
+          .trim();
+    });
+  }
+
+  Future<void> _openContact() async {
+    final uri = Uri.tryParse(contactUrl);
+    if (uri == null || !uri.hasScheme) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('管理员暂未配置联系我们链接')));
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法打开联系我们链接')));
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -89,9 +119,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await ServerManager.instance.selectServer(serverId);
     if (!mounted) return;
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已切换服务器')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已切换服务器')));
   }
 
   String _serverStatus(int serverId) {
@@ -110,9 +140,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         borderRadius: BorderRadius.circular(10),
         child: Image.asset('icon.png', width: 48, height: 48),
       ),
-      children: [
-        Text(content),
-      ],
+      children: [Text(content)],
     );
   }
 
@@ -300,8 +328,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       value: playerSettings.coverBlurAmount,
                       max: 500,
                       divisions: 100,
-                      onChanged:
-                          MusicPlayerSettingsService.setCoverBlurAmount,
+                      onChanged: MusicPlayerSettingsService.setCoverBlurAmount,
                     ),
                     _PlayerEffectSliderTile(
                       title: '背景调暗',
@@ -310,8 +337,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       value: playerSettings.coverBlurDarken,
                       max: 0.8,
                       divisions: 16,
-                      onChanged:
-                          MusicPlayerSettingsService.setCoverBlurDarken,
+                      onChanged: MusicPlayerSettingsService.setCoverBlurDarken,
                     ),
                   ],
                   SwitchListTile(
@@ -321,11 +347,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       playerSettings.coverBlurBackground
                           ? '需关闭模糊封面背景'
                           : playerSettings.dynamicBackground
-                              ? '控制正在播放页面的音频律动效果'
-                              : '需先开启正在播放动态背景',
+                          ? '控制正在播放页面的音频律动效果'
+                          : '需先开启正在播放动态背景',
                     ),
                     value: playerSettings.musicReactive,
-                    onChanged: playerSettings.dynamicBackground &&
+                    onChanged:
+                        playerSettings.dynamicBackground &&
                             !playerSettings.coverBlurBackground
                         ? MusicPlayerSettingsService.setMusicReactive
                         : null,
@@ -398,7 +425,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   subtitle: Text(_serverStatus(server.id)),
                   trailing:
                       ServerManager.instance.healthFor(server.id)?.reachable ==
-                              true
+                          true
                       ? const Icon(Icons.wifi_rounded, size: 20)
                       : const Icon(Icons.wifi_off_rounded, size: 20),
                   onTap: () => _selectServer(server.id),
@@ -433,14 +460,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: '关于',
             children: [
               _SettingTile(
+                icon: Icons.contact_support_outlined,
+                title: '联系我们',
+                subtitle: contactUrl.isEmpty ? '暂未配置联系方式' : '打开管理员设置的联系页面',
+                onTap: _openContact,
+              ),
+              _SettingTile(
                 icon: Icons.groups_outlined,
                 title: '关于我们',
                 subtitle: '社区介绍与联系方式',
                 onTap: () {
-                  _showInfo(
-                    '关于我们',
-                    '轻坛 是一套适配虚拟主机的轻量社区系统。',
-                  );
+                  _showInfo('关于我们', '轻坛 是一套适配虚拟主机的轻量社区系统。');
                 },
               ),
               _SettingTile(
@@ -490,8 +520,8 @@ class _PlayerEffectSliderTile extends StatelessWidget {
           Text(
             valueLabel,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary(context),
-                ),
+              color: AppColors.textSecondary(context),
+            ),
           ),
           Slider(
             value: value.clamp(0.0, max).toDouble(),
@@ -509,10 +539,7 @@ class _Section extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const _Section({
-    required this.title,
-    required this.children,
-  });
+  const _Section({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {

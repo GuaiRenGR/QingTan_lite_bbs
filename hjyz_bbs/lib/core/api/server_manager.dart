@@ -20,6 +20,7 @@ class ServerManager {
   ServerConfig? _currentServer;
   int? _selectedServerId;
   Timer? _healthCheckTimer;
+  Future<void>? _backgroundRefresh;
 
   List<ServerConfig> get servers => List.unmodifiable(_servers);
   ServerConfig? get currentServer => _currentServer;
@@ -44,10 +45,7 @@ class ServerManager {
     final active = activeServers;
     final current = _currentServer;
     if (current == null) return active;
-    return [
-      current,
-      ...active.where((server) => server.id != current.id),
-    ];
+    return [current, ...active.where((server) => server.id != current.id)];
   }
 
   Future<void> init({List<ServerConfig>? servers}) async {
@@ -63,22 +61,28 @@ class ServerManager {
     );
     if (_servers.isEmpty) {
       _replaceServers(const [
-        ServerConfig(
-          id: 1,
-          name: '默认服务器',
-          url: AppConfig.apiEntry,
-        ),
+        ServerConfig(id: 1, name: '默认服务器', url: AppConfig.apiEntry),
       ]);
     }
 
     _currentServer = _findServer(_selectedServerId) ?? _servers.first;
-    await _checkAllServers(selectFastest: _selectedServerId == null);
-    await refreshServerList();
-
     _healthCheckTimer = Timer.periodic(
       const Duration(seconds: 60),
       (_) => _checkAllServers(),
     );
+  }
+
+  Future<void> refreshInBackground() {
+    return _backgroundRefresh ??= _runBackgroundRefresh().whenComplete(() {
+      _backgroundRefresh = null;
+    });
+  }
+
+  Future<void> _runBackgroundRefresh() async {
+    final refreshed = await refreshServerList();
+    if (!refreshed) {
+      await _checkAllServers(selectFastest: _selectedServerId == null);
+    }
   }
 
   void dispose() {
@@ -89,10 +93,9 @@ class ServerManager {
     final candidates = requestServers;
     for (final server in candidates) {
       try {
-        final response = await _discoveryDio(server.url).get(
-          '',
-          queryParameters: {'route': 'system/servers'},
-        );
+        final response = await _discoveryDio(
+          server.url,
+        ).get('', queryParameters: {'route': 'system/servers'});
         final body = response.data;
         final data = body is Map ? body['data'] : null;
         final rawServers = data is Map ? data['servers'] : null;
@@ -101,8 +104,7 @@ class ServerManager {
         final discovered = rawServers
             .whereType<Map>()
             .map(
-              (item) =>
-                  ServerConfig.fromJson(Map<String, dynamic>.from(item)),
+              (item) => ServerConfig.fromJson(Map<String, dynamic>.from(item)),
             )
             .where(_isValidServer)
             .toList(growable: false);
@@ -165,8 +167,8 @@ class ServerManager {
   }
 
   void reportFailure(int serverId) {
-    final old = _healthStatus[serverId] ??
-        ServerHealth(lastChecked: DateTime(2000));
+    final old =
+        _healthStatus[serverId] ?? ServerHealth(lastChecked: DateTime(2000));
     _healthStatus[serverId] = old.copyWith(
       reachable: false,
       consecutiveFailures: old.consecutiveFailures + 1,
@@ -204,10 +206,9 @@ class ServerManager {
   Future<ServerHealth> _pingServer(ServerConfig server) async {
     final start = DateTime.now();
     try {
-      final response = await _discoveryDio(server.url).get(
-        '',
-        queryParameters: {'route': 'system/ping'},
-      );
+      final response = await _discoveryDio(
+        server.url,
+      ).get('', queryParameters: {'route': 'system/ping'});
       if (response.statusCode == 200) {
         return ServerHealth(
           reachable: true,
@@ -286,9 +287,7 @@ class ServerManager {
       if (decoded is! List) return const [];
       return decoded
           .whereType<Map>()
-          .map(
-            (item) => ServerConfig.fromJson(Map<String, dynamic>.from(item)),
-          )
+          .map((item) => ServerConfig.fromJson(Map<String, dynamic>.from(item)))
           .where(_isValidServer)
           .toList(growable: false);
     } catch (_) {

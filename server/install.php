@@ -418,14 +418,26 @@ function createTables(PDO $pdo, string $prefix)
     ";
 
     $sqls[] = "
-    CREATE TABLE IF NOT EXISTS `{$prefix}settings` (
+    CREATE TABLE IF NOT EXISTS `{$prefix}site_settings` (
       `id` INT NOT NULL AUTO_INCREMENT,
-      `setting_key` VARCHAR(100) NOT NULL,
-      `setting_value` MEDIUMTEXT DEFAULT NULL,
-      `type` VARCHAR(20) DEFAULT 'string',
+      `key` VARCHAR(100) NOT NULL,
+      `value` TEXT DEFAULT NULL,
       `updated_at` DATETIME DEFAULT NULL,
       PRIMARY KEY (`id`),
-      UNIQUE KEY `uk_key` (`setting_key`)
+      UNIQUE KEY `uk_key` (`key`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}sponsors` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `name` VARCHAR(100) NOT NULL,
+      `amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      `message` VARCHAR(500) NOT NULL DEFAULT '',
+      `created_at` DATETIME NOT NULL,
+      `updated_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`),
+      KEY `idx_created_at` (`created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

@@ -53,6 +53,13 @@ class SystemController
         ]);
     }
 
+    public static function publicConfig()
+    {
+        \Response::success([
+            'contact_url' => (string)\SiteSetting::get('contact_url', ''),
+        ]);
+    }
+
     public static function health()
     {
         $config = \load_server_config();

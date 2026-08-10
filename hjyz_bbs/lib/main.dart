@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -40,12 +42,18 @@ void main() async {
   // 初始化多服务器管理器
   await AppLogger.log('main', 'ServerManager.init start');
   await ServerManager.instance.init();
-  await AppLogger.log('main', 'ServerManager.init end, currentServer=${ServerManager.instance.currentServer?.url}');
+  await AppLogger.log(
+    'main',
+    'ServerManager.init end, currentServer=${ServerManager.instance.currentServer?.url}',
+  );
 
   // 加载写队列
   await AppLogger.log('main', 'WriteQueue.load start');
   await WriteQueue.instance.load();
-  await AppLogger.log('main', 'WriteQueue.load end, pending=${WriteQueue.instance.pendingCount}');
+  await AppLogger.log(
+    'main',
+    'WriteQueue.load end, pending=${WriteQueue.instance.pendingCount}',
+  );
 
   // 尝试重试队列中的请求
   WriteQueue.instance.retryAll();
@@ -56,9 +64,9 @@ void main() async {
 
   await AppLogger.log('main', 'runApp');
 
-  runApp(
-    const ProviderScope(
-      child: ForumXApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: ForumXApp()));
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(ServerManager.instance.refreshInBackground());
+  });
 }

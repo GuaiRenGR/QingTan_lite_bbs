@@ -405,6 +405,12 @@ class AdminController
         }
 
         foreach ($settings as $key => $value) {
+            if ($key === 'contact_url') {
+                $value = trim((string)$value);
+                if ($value !== '' && (!filter_var($value, FILTER_VALIDATE_URL) || strlen($value) > 1000)) {
+                    \Response::json(422, '联系我们链接格式不正确');
+                }
+            }
             \SiteSetting::set($key, (string)$value);
         }
 

@@ -16,6 +16,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   Map<String, dynamic> stats = {};
   bool requireReview = false;
   Map<String, String> downloadLinks = {};
+  String contactUrl = '';
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
       if (mounted) {
         setState(() {
           requireReview = data['require_review'] == '1';
+          contactUrl = (data['contact_url'] ?? '').toString();
           for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
             downloadLinks[key] = (data['dl_$key'] ?? '').toString();
           }
@@ -54,9 +56,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     final result = await ApiClient.instance.post(
       'admin/settings/update',
       data: {
-        'settings': {
-          'require_review': value ? '1' : '0',
-        },
+        'settings': {'require_review': value ? '1' : '0'},
       },
     );
 
@@ -64,13 +64,13 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
 
     if (result.success) {
       setState(() => requireReview = value);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(value ? '已开启审核功能' : '已关闭审核功能')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(value ? '已开启审核功能' : '已关闭审核功能')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
     }
   }
 
@@ -87,6 +87,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   }
 
   void _showSettingsDialog() {
+    final contactCtrl = TextEditingController(text: contactUrl);
     final dlCtrls = <String, TextEditingController>{};
     for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
       dlCtrls[key] = TextEditingController(text: downloadLinks[key] ?? '');
@@ -114,6 +115,21 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 ),
                 const Divider(height: 24),
                 const Text(
+                  '联系我们',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: contactCtrl,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(
+                    labelText: '跳转链接',
+                    hintText: 'https://...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const Divider(height: 24),
+                const Text(
                   '下载链接',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
@@ -123,11 +139,17 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
                 const SizedBox(height: 12),
-                _DownloadField(label: 'Android', controller: dlCtrls['android']!),
+                _DownloadField(
+                  label: 'Android',
+                  controller: dlCtrls['android']!,
+                ),
                 const SizedBox(height: 8),
                 _DownloadField(label: 'iOS', controller: dlCtrls['ios']!),
                 const SizedBox(height: 8),
-                _DownloadField(label: 'Windows', controller: dlCtrls['windows']!),
+                _DownloadField(
+                  label: 'Windows',
+                  controller: dlCtrls['windows']!,
+                ),
                 const SizedBox(height: 8),
                 _DownloadField(label: 'macOS', controller: dlCtrls['macos']!),
                 const SizedBox(height: 8),
@@ -143,7 +165,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
             FilledButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _saveDownloadLinks(dlCtrls);
+                _saveSystemLinks(contactCtrl, dlCtrls);
               },
               child: const Text('保存'),
             ),
@@ -153,9 +175,11 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     );
   }
 
-  Future<void> _saveDownloadLinks(
-      Map<String, TextEditingController> ctrls) async {
-    final settings = <String, String>{};
+  Future<void> _saveSystemLinks(
+    TextEditingController contactCtrl,
+    Map<String, TextEditingController> ctrls,
+  ) async {
+    final settings = <String, String>{'contact_url': contactCtrl.text.trim()};
     for (final entry in ctrls.entries) {
       settings['dl_${entry.key}'] = entry.value.text.trim();
     }
@@ -169,17 +193,19 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
 
     if (result.success) {
       setState(() {
+        contactUrl = settings['contact_url'] ?? '';
         for (final entry in settings.entries) {
+          if (!entry.key.startsWith('dl_')) continue;
           downloadLinks[entry.key.replaceFirst('dl_', '')] = entry.value;
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('下载链接已保存')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('系统链接已保存')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
     }
   }
 
@@ -216,19 +242,25 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   onTap: () => context.push('/admin/review'),
                 ),
                 _AdminEntry(
+                  icon: Icons.volunteer_activism_outlined,
+                  title: '赞助名单',
+                  subtitle: '添加、编辑和删除赞助记录',
+                  onTap: () => context.push('/admin/sponsors'),
+                ),
+                _AdminEntry(
                   icon: Icons.forum_outlined,
                   title: '版块管理',
                   subtitle: '管理论坛分区和标签',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('版块管理开发中')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('版块管理开发中')));
                   },
                 ),
                 _AdminEntry(
                   icon: Icons.settings_outlined,
                   title: '系统设置',
-                  subtitle: '审核开关、下载链接配置',
+                  subtitle: '审核开关、联系与下载链接配置',
                   onTap: () => _showSettingsDialog(),
                 ),
               ],
@@ -337,10 +369,7 @@ class _StatItem extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -411,8 +440,10 @@ class _DownloadField extends StatelessWidget {
         hintText: 'https://...',
         border: const OutlineInputBorder(),
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
       ),
     );
   }
