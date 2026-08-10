@@ -390,7 +390,7 @@ class _LyricsPage extends StatefulWidget {
   final MusicTrack track;
   final Duration position;
 
-  const _LyricsPage({super.key, required this.track, required this.position});
+  const _LyricsPage({required this.track, required this.position});
 
   @override
   State<_LyricsPage> createState() => _LyricsPageState();

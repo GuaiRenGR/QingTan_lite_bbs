@@ -453,7 +453,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               );
               if (!dialogContext.mounted) return;
               setDialogState(() {
-                musicFile = File(file!.path!);
+                musicFile = File(file.path!);
                 musicName = file.name;
                 musicMetadata = metadata;
                 songTitleController.text = metadata.title;

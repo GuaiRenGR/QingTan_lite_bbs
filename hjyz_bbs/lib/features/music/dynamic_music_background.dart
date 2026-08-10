@@ -391,7 +391,7 @@ class _BlurredCoverBackgroundState extends State<_BlurredCoverBackground> {
           fit: StackFit.expand,
           children: [
             ...previousChildren,
-            if (currentChild != null) currentChild,
+            ?currentChild,
           ],
         );
       },
