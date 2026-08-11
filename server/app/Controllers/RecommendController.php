@@ -48,7 +48,7 @@ class RecommendController
 
         $rows = \Database::fetchAll(
             "SELECT
-                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
+                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.cover_width, t.cover_height, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                 u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
@@ -69,7 +69,7 @@ class RecommendController
 
         $rows = \Database::fetchAll(
             "SELECT
-                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
+                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.cover_width, t.cover_height, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                 u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
@@ -92,7 +92,7 @@ class RecommendController
 
         $rows = \Database::fetchAll(
             "SELECT
-                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
+                t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.cover_width, t.cover_height, t.mode,
                 t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                 t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                 u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar
@@ -123,7 +123,7 @@ class RecommendController
         if ($userId > 0) {
             $rows = \Database::fetchAll(
                 "SELECT
-                    t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
+                    t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.cover_width, t.cover_height, t.mode,
                     t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                     t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                     u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar,
@@ -152,7 +152,7 @@ class RecommendController
         } else {
             $rows = \Database::fetchAll(
                 "SELECT
-                    t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.mode,
+                    t.id, t.forum_id, t.user_id, t.title, t.summary, t.cover, t.cover_width, t.cover_height, t.mode,
                     t.images_json, t.sensitive_labels_json, t.view_count, t.like_count, t.favorite_count,
                     t.share_count, t.reply_count, t.is_top, t.is_digest, t.created_at,
                     u.nickname AS author_name, u.username AS author_username, u.avatar AS author_avatar,
@@ -350,6 +350,8 @@ class RecommendController
                 'title' => $row['title'],
                 'summary' => $row['summary'] ?? '',
                 'cover' => $row['cover'] ?? '',
+                'cover_width' => (int)($row['cover_width'] ?? 0),
+                'cover_height' => (int)($row['cover_height'] ?? 0),
                 'mode' => $row['mode'] ?? 'article',
                 'sensitive_labels' => is_array($sensitiveLabels) ? array_values($sensitiveLabels) : [],
                 'like_count' => (int)$row['like_count'],

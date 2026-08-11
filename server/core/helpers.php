@@ -845,6 +845,34 @@ if (!function_exists('generate_thumbnail')) {
         return [
             'attachment_id' => $attachmentId,
             'url' => $thumbUrl,
+            'width' => $newW,
+            'height' => $newH,
+        ];
+    }
+}
+
+if (!function_exists('get_image_dimensions')) {
+    function get_image_dimensions($imageUrl)
+    {
+        $imageUrl = trim((string)$imageUrl);
+        if ($imageUrl === '') {
+            return null;
+        }
+
+        $resolvedUrl = normalize_forum_media_url($imageUrl);
+        $imageData = @file_get_contents($resolvedUrl);
+        if ($imageData === false) {
+            return null;
+        }
+
+        $size = @getimagesizefromstring($imageData);
+        if (!$size || (int)$size[0] <= 0 || (int)$size[1] <= 0) {
+            return null;
+        }
+
+        return [
+            'width' => (int)$size[0],
+            'height' => (int)$size[1],
         ];
     }
 }

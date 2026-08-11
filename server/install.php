@@ -151,6 +151,8 @@ function createTables(PDO $pdo, string $prefix)
       `summary` VARCHAR(255) DEFAULT NULL,
       `content` MEDIUMTEXT NOT NULL,
       `cover` VARCHAR(1000) DEFAULT NULL,
+      `cover_width` INT UNSIGNED DEFAULT NULL,
+      `cover_height` INT UNSIGNED DEFAULT NULL,
       `mode` VARCHAR(20) NOT NULL DEFAULT 'article',
       `images_json` MEDIUMTEXT NULL,
       `sensitive_labels_json` VARCHAR(255) DEFAULT NULL,

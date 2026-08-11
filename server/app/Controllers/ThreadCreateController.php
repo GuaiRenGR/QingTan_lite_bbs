@@ -62,10 +62,17 @@ class ThreadCreateController
         }
 
         $cover = '';
+        $coverWidth = null;
+        $coverHeight = null;
 
         if (!empty($allImages[0])) {
             $thumb = generate_thumbnail($allImages[0], $user['id']);
             $cover = $thumb ? $thumb['url'] : $allImages[0];
+            $dimensions = $thumb ?: get_image_dimensions($cover);
+            if ($dimensions) {
+                $coverWidth = (int)$dimensions['width'];
+                $coverHeight = (int)$dimensions['height'];
+            }
         }
 
         if ($musicUrl !== '' && !validate_remote_url($musicUrl)) {
@@ -92,12 +99,12 @@ class ThreadCreateController
         try {
             \Database::execute(
                 "INSERT INTO {$threads}
-                (`forum_id`, `user_id`, `title`, `content`, `summary`, `cover`,
+                (`forum_id`, `user_id`, `title`, `content`, `summary`, `cover`, `cover_width`, `cover_height`,
                  `mode`, `images_json`, `sensitive_labels_json`, `music_url`, `music_name`,
                  `view_count`, `reply_count`, `like_count`, `favorite_count`, `share_count`,
                  `is_top`, `is_digest`, `status`, `visibility`, `created_at`, `updated_at`)
                 VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?, ?)",
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 1, ?, ?, ?)",
                 [
                     $forumId,
                     $user['id'],
@@ -105,6 +112,8 @@ class ThreadCreateController
                     $content,
                     $summary,
                     $cover,
+                    $coverWidth,
+                    $coverHeight,
                     $mode,
                     json_encode($allImages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                     json_encode($sensitiveLabels, JSON_UNESCAPED_UNICODE),

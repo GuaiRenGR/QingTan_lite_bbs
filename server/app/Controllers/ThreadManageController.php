@@ -87,10 +87,17 @@ class ThreadManageController
             $sensitiveLabels = [];
         }
         $cover = '';
+        $coverWidth = null;
+        $coverHeight = null;
 
         if (!empty($allImages[0])) {
             $thumb = generate_thumbnail($allImages[0], $user['id']);
             $cover = $thumb ? $thumb['url'] : $allImages[0];
+            $dimensions = $thumb ?: get_image_dimensions($cover);
+            if ($dimensions) {
+                $coverWidth = (int)$dimensions['width'];
+                $coverHeight = (int)$dimensions['height'];
+            }
 
             // Only remove the previous generated thumbnail after its
             // replacement is ready. Uploaded source images must never be
@@ -110,6 +117,8 @@ class ThreadManageController
                  summary = ?,
                  mode = ?,
                  cover = ?,
+                 cover_width = ?,
+                 cover_height = ?,
                  images_json = ?,
                  sensitive_labels_json = ?,
                  updated_at = ?
@@ -121,6 +130,8 @@ class ThreadManageController
                 $summary,
                 $mode,
                 $cover,
+                $coverWidth,
+                $coverHeight,
                 json_encode($allImages, JSON_UNESCAPED_UNICODE),
                 json_encode($sensitiveLabels, JSON_UNESCAPED_UNICODE),
                 now(),

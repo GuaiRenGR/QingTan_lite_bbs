@@ -152,6 +152,11 @@ class ThreadWaterfallCard extends StatelessWidget {
     final id = _toInt(item['id'] ?? item['thread_id']);
     final title = item['title']?.toString() ?? '';
     final cover = item['cover']?.toString() ?? '';
+    final coverWidth = _toInt(item['cover_width']);
+    final coverHeight = _toInt(item['cover_height']);
+    final coverRatio = coverWidth > 0 && coverHeight > 0
+        ? coverWidth / coverHeight
+        : null;
     final summary = item['summary']?.toString() ?? '';
     final likeCount = _toInt(item['like_count']);
     final replyCount = _toInt(item['reply_count']);
@@ -200,6 +205,7 @@ class ThreadWaterfallCard extends StatelessWidget {
                     blockedHeight: 120 + (id.abs() % 5) * 15.0,
                     child: _CoverWithBadges(
                       cover: cover,
+                      aspectRatio: coverRatio,
                       isTop: isTop,
                       isDigest: isDigest,
                       replyCount: replyCount,
@@ -287,12 +293,14 @@ class ThreadWaterfallCard extends StatelessWidget {
 
 class _CoverWithBadges extends StatelessWidget {
   final String cover;
+  final double? aspectRatio;
   final bool isTop;
   final bool isDigest;
   final int replyCount;
 
   const _CoverWithBadges({
     required this.cover,
+    this.aspectRatio,
     required this.isTop,
     required this.isDigest,
     required this.replyCount,
@@ -305,6 +313,7 @@ class _CoverWithBadges extends StatelessWidget {
         AspectRatioNetworkImage(
           url: cover,
           width: double.infinity,
+          aspectRatio: aspectRatio,
         ),
         Positioned(
           left: 6,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/aspect_ratio_network_image.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../../core/widgets/sensitive_media.dart';
 import '../../../core/services/feed_display_service.dart';
@@ -132,6 +133,10 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasCover = thread.cover.isNotEmpty;
+    final hasDimensions = thread.coverWidth > 0 && thread.coverHeight > 0;
+    final aspectRatio = hasDimensions
+        ? thread.coverWidth / thread.coverHeight
+        : null;
     final height = _mockHeight(thread.id);
     final placeholder = _buildPlaceholder(context, height);
 
@@ -147,10 +152,10 @@ class _Cover extends StatelessWidget {
             return SensitiveMedia(
               labels: thread.sensitiveLabels,
               blockedHeight: height,
-              child: SafeNetworkImage(
+              child: AspectRatioNetworkImage(
                 url: thread.cover,
                 width: double.infinity,
-                height: height,
+                aspectRatio: aspectRatio,
                 fit: BoxFit.cover,
                 errorWidget: placeholder,
               ),

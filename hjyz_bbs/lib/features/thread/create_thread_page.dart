@@ -13,6 +13,7 @@ import '../../core/api/api_client.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
+import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../../core/widgets/sensitive_media.dart';
 import '../auth/auth_controller.dart';
@@ -37,6 +38,7 @@ class CreateThreadPage extends ConsumerStatefulWidget {
 class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   final titleController = TextEditingController();
   final contentController = BbcodeEditorController();
+  final contentFocusNode = FocusNode();
 
   final imagePicker = ImagePicker();
 
@@ -47,6 +49,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   bool uploadingMusic = false;
   bool uploadingVideo = false;
   bool uploadingAttachment = false;
+  bool showEmojiPicker = false;
 
   final List<String> imageUrls = [];
   final List<int> attachmentIds = [];
@@ -87,6 +90,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
     titleController.addListener(_scheduleAutoSaveDraft);
     contentController.addListener(_scheduleAutoSaveDraft);
+    contentFocusNode.addListener(_onContentFocusChanged);
   }
 
   @override
@@ -94,6 +98,9 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     draftTimer?.cancel();
     titleController.dispose();
     contentController.dispose();
+    contentFocusNode
+      ..removeListener(_onContentFocusChanged)
+      ..dispose();
     tagController.dispose();
     super.dispose();
   }
@@ -106,6 +113,31 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     draftTimer = Timer(const Duration(seconds: 2), () {
       _saveDraft(showToast: false);
     });
+  }
+
+  void _onContentFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _toggleEmojiPicker() {
+    final shouldShow = !showEmojiPicker;
+    setState(() => showEmojiPicker = shouldShow);
+    if (shouldShow) {
+      contentFocusNode.unfocus();
+    } else {
+      contentFocusNode.requestFocus();
+    }
+  }
+
+  void _insertEmoji(String char) {
+    final selection = contentController.selection;
+    final text = contentController.text;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+    contentController.value = TextEditingValue(
+      text: text.replaceRange(start, end, char),
+      selection: TextSelection.collapsed(offset: start + char.length),
+    );
   }
 
   Future<void> _checkDraft() async {
@@ -1301,6 +1333,10 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           )
         : InputBorder.none;
 
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final showInputAccessory = showEmojiPicker ||
+        (contentFocusNode.hasFocus && keyboardVisible);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? '编辑帖子' : '发布帖子'),
@@ -1365,6 +1401,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           if (isImageMode) const SizedBox(height: 10),
           TextField(
             controller: contentController,
+            focusNode: contentFocusNode,
             minLines: isImageMode ? 5 : 12,
             maxLines: null,
             style: TextStyle(color: editorText),
@@ -1379,6 +1416,11 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               enabledBorder: editorBorder,
               focusedBorder: editorFocusedBorder,
             ),
+            onTap: () {
+              if (showEmojiPicker) {
+                setState(() => showEmojiPicker = false);
+              }
+            },
           ),
           const SizedBox(height: 12),
           const Text(
@@ -1547,6 +1589,37 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
           ),
         ],
       ),
+      bottomNavigationBar: showInputAccessory
+          ? SafeArea(
+              top: false,
+              child: Material(
+                color: AppColors.card(context),
+                elevation: 8,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 48,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: '表情',
+                            onPressed: _toggleEmojiPicker,
+                            icon: const Icon(Icons.emoji_emotions_outlined),
+                            color: showEmojiPicker
+                                ? Theme.of(context).colorScheme.primary
+                                : AppColors.textSecondary(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (showEmojiPicker)
+                      EmojiPicker(onEmojiSelected: _insertEmoji),
+                  ],
+                ),
+              ),
+            )
+          : null,
       backgroundColor: AppColors.scaffoldBg(context),
     );
   }

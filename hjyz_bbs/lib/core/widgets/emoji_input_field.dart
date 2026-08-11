@@ -47,6 +47,9 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
   @override
   Widget build(BuildContext context) {
     final text = widget.controller.text;
+    const inputStyle = TextStyle(fontSize: 15, height: 1.2);
+    final contentPadding = widget.decoration?.contentPadding ??
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
     return Stack(
       children: [
@@ -57,7 +60,7 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
           minLines: widget.minLines,
           maxLines: widget.maxLines,
           onTap: widget.onTap,
-          style: const TextStyle(color: Colors.transparent),
+          style: inputStyle.copyWith(color: Colors.transparent),
           cursorColor: Theme.of(context).colorScheme.primary,
           decoration: widget.decoration ??
               InputDecoration(
@@ -80,11 +83,8 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
         Positioned.fill(
           child: IgnorePointer(
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 13,
-                vertical: 9,
-              ),
-              child: _buildRichText(context, text),
+              padding: contentPadding,
+              child: _buildRichText(context, text, inputStyle),
             ),
           ),
         ),
@@ -92,7 +92,11 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
     );
   }
 
-  Widget _buildRichText(BuildContext context, String text) {
+  Widget _buildRichText(
+    BuildContext context,
+    String text,
+    TextStyle inputStyle,
+  ) {
     if (text.isEmpty) return const SizedBox.shrink();
 
     bool hasEmoji = false;
@@ -106,8 +110,7 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
     if (!hasEmoji) {
       return Text(
         text,
-        style: TextStyle(
-          fontSize: 15,
+        style: inputStyle.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
         ),
         maxLines: widget.maxLines,
@@ -131,8 +134,8 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
             alignment: PlaceholderAlignment.middle,
             child: Image.asset(
               emoji.assetPath,
-              width: 20,
-              height: 20,
+              width: 15,
+              height: 15,
               fit: BoxFit.contain,
             ),
           ));
@@ -150,8 +153,7 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
       maxLines: widget.maxLines,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(
-        style: TextStyle(
-          fontSize: 15,
+        style: inputStyle.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
         ),
         children: spans,

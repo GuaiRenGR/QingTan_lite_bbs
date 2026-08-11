@@ -86,6 +86,8 @@ class HomeController
             'summary' => $row['summary'],
             'content' => '',
             'cover' => $row['cover'],
+            'cover_width' => (int)($row['cover_width'] ?? 0),
+            'cover_height' => (int)($row['cover_height'] ?? 0),
             'sensitive_labels' => is_array(json_decode($row['sensitive_labels_json'] ?? '[]', true))
                 ? array_values(json_decode($row['sensitive_labels_json'], true))
                 : [],

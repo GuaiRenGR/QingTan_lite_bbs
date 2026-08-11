@@ -6,6 +6,8 @@ class ThreadModel {
   final String summary;
   final String content;
   final String cover;
+  final int coverWidth;
+  final int coverHeight;
   final int viewCount;
   final int replyCount;
   final int likeCount;
@@ -27,6 +29,8 @@ class ThreadModel {
     required this.summary,
     required this.content,
     required this.cover,
+    this.coverWidth = 0,
+    this.coverHeight = 0,
     required this.viewCount,
     required this.replyCount,
     required this.likeCount,
@@ -56,6 +60,8 @@ class ThreadModel {
       summary: _toString(json['summary']),
       content: _toString(json['content']),
       cover: _toString(json['cover']),
+      coverWidth: _toInt(json['cover_width']),
+      coverHeight: _toInt(json['cover_height']),
       viewCount: _toInt(json['view_count']),
       replyCount: _toInt(json['reply_count']),
       likeCount: _toInt(json['like_count']),
@@ -89,6 +95,8 @@ class ThreadModel {
       'title': title,
       'summary': summary,
       'cover': cover,
+      'cover_width': coverWidth,
+      'cover_height': coverHeight,
       'like_count': likeCount,
       'reply_count': replyCount,
       'favorite_count': favoriteCount,

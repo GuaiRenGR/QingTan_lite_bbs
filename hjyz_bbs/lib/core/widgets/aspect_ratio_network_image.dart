@@ -9,6 +9,7 @@ class AspectRatioNetworkImage extends StatefulWidget {
   final BoxFit fit;
   final Widget? placeholder;
   final Widget? errorWidget;
+  final double? aspectRatio;
 
   /// true = 展示整张图不裁剪（图片模式），false = 裁剪填充（推荐页卡片）
   final bool containMode;
@@ -21,6 +22,7 @@ class AspectRatioNetworkImage extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.placeholder,
     this.errorWidget,
+    this.aspectRatio,
     this.containMode = false,
   });
 
@@ -43,6 +45,7 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
   @override
   void initState() {
     super.initState();
+    _aspectRatio = _normalizedRatio(widget.aspectRatio);
     _resolve();
   }
 
@@ -50,13 +53,21 @@ class _AspectRatioNetworkImageState extends State<AspectRatioNetworkImage> {
   void didUpdateWidget(covariant AspectRatioNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.url != widget.url) {
+    if (oldWidget.url != widget.url ||
+        oldWidget.aspectRatio != widget.aspectRatio) {
       _removeListener();
       _provider = null;
-      _aspectRatio = null;
+      _aspectRatio = _normalizedRatio(widget.aspectRatio);
       _failed = false;
       _resolve();
     }
+  }
+
+  double? _normalizedRatio(double? ratio) {
+    if (ratio == null || !ratio.isFinite || ratio <= 0) return null;
+    return widget.containMode
+        ? ratio
+        : ratio.clamp(minRatio, maxRatio).toDouble();
   }
 
   void _resolve() {
