@@ -3,6 +3,7 @@
 define('FX_ROOT', __DIR__);
 require_once FX_ROOT . '/core/helpers.php';
 require_once FX_ROOT . '/core/Database.php';
+require_once FX_ROOT . '/core/OneDriveService.php';
 
 header('Content-Type: text/html; charset=utf-8');
 @set_time_limit(0);

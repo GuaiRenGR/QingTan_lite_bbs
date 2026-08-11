@@ -859,8 +859,52 @@ if (!function_exists('get_image_dimensions')) {
             return null;
         }
 
-        $resolvedUrl = normalize_forum_media_url($imageUrl);
-        $imageData = @file_get_contents($resolvedUrl);
+        $resolvedUrl = '';
+        if (preg_match('#^/index\.php\?route=file/resolve&id=(\d+)$#', $imageUrl, $matches)) {
+            $attachments = Database::table('attachments');
+            $attachment = Database::fetch(
+                "SELECT onedrive_item_id, file_url FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
+                [(int)$matches[1]]
+            );
+
+            if ($attachment && !empty($attachment['onedrive_item_id'])) {
+                try {
+                    $service = new OneDriveService();
+                    $resolvedUrl = $service->getFileUrl($attachment['onedrive_item_id']);
+                } catch (\Throwable $e) {
+                    log_error('[ImageDimensions] ' . $e->getMessage());
+                }
+            }
+
+            if ($resolvedUrl === '' && $attachment) {
+                $resolvedUrl = normalize_forum_media_url($attachment['file_url'] ?? '');
+            }
+        } else {
+            $resolvedUrl = normalize_forum_media_url($imageUrl);
+        }
+
+        if ($resolvedUrl === '') {
+            return null;
+        }
+
+        $imageData = false;
+        if (function_exists('curl_init')) {
+            $curl = curl_init($resolvedUrl);
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($curl, CURLOPT_TIMEOUT, 30);
+            $imageData = curl_exec($curl);
+            $statusCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            curl_close($curl);
+            if ($statusCode < 200 || $statusCode >= 300) {
+                $imageData = false;
+            }
+        }
+
+        if ($imageData === false) {
+            $imageData = @file_get_contents($resolvedUrl);
+        }
         if ($imageData === false) {
             return null;
         }
