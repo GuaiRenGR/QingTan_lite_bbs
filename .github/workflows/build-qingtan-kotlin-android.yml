@@ -1,0 +1,38 @@
+name: Build Qingtan Kotlin Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "qingtan_kotlin/**"
+      - ".github/workflows/build-qingtan-kotlin-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: qingtan_kotlin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --stacktrace
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingtan-kotlin-apk
+          path: qingtan_kotlin/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
