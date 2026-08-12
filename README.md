@@ -121,8 +121,12 @@ flutter build web --release
 ## 📈 Star 趋势
 
 <div align="center">
-  <a href="https://star-history.com/#GuaiRenGR/QingTan_lite_bbs&Date">
-    <img src="https://api.star-history.com/svg?repos=GuaiRenGR/QingTan_lite_bbs&type=Date" alt="轻坛 Star History 趋势图">
+  <a href="https://www.star-history.com/?type=date&repos=GuaiRenGR%2FQingTan_lite_bbs">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=GuaiRenGR/QingTan_lite_bbs&type=date&theme=dark&legend=top-left&sealed_token=87PhZgk-GAy0ZdBCbIMOYvZw7PIuAiIfAyqqj-K8-jJXXAHCp5FWpnasttnqnhBNmyV8MzPf0zXKupWcFB842FzBNgQBedZlKSZZEdmsNGFR8sG6cD3E8uu6yr6rLctKSrjepiVKTI7THmHERgL6kSoJqVlhtXwTYhURQhFojj5f3H9f7nw1BIhN7_Ow">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=GuaiRenGR/QingTan_lite_bbs&type=date&legend=top-left&sealed_token=87PhZgk-GAy0ZdBCbIMOYvZw7PIuAiIfAyqqj-K8-jJXXAHCp5FWpnasttnqnhBNmyV8MzPf0zXKupWcFB842FzBNgQBedZlKSZZEdmsNGFR8sG6cD3E8uu6yr6rLctKSrjepiVKTI7THmHERgL6kSoJqVlhtXwTYhURQhFojj5f3H9f7nw1BIhN7_Ow">
+      <img alt="轻坛 Star History 趋势图" src="https://api.star-history.com/chart?repos=GuaiRenGR/QingTan_lite_bbs&type=date&legend=top-left&sealed_token=87PhZgk-GAy0ZdBCbIMOYvZw7PIuAiIfAyqqj-K8-jJXXAHCp5FWpnasttnqnhBNmyV8MzPf0zXKupWcFB842FzBNgQBedZlKSZZEdmsNGFR8sG6cD3E8uu6yr6rLctKSrjepiVKTI7THmHERgL6kSoJqVlhtXwTYhURQhFojj5f3H9f7nw1BIhN7_Ow">
+    </picture>
   </a>
 </div>
 
