@@ -81,6 +81,7 @@ class ThreadCreateController
 
         $summarySource = preg_replace('/\[markdown\]([\s\S]*?)\[\/markdown\]/i', '$1', $content);
         $summarySource = preg_replace('/\[img=https?:\/\/[^\]\s]+\]/i', '', $summarySource);
+        $summarySource = preg_replace('/\[chatlog=\d+\]/i', '', $summarySource);
         $summary = make_summary($summarySource, 120);
 
         // 确定帖子可见性

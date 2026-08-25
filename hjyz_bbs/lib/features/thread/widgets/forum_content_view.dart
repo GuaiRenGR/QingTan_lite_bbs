@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -18,6 +19,7 @@ import '../../../core/widgets/safe_network_image.dart';
 import '../../../core/widgets/sensitive_media.dart';
 import '../../music/music_player_controller.dart';
 import 'forum_video_player.dart';
+import '../chat_log_model.dart';
 
 class ForumContentView extends StatelessWidget {
   final String content;
@@ -245,6 +247,12 @@ class ForumContentView extends StatelessWidget {
 
       case _ContentPartType.attachment:
         return _AttachmentCard(attachmentId: part.value);
+
+      case _ContentPartType.chatlog:
+        return _ChatLogCard(
+          attachmentId: part.value,
+          sensitiveLabels: sensitiveLabels,
+        );
     }
   }
 
@@ -346,7 +354,8 @@ class ForumContentView extends StatelessWidget {
       r'|(\[thread=([^\]\s]+)\])'
       r'|(\[hide\]([\s\S]*?)\[\/hide\])'
       r'|(\[url=(https?:\/\/[^\]\s]+)\]([\s\S]*?)\[\/url\])'
-      r'|(\[attach=(\d+)\])',
+      r'|(\[attach=(\d+)\])'
+      r'|(\[chatlog=(\d+)\])',
       caseSensitive: false,
     );
 
@@ -376,6 +385,7 @@ class ForumContentView extends StatelessWidget {
       final linkUrl = match.group(14);
       final linkText = match.group(15);
       final attachment = match.group(17);
+      final chatlog = match.group(19);
 
       if (markdown != null) {
         result.add(
@@ -457,6 +467,13 @@ class ForumContentView extends StatelessWidget {
             value: attachment.trim(),
           ),
         );
+      } else if (chatlog != null) {
+        result.add(
+          _ContentPart(
+            type: _ContentPartType.chatlog,
+            value: chatlog.trim(),
+          ),
+        );
       }
 
       last = match.end;
@@ -488,6 +505,7 @@ enum _ContentPartType {
   link,
   hidden,
   attachment,
+  chatlog,
 }
 
 class _ContentPart {
@@ -502,6 +520,322 @@ class _ContentPart {
     this.extra,
     this.identifier,
   });
+}
+
+class _ChatLogCard extends StatefulWidget {
+  final String attachmentId;
+  final List<String> sensitiveLabels;
+
+  const _ChatLogCard({
+    required this.attachmentId,
+    required this.sensitiveLabels,
+  });
+
+  @override
+  State<_ChatLogCard> createState() => _ChatLogCardState();
+}
+
+class _ChatLogCardState extends State<_ChatLogCard> {
+  late Future<ChatLogDocument> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<ChatLogDocument> _load() async {
+    final id = int.tryParse(widget.attachmentId) ?? 0;
+    if (id <= 0) throw const FormatException('聊天记录附件无效');
+    final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
+    final url = '${apiBase}index.php?route=file/resolve&id=$id';
+    final response = await ApiClient.instance.rawGet(url);
+    if (response.statusCode != null && response.statusCode! >= 400) {
+      throw const FormatException('聊天记录文件读取失败');
+    }
+    final bytes = response.data ?? const <int>[];
+    return ChatLogDocument.fromJsonString(utf8.decode(bytes));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ChatLogDocument>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        final document = snapshot.data;
+        if (document == null) {
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.forum_outlined),
+              title: const Text('聊天记录加载失败'),
+              subtitle: Text(snapshot.error?.toString() ?? '文件不可用'),
+              trailing: IconButton(
+                onPressed: () => setState(() => _future = _load()),
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          );
+        }
+        return _CollapsedChatLogView(
+          document: document,
+          depth: 0,
+          sensitiveLabels: widget.sensitiveLabels,
+        );
+      },
+    );
+  }
+}
+
+class _ChatLogView extends StatelessWidget {
+  final ChatLogDocument document;
+  final int depth;
+  final List<String> sensitiveLabels;
+
+  const _ChatLogView({
+    required this.document,
+    required this.depth,
+    required this.sensitiveLabels,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final background = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF1D2025)
+        : const Color(0xFFF3F5F7);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.forum_outlined, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  document.title.isEmpty ? '聊天记录' : document.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text('${document.messages.length} 条', style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          const Divider(height: 16),
+          for (final message in document.messages)
+            _ChatLogMessageView(
+              message: message,
+              depth: depth,
+              sensitiveLabels: sensitiveLabels,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollapsedChatLogView extends StatefulWidget {
+  final ChatLogDocument document;
+  final int depth;
+  final List<String> sensitiveLabels;
+
+  const _CollapsedChatLogView({
+    required this.document,
+    required this.depth,
+    required this.sensitiveLabels,
+  });
+
+  @override
+  State<_CollapsedChatLogView> createState() => _CollapsedChatLogViewState();
+}
+
+class _CollapsedChatLogViewState extends State<_CollapsedChatLogView> {
+  bool _expanded = false;
+
+  String _previewText(ChatLogMessage message) {
+    switch (message.type) {
+      case ChatLogMessageType.text:
+        return message.content.trim();
+      case ChatLogMessageType.image:
+        return '[图片]';
+      case ChatLogMessageType.quote:
+        return '[引用]';
+      case ChatLogMessageType.chatlog:
+        return '[聊天记录]';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final border = dark ? const Color(0xFF61434F) : const Color(0xFFF2D8E2);
+    final background = dark ? const Color(0xFF30252B) : const Color(0xFFFFF7FA);
+    final secondary = dark ? const Color(0xFFD4BFC8) : const Color(0xFF987A86);
+
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 7),
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 9),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border),
+        ),
+        child: _expanded
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ChatLogView(
+                    document: widget.document,
+                    depth: widget.depth,
+                    sensitiveLabels: widget.sensitiveLabels,
+                  ),
+                  Text('收起聊天记录', style: TextStyle(fontSize: 13, color: secondary)),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _title(),
+                  const SizedBox(height: 5),
+                  for (final message in widget.document.messages.take(4))
+                    Text(
+                      '${message.nickname}: ${_previewText(message)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: secondary),
+                    ),
+                  const SizedBox(height: 8),
+                  Divider(height: 1, color: border),
+                  const SizedBox(height: 7),
+                  Text(
+                    '查看${widget.document.messages.length}条转发消息',
+                    style: TextStyle(fontSize: 13, color: secondary),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _title() {
+    return Text(
+      widget.document.title.isEmpty ? '聊天记录' : widget.document.title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _ChatLogMessageView extends StatelessWidget {
+  final ChatLogMessage message;
+  final int depth;
+  final List<String> sensitiveLabels;
+
+  const _ChatLogMessageView({
+    required this.message,
+    required this.depth,
+    required this.sensitiveLabels,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bubbleColor = isDark ? const Color(0xFF2A2F36) : Colors.white;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            child: Text(message.nickname.isEmpty ? '?' : message.nickname[0]),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${message.nickname} · ${message.sender}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _messageBody(context),
+                ),
+                if (message.time.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(message.time, style: const TextStyle(fontSize: 11)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _messageBody(BuildContext context) {
+    switch (message.type) {
+      case ChatLogMessageType.text:
+        return Text(message.content);
+      case ChatLogMessageType.image:
+        return SensitiveMedia(
+          labels: sensitiveLabels,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SafeNetworkImage(
+              url: ApiClient.instance.resolveUrl(message.imageUrl),
+              width: 220,
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      case ChatLogMessageType.quote:
+        final quote = message.quote;
+        return Container(
+          padding: const EdgeInsets.only(left: 8),
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: AppColors.border(context), width: 3)),
+          ),
+          child: Text(
+            quote == null
+                ? message.content
+                : '${quote.nickname} · ${quote.sender}\n${quote.content}',
+          ),
+        );
+      case ChatLogMessageType.chatlog:
+        final nested = message.chatlog;
+        if (nested == null || depth >= chatLogMaxDepth) {
+          return const Text('嵌套聊天记录不可用');
+        }
+        return _CollapsedChatLogView(
+          document: nested,
+          depth: depth + 1,
+          sensitiveLabels: sensitiveLabels,
+        );
+    }
+  }
 }
 
 class _InlineThreadCard extends StatefulWidget {

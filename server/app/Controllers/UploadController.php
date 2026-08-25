@@ -13,7 +13,7 @@ class UploadController
             $type = 'image';
         }
         $type = trim($type);
-        if (!in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment'], true)) {
+        if (!in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
             $type = 'image';
         }
 
@@ -41,6 +41,10 @@ class UploadController
             }
         } elseif ($type === 'attachment') {
             // 管理员上传附件不限制大小
+        } elseif ($type === 'chatlog') {
+            if ($size > 4 * 1024 * 1024) {
+                \Response::json(422, '聊天记录文件不能超过 4MB');
+            }
         } elseif ($type === 'lyrics') {
             if ($size > 2 * 1024 * 1024) {
                 \Response::json(422, '歌词文件不能超过 2MB');
@@ -55,6 +59,23 @@ class UploadController
         $originalName = $file['name'];
 
         $mime = self::detectMime($tmp, $originalName);
+
+        if ($type === 'chatlog') {
+            if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'json') {
+                \Response::json(422, '聊天记录文件扩展名必须为 .json');
+            }
+            if (!in_array($mime, ['application/json', 'text/plain', 'application/octet-stream'], true)) {
+                \Response::json(422, '聊天记录必须是 JSON 文件');
+            }
+            $document = json_decode((string)file_get_contents($tmp), true);
+            if (!is_array($document) || json_last_error() !== JSON_ERROR_NONE) {
+                \Response::json(422, '聊天记录 JSON 格式错误');
+            }
+            $chatLogError = self::validateChatLog($document);
+            if ($chatLogError !== null) {
+                \Response::json(422, $chatLogError);
+            }
+        }
 
         if ($type === 'image') {
             if (!in_array($mime, [
@@ -107,7 +128,7 @@ class UploadController
                 ? 'images'
                 : ($type === 'video'
                     ? 'video'
-                    : ($type === 'attachment' ? 'attachments' : 'music'));
+                    : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
 
             $result = $service->upload(
                 $tmp,
@@ -224,8 +245,55 @@ class UploadController
             'mov'  => 'video/quicktime',
             'avi'  => 'video/x-msvideo',
             'mkv'  => 'video/x-matroska',
+            'json' => 'application/json',
         ];
 
         return $map[$ext] ?? 'application/octet-stream';
+    }
+
+    private static function validateChatLog($document, $depth = 0)
+    {
+        if ($depth > 2) {
+            return '聊天记录最多嵌套两层';
+        }
+        if (($document['schema'] ?? '') !== 'qingtan.chatlog' || (int)($document['version'] ?? 0) !== 1) {
+            return '不支持的聊天记录格式';
+        }
+        if (!isset($document['messages']) || !is_array($document['messages'])) {
+            return '聊天记录缺少消息列表';
+        }
+        if (count($document['messages']) > 100) {
+            return '一条聊天记录最多包含100条消息';
+        }
+
+        foreach ($document['messages'] as $message) {
+            if (!is_array($message)) {
+                return '聊天记录消息格式错误';
+            }
+            $type = (string)($message['type'] ?? '');
+            if (!in_array($type, ['text', 'image', 'quote', 'chatlog'], true)) {
+                return '聊天记录包含未知消息类型';
+            }
+            if (trim((string)($message['nickname'] ?? '')) === '' || trim((string)($message['sender'] ?? '')) === '') {
+                return '聊天记录消息缺少昵称或发送人';
+            }
+            if ($type === 'image' && trim((string)($message['image_url'] ?? '')) === '') {
+                return '图片消息缺少图片地址';
+            }
+            if ($type === 'quote' && !is_array($message['quote'] ?? null)) {
+                return '引用消息缺少引用内容';
+            }
+            if ($type === 'chatlog') {
+                if ($depth >= 2 || !is_array($message['chatlog'] ?? null)) {
+                    return '聊天记录最多嵌套两层';
+                }
+                $nestedError = self::validateChatLog($message['chatlog'], $depth + 1);
+                if ($nestedError !== null) {
+                    return $nestedError;
+                }
+            }
+        }
+
+        return null;
     }
 }

@@ -15,6 +15,7 @@ class ThreadManageController
         $forumId = \Request::int('forum_id', 0);
         $tagNames = \Request::input('tags', []);
         $sensitiveLabels = \Request::input('sensitive_labels', []);
+        $attachmentIds = parse_json_array_input(\Request::input('attachment_ids', []));
 
         if ($threadId <= 0) {
             \Response::json(422, '帖子 ID 错误');
@@ -107,7 +108,8 @@ class ThreadManageController
             }
         }
 
-        $summary = make_summary($content);
+        $summarySource = preg_replace('/\[chatlog=\d+\]/i', '', $content);
+        $summary = make_summary($summarySource);
 
         \Database::execute(
             "UPDATE {$threads}
@@ -138,6 +140,20 @@ class ThreadManageController
                 $threadId,
             ]
         );
+
+        if (!empty($attachmentIds)) {
+            $ids = array_values(array_filter(array_map('intval', $attachmentIds)));
+            if (!empty($ids)) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $attachments = \Database::table('attachments');
+                \Database::execute(
+                    "UPDATE {$attachments}
+                     SET object_type = 'thread', object_id = ?
+                     WHERE user_id = ? AND id IN ({$placeholders})",
+                    array_merge([$threadId, $user['id']], $ids)
+                );
+            }
+        }
 
         sync_thread_tags($threadId, $tagNames);
 

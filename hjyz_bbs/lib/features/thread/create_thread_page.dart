@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/config/app_config.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
@@ -17,6 +18,8 @@ import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/safe_network_image.dart';
 import '../../core/widgets/sensitive_media.dart';
 import '../auth/auth_controller.dart';
+import 'chat_log_editor_page.dart';
+import 'chat_log_model.dart';
 import 'widgets/forum_content_view.dart';
 
 class CreateThreadPage extends ConsumerStatefulWidget {
@@ -783,6 +786,121 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
     );
   }
 
+  Future<void> _createChatLog() async {
+    final document = await Navigator.of(context).push<ChatLogDocument>(
+      MaterialPageRoute(builder: (_) => const ChatLogEditorPage()),
+    );
+    if (document == null || !mounted) return;
+
+    final tempFile = File(
+      '${Directory.systemTemp.path}/qingtan_chatlog_${DateTime.now().microsecondsSinceEpoch}.json',
+    );
+    try {
+      await tempFile.writeAsString(document.toJsonString(), flush: true);
+      final result = await ApiClient.instance.uploadFile(
+        'upload/media',
+        file: tempFile,
+        fields: const {'type': 'chatlog'},
+      );
+      if (!mounted) return;
+      if (!result.success || result.data is! Map) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+        return;
+      }
+      final id = _toInt((result.data as Map)['id']);
+      if (id <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('聊天记录上传后没有返回附件ID')),
+        );
+        return;
+      }
+      attachmentIds.add(id);
+      attachmentIds.addAll(document.attachmentIds);
+      final selection = contentController.selection;
+      final oldText = contentController.text;
+      final start = selection.start < 0 ? oldText.length : selection.start;
+      final end = selection.end < 0 ? oldText.length : selection.end;
+      const suffix = '\n';
+      final tag = '[chatlog=$id]';
+      contentController.text = oldText.replaceRange(start, end, '$tag$suffix');
+      contentController.selection = TextSelection.fromPosition(
+        TextPosition(offset: start + tag.length + suffix.length),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('聊天记录已上传并插入正文')),
+      );
+    } finally {
+      if (await tempFile.exists()) await tempFile.delete();
+    }
+  }
+
+  Future<void> _editExistingChatLog() async {
+    final match = RegExp(r'\[chatlog=(\d+)\]').firstMatch(contentController.text);
+    final id = match == null ? 0 : int.tryParse(match.group(1) ?? '') ?? 0;
+    if (id <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前正文没有可编辑的聊天记录')),
+      );
+      return;
+    }
+
+    try {
+      final apiBase = AppConfig.apiEntry.replaceAll('index.php', '');
+      final response = await ApiClient.instance.rawGet(
+        '${apiBase}index.php?route=file/resolve&id=$id',
+      );
+      final document = ChatLogDocument.fromJsonString(
+        utf8.decode(response.data ?? const <int>[]),
+      );
+      if (!mounted) return;
+      final edited = await Navigator.of(context).push<ChatLogDocument>(
+        MaterialPageRoute(
+          builder: (_) => ChatLogEditorPage(initialDocument: document),
+        ),
+      );
+      if (edited == null || !mounted) return;
+
+      final tempFile = File(
+        '${Directory.systemTemp.path}/qingtan_chatlog_${DateTime.now().microsecondsSinceEpoch}.json',
+      );
+      try {
+        await tempFile.writeAsString(edited.toJsonString(), flush: true);
+        final result = await ApiClient.instance.uploadFile(
+          'upload/media',
+          file: tempFile,
+          fields: const {'type': 'chatlog'},
+        );
+        if (!mounted) return;
+        if (!result.success || result.data is! Map) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message)),
+          );
+          return;
+        }
+        final newId = _toInt((result.data as Map)['id']);
+        if (newId <= 0) throw const FormatException('聊天记录上传失败');
+        attachmentIds.add(newId);
+        attachmentIds.addAll(edited.attachmentIds);
+        contentController.text = contentController.text.replaceFirst(
+          '[chatlog=$id]',
+          '[chatlog=$newId]',
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('聊天记录已更新')),
+        );
+      } finally {
+        if (await tempFile.exists()) await tempFile.delete();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('聊天记录读取失败：$error')),
+      );
+    }
+  }
+
   void _insertHideBlock() {
     final selection = contentController.selection;
     final text = contentController.text;
@@ -1515,6 +1633,16 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
                 icon: Icons.library_music_outlined,
                 text: '插入音乐',
                 onTap: _pickExistingMusic,
+              ),
+              _ToolButton(
+                icon: Icons.forum_outlined,
+                text: '新建聊天记录',
+                onTap: _createChatLog,
+              ),
+              _ToolButton(
+                icon: Icons.edit_note_rounded,
+                text: '编辑聊天记录',
+                onTap: _editExistingChatLog,
               ),
               if (_isAdmin)
                 _ToolButton(
