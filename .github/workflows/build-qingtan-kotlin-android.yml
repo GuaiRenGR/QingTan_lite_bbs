@@ -2,10 +2,6 @@ name: Build Qingtan Kotlin Android
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "qingtan_kotlin/**"
-      - ".github/workflows/build-qingtan-kotlin-android.yml"
 
 permissions:
   contents: read

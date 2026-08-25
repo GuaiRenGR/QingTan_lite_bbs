@@ -2,9 +2,6 @@ name: Build QingTan Music Android
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "music-v*"
 
 env:
   PROJECT_DIR: qingtan_music
