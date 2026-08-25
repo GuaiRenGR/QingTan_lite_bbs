@@ -18,6 +18,7 @@ import '../../../core/widgets/image_viewer.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../../core/widgets/sensitive_media.dart';
 import '../../music/music_player_controller.dart';
+import '../chat_log_page.dart';
 import 'forum_video_player.dart';
 import '../chat_log_model.dart';
 
@@ -684,7 +685,14 @@ class _CollapsedChatLogViewState extends State<_CollapsedChatLogView> {
     final secondary = dark ? const Color(0xFFD4BFC8) : const Color(0xFF987A86);
 
     return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatLogPage(
+            document: widget.document,
+            sensitiveLabels: widget.sensitiveLabels,
+          ),
+        ),
+      ),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 7),
         padding: const EdgeInsets.fromLTRB(12, 11, 12, 9),
