@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/PHP-7.4%2B-777BB4?logo=php&logoColor=white" alt="PHP 7.4 or later">
   </p>
 <p align="center">
-    <img src="https://img.shields.io/badge/Version-1.2.4%2B30-00A98F" alt="Version 1.2.4+30">
+    <img src="https://img.shields.io/badge/Version-1.2.5%2B31-00A98F" alt="Version 1.2.5+31">
     <a href="https://github.com/GuaiRenGR/QingTan_lite_bbs/actions/workflows/main.yml"><img src="https://github.com/GuaiRenGR/QingTan_lite_bbs/actions/workflows/main.yml/badge.svg" alt="Build status"></a>
     <a href="https://github.com/GuaiRenGR/QingTan_lite_bbs/releases"><img src="https://img.shields.io/github/v/release/GuaiRenGR/QingTan_lite_bbs?display_name=tag&sort=semver" alt="Latest release"></a>
     <a href="https://github.com/GuaiRenGR/QingTan_lite_bbs/stargazers"><img src="https://img.shields.io/github/stars/GuaiRenGR/QingTan_lite_bbs?style=flat" alt="GitHub Stars"></a>
