@@ -100,6 +100,9 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
 
   Future<void> _initNotifications() async {
     await NotificationService().initialize();
+    // Check once at startup even when auth restoration completed before the
+    // first frame and therefore did not trigger the auth listener transition.
+    await NotificationService().checkNow();
     _checkAuthAndPoll();
   }
 
@@ -109,6 +112,9 @@ class _ForumXAppState extends ConsumerState<ForumXApp>
 
     if (isLoggedIn && !_wasLoggedIn) {
       // 刚登录，启动轮询
+      NotificationService().startPolling();
+    } else if (isLoggedIn) {
+      NotificationService().checkNow();
       NotificationService().startPolling();
     } else if (!isLoggedIn && _wasLoggedIn) {
       // 刚退出登录，停止轮询

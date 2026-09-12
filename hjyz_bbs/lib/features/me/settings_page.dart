@@ -26,6 +26,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool showImagesOnMobile = true;
   bool compactTextOnlyPosts = false;
+  bool xMode = false;
   bool nativeNotifications = true;
   bool autoCheckUpdate = true;
   bool useHttps = true;
@@ -78,6 +79,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       setState(() {
         showImagesOnMobile = prefs.getBool('show_images_on_mobile') ?? true;
         compactTextOnlyPosts = FeedDisplayService.compactTextOnlyPosts.value;
+        xMode = FeedDisplayService.xMode.value;
         nativeNotifications = prefs.getBool('native_notifications') ?? true;
         useHttps = prefs.getBool('use_https') ?? true;
         sensitiveContentMode = SensitiveContentService.mode.value;
@@ -219,6 +221,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _Section(
             title: '浏览设置',
             children: [
+              ListTile(
+                leading: const Icon(Icons.view_stream_outlined),
+                title: const Text('首页模式'),
+                subtitle: const Text('切换默认论坛信息流或 X 信息流布局'),
+                trailing: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('默认')),
+                    ButtonSegment(value: true, label: Text('X')),
+                  ],
+                  selected: {xMode},
+                  onSelectionChanged: (selection) {
+                    final value = selection.first;
+                    setState(() => xMode = value);
+                    FeedDisplayService.setXMode(value);
+                  },
+                ),
+              ),
               SwitchListTile(
                 secondary: const Icon(Icons.image_outlined),
                 title: const Text('移动网络下显示图片'),

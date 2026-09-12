@@ -10,7 +10,9 @@ import '../../core/widgets/sensitive_media.dart';
 import '../auth/auth_controller.dart';
 
 class XFeedPage extends ConsumerStatefulWidget {
-  const XFeedPage({super.key});
+  final bool adminOnly;
+
+  const XFeedPage({super.key, this.adminOnly = true});
 
   @override
   ConsumerState<XFeedPage> createState() => _XFeedPageState();
@@ -75,7 +77,7 @@ class _XFeedPageState extends ConsumerState<XFeedPage> {
   }
 
   Future<void> _refresh() async {
-    if (!_isAdmin) return;
+    if (widget.adminOnly && !_isAdmin) return;
     setState(() {
       loading = items.isEmpty;
       error = null;
@@ -94,7 +96,7 @@ class _XFeedPageState extends ConsumerState<XFeedPage> {
   }
 
   Future<void> _loadMore() async {
-    if (!_isAdmin || loading || loadingMore || !hasMore) return;
+    if ((widget.adminOnly && !_isAdmin) || loading || loadingMore || !hasMore) return;
     setState(() => loadingMore = true);
     final nextPage = page + 1;
     final loaded = await _fetch(nextPage);
@@ -129,7 +131,7 @@ class _XFeedPageState extends ConsumerState<XFeedPage> {
     if (auth.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!isAdmin) {
+    if (widget.adminOnly && !isAdmin) {
       return const Scaffold(
         body: Center(child: Text('该页面仅对管理员开放')),
       );

@@ -30,6 +30,7 @@ import 'features/admin/admin_threads_page.dart';
 import 'features/admin/admin_files_page.dart';
 import 'features/admin/admin_sponsors_page.dart';
 import 'features/download/download_page.dart';
+import 'features/discover/discover_page.dart';
 import 'features/user/user_home_page.dart';
 
 final router = GoRouter(
@@ -121,6 +122,7 @@ final router = GoRouter(
     ),
     GoRoute(path: '/admin/x-feed', builder: (_, _) => const XFeedPage()),
     GoRoute(path: '/downloads', builder: (_, _) => const DownloadPage()),
+    GoRoute(path: '/tools', builder: (_, _) => const DiscoverPage()),
     GoRoute(path: '/music-player', builder: (_, _) => const MusicPlayerPage()),
     GoRoute(
       path: '/music-playlist',

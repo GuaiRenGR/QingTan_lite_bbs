@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -167,6 +168,12 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         unawaited(_handleCompletion());
       }
     });
+    _currentIndexSub = _player.currentIndexStream.listen((index) {
+      if (!mounted || index == null || index < 0 || index >= state.playlist.length) return;
+      final track = state.playlist[index];
+      _loadedUrl = track.url;
+      state = state.copyWith(currentIndex: index, duration: _player.duration ?? state.duration);
+    });
     _storageQueue = _restorePlaylist();
   }
 
@@ -177,6 +184,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   StreamSubscription<Duration>? _bufferedPositionSub;
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<int?>? _currentIndexSub;
   String? _loadedUrl;
   Duration _furthestBufferedPosition = Duration.zero;
   bool _handlingCompletion = false;
@@ -390,27 +398,21 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       );
       _schedulePersist();
       final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
-      final mediaItem = MediaItem(
-        id: track.uuid?.trim().isNotEmpty == true ? track.uuid!.trim() : track.url,
-        title: track.title,
-        artist: track.artist,
-        artUri: track.coverUrl == null ? null : Uri.tryParse(track.coverUrl!),
-      );
-      if (cachedFile == null) {
-        final streamCacheFile = await MusicCacheService.instance
-            .getPersistentStreamCacheFile(track.url);
-        await _player.setAudioSource(
-          LockCachingAudioSource(
-            Uri.parse(track.url),
-            cacheFile: streamCacheFile,
-            tag: mediaItem,
-          ),
-        );
-      } else {
-        await _player.setAudioSource(
-          AudioSource.uri(Uri.file(cachedFile.path), tag: mediaItem),
-        );
+      final source = await _sourceForTrack(track, cachedFile: cachedFile);
+      final sources = <AudioSource>[];
+      for (final item in state.playlist) {
+        final itemCached = item.url == track.url ? cachedFile : await MusicCacheService.instance.getCachedAudio(item.url);
+        sources.add(await _sourceForTrack(item, cachedFile: itemCached));
       }
+      // A queue is required for Android's media session to expose previous and
+      // next actions. Keep the current source in the queue even for a one-item
+      // playlist; Windows uses a direct URI instead of LockCachingAudioSource.
+      if (sources.isEmpty) sources.add(source);
+      await _player.setAudioSource(
+        ConcatenatingAudioSource(children: sources),
+        initialIndex: index,
+      );
+      await _player.setLoopMode(LoopMode.all);
       _loadedUrl = track.url;
       _furthestBufferedPosition = _player.bufferedPosition;
       if (mounted) {
@@ -434,6 +436,34 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         );
       }
     }
+  }
+
+  Future<AudioSource> _sourceForTrack(
+    MusicTrack track, {
+    required File? cachedFile,
+  }) async {
+    final mediaItem = MediaItem(
+      id: track.uuid?.trim().isNotEmpty == true ? track.uuid!.trim() : track.url,
+      title: track.title,
+      artist: track.artist,
+      artUri: track.coverUrl == null ? null : Uri.tryParse(track.coverUrl!),
+    );
+    if (cachedFile != null) {
+      return AudioSource.uri(Uri.file(cachedFile.path), tag: mediaItem);
+    }
+    final resolvedUrl = MusicCacheService.instance.resolveUrl(track.url);
+    if (Platform.isWindows) {
+      // LockCachingAudioSource can remain in loading state on Windows when the
+      // server does not support range requests. Let the native player stream it.
+      return AudioSource.uri(Uri.parse(resolvedUrl), tag: mediaItem);
+    }
+    final streamCacheFile = await MusicCacheService.instance
+        .getPersistentStreamCacheFile(track.url);
+    return LockCachingAudioSource(
+      Uri.parse(resolvedUrl),
+      cacheFile: streamCacheFile,
+      tag: mediaItem,
+    );
   }
 
   void _preloadUpcoming(int currentIndex) {
@@ -536,6 +566,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     _bufferedPositionSub?.cancel();
     _durationSub?.cancel();
     _playerStateSub?.cancel();
+    _currentIndexSub?.cancel();
     _player.dispose();
     super.dispose();
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/feed_display_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/theme_color_service.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -232,6 +233,13 @@ class MePage extends ConsumerWidget {
         color: const Color(0xFF66BB6A),
         onTap: () => context.push('/user/$userId'),
       ),
+      if (FeedDisplayService.xMode.value)
+        _MeAction(
+          icon: Icons.build_outlined,
+          label: '工具',
+          color: const Color(0xFF00897B),
+          onTap: () => context.push('/tools'),
+        ),
       if (groupId >= 50)
         _MeAction(
           icon: Icons.fact_check_outlined,
