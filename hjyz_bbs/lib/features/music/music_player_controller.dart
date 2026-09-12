@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:media_kit/media_kit.dart' as media_kit;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/music_cache_service.dart';
@@ -134,6 +135,27 @@ class MusicPlayerState {
 
 class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   MusicPlayerController() : super(const MusicPlayerState()) {
+    if (Platform.isWindows) {
+      _windowsPlayer = media_kit.Player();
+      _windowsPositionSub = _windowsPlayer!.stream.position.listen((position) {
+        if (mounted && _loadedUrl != null) state = state.copyWith(position: position);
+      });
+      _windowsDurationSub = _windowsPlayer!.stream.duration.listen((duration) {
+        if (mounted && _loadedUrl != null) state = state.copyWith(duration: duration);
+      });
+      _windowsBufferingSub = _windowsPlayer!.stream.buffering.listen((buffering) {
+        if (mounted && _loadedUrl != null) state = state.copyWith(loading: buffering);
+      });
+      _windowsPlayingSub = _windowsPlayer!.stream.playing.listen((playing) {
+        if (mounted && _loadedUrl != null) state = state.copyWith(playing: playing);
+      });
+      _windowsCompletedSub = _windowsPlayer!.stream.completed.listen((completed) {
+        if (completed && mounted && _loadedUrl != null && !_handlingCompletion) {
+          _handlingCompletion = true;
+          unawaited(_handleCompletion());
+        }
+      });
+    }
     _positionSub = _player.positionStream.listen((position) {
       if (mounted && _loadedUrl != null) {
         state = state.copyWith(position: position);
@@ -180,6 +202,12 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   static const _playlistStorageKey = 'music_player_playlist_v1';
 
   final AudioPlayer _player = AudioPlayer();
+  media_kit.Player? _windowsPlayer;
+  StreamSubscription<Duration>? _windowsPositionSub;
+  StreamSubscription<Duration>? _windowsDurationSub;
+  StreamSubscription<bool>? _windowsBufferingSub;
+  StreamSubscription<bool>? _windowsPlayingSub;
+  StreamSubscription<bool>? _windowsCompletedSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration>? _bufferedPositionSub;
   StreamSubscription<Duration?>? _durationSub;
@@ -269,7 +297,11 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     }
     if (unique.isEmpty) return;
 
-    await _player.stop();
+    if (Platform.isWindows) {
+      await _windowsPlayer?.stop();
+    } else {
+      await _player.stop();
+    }
     _loadedUrl = null;
     state = MusicPlayerState(
       playlist: List.unmodifiable(unique),
@@ -313,11 +345,19 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   }
 
   Future<void> pause() async {
+    if (Platform.isWindows) {
+      await _windowsPlayer?.pause();
+      return;
+    }
     await _player.pause();
   }
 
   Future<void> seek(Duration position) async {
     if (mounted) state = state.copyWith(position: position);
+    if (Platform.isWindows) {
+      await _windowsPlayer?.seek(position);
+      return;
+    }
     await _player.seek(position);
   }
 
@@ -346,7 +386,11 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
     if (index == state.currentIndex) {
       final autoplay = state.playing;
-      await _player.stop();
+      if (Platform.isWindows) {
+        await _windowsPlayer?.stop();
+      } else {
+        await _player.stop();
+      }
       _loadedUrl = null;
       final nextIndex = index >= tracks.length ? tracks.length - 1 : index;
       state = state.copyWith(
@@ -373,7 +417,11 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   }
 
   Future<void> clearPlaylist() async {
-    await _player.stop();
+    if (Platform.isWindows) {
+      await _windowsPlayer?.stop();
+    } else {
+      await _player.stop();
+    }
     _loadedUrl = null;
     state = const MusicPlayerState();
     _schedulePersist();
@@ -384,7 +432,11 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
     final track = state.playlist[index];
     try {
-      await _player.pause();
+      if (Platform.isWindows) {
+        await _windowsPlayer?.pause();
+      } else {
+        await _player.pause();
+      }
       _loadedUrl = null;
       _furthestBufferedPosition = Duration.zero;
       state = state.copyWith(
@@ -397,6 +449,10 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         clearError: true,
       );
       _schedulePersist();
+      if (Platform.isWindows) {
+        await _loadWindowsTrack(track, index: index, autoplay: autoplay);
+        return;
+      }
       final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
       final source = await _sourceForTrack(track, cachedFile: cachedFile);
       final sources = <AudioSource>[];
@@ -436,6 +492,36 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         );
       }
     }
+  }
+
+  Future<void> _loadWindowsTrack(
+    MusicTrack track, {
+    required int index,
+    required bool autoplay,
+  }) async {
+    final player = _windowsPlayer;
+    if (player == null) throw StateError('Windows 音频播放器未初始化');
+
+    final cachedFile = await MusicCacheService.instance.getCachedAudio(track.url);
+    final mediaPath = cachedFile == null
+        ? MusicCacheService.instance.resolveUrl(track.url)
+        : Uri.file(cachedFile.path).toString();
+    if (mediaPath.isEmpty) throw StateError('音乐地址为空');
+
+    await player.open(media_kit.Media(mediaPath), play: false);
+    _loadedUrl = track.url;
+    if (mounted) {
+      state = state.copyWith(
+        currentIndex: index,
+        loading: false,
+        playing: false,
+        position: player.state.position,
+        duration: player.state.duration,
+        clearError: true,
+      );
+    }
+    if (autoplay) _startPlayback();
+    _preloadUpcoming(index);
   }
 
   Future<AudioSource> _sourceForTrack(
@@ -482,6 +568,16 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   }
 
   void _startPlayback() {
+    if (Platform.isWindows) {
+      unawaited(
+        _windowsPlayer?.play().catchError((_) {
+          if (mounted) {
+            state = state.copyWith(error: '音乐播放失败', loading: false);
+          }
+        }) ?? Future<void>.value(),
+      );
+      return;
+    }
     unawaited(
       _player.play().catchError((_) {
         if (mounted) {
@@ -496,8 +592,13 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
       if (state.playlist.length > 1) {
         await playNext();
       } else {
-        await _player.pause();
-        await _player.seek(Duration.zero);
+        if (Platform.isWindows) {
+          await _windowsPlayer?.pause();
+          await _windowsPlayer?.seek(Duration.zero);
+        } else {
+          await _player.pause();
+          await _player.seek(Duration.zero);
+        }
       }
     } finally {
       _handlingCompletion = false;
@@ -562,12 +663,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
   @override
   void dispose() {
+    _windowsPositionSub?.cancel();
+    _windowsDurationSub?.cancel();
+    _windowsBufferingSub?.cancel();
+    _windowsPlayingSub?.cancel();
+    _windowsCompletedSub?.cancel();
     _positionSub?.cancel();
     _bufferedPositionSub?.cancel();
     _durationSub?.cancel();
     _playerStateSub?.cancel();
     _currentIndexSub?.cancel();
     _player.dispose();
+    _windowsPlayer?.dispose();
     super.dispose();
   }
 }

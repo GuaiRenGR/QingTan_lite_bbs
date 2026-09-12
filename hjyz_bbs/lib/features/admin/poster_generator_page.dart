@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -26,7 +25,7 @@ class _PosterGeneratorPageState extends ConsumerState<PosterGeneratorPage> {
   int _template = 0;
   bool _autoScroll = true;
   bool _showTags = true;
-  String _tags = '生活碎片  日常记录';
+  final _tags = TextEditingController(text: '生活碎片  日常记录');
   bool _saving = false;
 
   static const _templates = [
@@ -38,7 +37,9 @@ class _PosterGeneratorPageState extends ConsumerState<PosterGeneratorPage> {
 
   @override
   void dispose() {
-    for (final c in [_title, _body, _author, _highlight]) c.dispose();
+    for (final c in [_title, _body, _author, _highlight, _tags]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
