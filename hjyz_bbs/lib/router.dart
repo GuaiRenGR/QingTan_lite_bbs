@@ -29,6 +29,7 @@ import 'features/admin/admin_users_page.dart';
 import 'features/admin/admin_threads_page.dart';
 import 'features/admin/admin_files_page.dart';
 import 'features/admin/admin_sponsors_page.dart';
+import 'features/admin/poster_generator_page.dart';
 import 'features/download/download_page.dart';
 import 'features/discover/discover_page.dart';
 import 'features/user/user_home_page.dart';
@@ -121,6 +122,7 @@ final router = GoRouter(
       builder: (_, _) => const AdminSponsorsPage(),
     ),
     GoRoute(path: '/admin/x-feed', builder: (_, _) => const XFeedPage()),
+    GoRoute(path: '/admin/poster-generator', builder: (_, _) => const PosterGeneratorPage()),
     GoRoute(path: '/downloads', builder: (_, _) => const DownloadPage()),
     GoRoute(path: '/tools', builder: (_, _) => const DiscoverPage()),
     GoRoute(path: '/music-player', builder: (_, _) => const MusicPlayerPage()),

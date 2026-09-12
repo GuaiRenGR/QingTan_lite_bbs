@@ -248,6 +248,12 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   onTap: () => context.push('/admin/sponsors'),
                 ),
                 _AdminEntry(
+                  icon: Icons.auto_awesome_outlined,
+                  title: '小红书大字报生成器',
+                  subtitle: '本地制作多种风格的图文海报并分享',
+                  onTap: () => context.push('/admin/poster-generator'),
+                ),
+                _AdminEntry(
                   icon: Icons.forum_outlined,
                   title: '版块管理',
                   subtitle: '管理论坛分区和标签',
