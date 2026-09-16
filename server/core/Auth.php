@@ -33,7 +33,7 @@ class Auth
         $user = self::user();
 
         if (!$user) {
-            Response::json(401, '请先登录');
+            Response::json(401, '请先登录', null, 401);
         }
 
         return $user;

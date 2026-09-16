@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/services/database_backup_service.dart';
 import '../../core/theme/app_colors.dart';
 
 class AdminCenterPage extends StatefulWidget {
@@ -17,6 +18,9 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   bool requireReview = false;
   Map<String, String> downloadLinks = {};
   String contactUrl = '';
+  bool backupDownloading = false;
+  double backupProgress = 0;
+  String? lastBackupPath;
 
   @override
   void initState() {
@@ -209,6 +213,73 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     }
   }
 
+  Future<void> _confirmDownloadBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('下载数据库备份'),
+        content: const Text('备份包含账号、内容和系统配置等敏感数据，请下载后妥善保管。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('下载'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _downloadBackup();
+    }
+  }
+
+  Future<void> _downloadBackup() async {
+    if (backupDownloading) return;
+
+    setState(() {
+      backupDownloading = true;
+      backupProgress = 0;
+    });
+
+    try {
+      final result = await DatabaseBackupService.instance.download(
+        onProgress: (received, total) {
+          if (!mounted || total <= 0) return;
+          final nextProgress = received / total;
+          if (nextProgress - backupProgress >= 0.01 || nextProgress >= 1) {
+            setState(() => backupProgress = nextProgress.clamp(0.0, 1.0));
+          }
+        },
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        backupDownloading = false;
+        backupProgress = 0;
+        if (result.success) lastBackupPath = result.data;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.success ? '数据库备份已下载' : result.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        backupDownloading = false;
+        backupProgress = 0;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法保存备份，请检查存储空间后重试')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -268,6 +339,17 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   title: '系统设置',
                   subtitle: '审核开关、联系与下载链接配置',
                   onTap: () => _showSettingsDialog(),
+                ),
+                _AdminEntry(
+                  icon: Icons.cloud_download_outlined,
+                  title: '下载数据库备份',
+                  subtitle: backupDownloading
+                      ? (backupProgress > 0
+                            ? '正在下载 ${(backupProgress * 100).toStringAsFixed(0)}%'
+                            : '正在生成备份...')
+                      : (lastBackupPath ?? '仅管理员可下载，服务端文件下载后自动删除'),
+                  loading: backupDownloading,
+                  onTap: backupDownloading ? null : _confirmDownloadBackup,
                 ),
               ],
             ),
@@ -405,13 +487,15 @@ class _AdminEntry extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool loading;
 
   const _AdminEntry({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.loading = false,
   });
 
   @override
@@ -424,7 +508,12 @@ class _AdminEntry extends StatelessWidget {
         leading: Icon(icon),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: loading
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.chevron_right),
         onTap: onTap,
       ),
     );

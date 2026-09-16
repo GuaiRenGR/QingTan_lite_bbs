@@ -2,3 +2,4 @@ RewriteEngine On
 RewriteRule (^|/)config/ - [F]
 RewriteRule (^|/)runtime/ - [F]
 RewriteRule (^|/)\. - [F]
+RewriteRule (^|/)(backup|qingtan_backup)_[^/]*\.sql$ - [F,NC]

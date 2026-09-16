@@ -6,6 +6,7 @@ require_once FX_ROOT . '/core/helpers.php';
 require_once FX_ROOT . '/core/Response.php';
 require_once FX_ROOT . '/core/Request.php';
 require_once FX_ROOT . '/core/Database.php';
+require_once FX_ROOT . '/core/DatabaseBackup.php';
 require_once FX_ROOT . '/core/Auth.php';
 require_once FX_ROOT . '/core/SiteSetting.php';
 require_once FX_ROOT . '/core/OneDriveService.php';
@@ -445,6 +446,10 @@ try {
 
         case 'admin/sponsors/delete':
             App\Controllers\SponsorController::delete();
+            break;
+
+        case 'admin/backup/download':
+            App\Controllers\AdminController::backupDownload();
             break;
 
         case 'admin/user/update':

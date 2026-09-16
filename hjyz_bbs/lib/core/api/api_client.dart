@@ -214,6 +214,97 @@ class ApiClient {
     );
   }
 
+  Future<ApiResult<String>> downloadAdminBackup({
+    required String savePath,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final servers = ServerManager.instance.activeServers;
+    final partialFile = File('$savePath.part');
+    DioException? lastError;
+
+    for (final server in servers) {
+      try {
+        await _deleteIfExists(partialFile);
+
+        final dio = _getDioForServer(server.id, server.url);
+        final response = await dio.download(
+          '',
+          partialFile.path,
+          queryParameters: const {'route': 'admin/backup/download'},
+          data: const <String, dynamic>{},
+          options: Options(
+            method: 'POST',
+            headers: const {'Accept': 'application/sql'},
+            receiveTimeout: const Duration(minutes: 10),
+          ),
+          onReceiveProgress: onReceiveProgress,
+          deleteOnError: false,
+        );
+
+        final statusCode = response.statusCode ?? 0;
+        final isBackup =
+            statusCode == 200 && await _hasBackupSignature(partialFile);
+        if (isBackup) {
+          final target = File(savePath);
+          await _deleteIfExists(target);
+          await partialFile.rename(savePath);
+          ServerManager.instance.reportSuccess(server.id);
+          return ApiResult.ok(savePath, message: '备份下载完成');
+        }
+
+        final message = await _readDownloadError(partialFile, statusCode);
+        await _deleteIfExists(partialFile);
+
+        if (statusCode == 200 || (statusCode >= 400 && statusCode < 500)) {
+          return ApiResult.fail(message, code: statusCode);
+        }
+        ServerManager.instance.reportFailure(server.id);
+      } on DioException catch (e) {
+        lastError = e;
+        await _deleteIfExists(partialFile);
+        ServerManager.instance.reportFailure(server.id);
+      } catch (e) {
+        await _deleteIfExists(partialFile);
+        await AppLogger.log(
+          'ApiClient',
+          'backup download ERROR: serverId=${server.id} error=$e',
+        );
+      }
+    }
+
+    return ApiResult.fail(
+      lastError != null ? _dioErrorMessage(lastError) : '备份下载失败，请稍后重试',
+    );
+  }
+
+  Future<bool> _hasBackupSignature(File file) async {
+    if (!await file.exists() || await file.length() == 0) return false;
+
+    final bytes = await file
+        .openRead(0, 64)
+        .fold<List<int>>(<int>[], (buffer, chunk) => buffer..addAll(chunk));
+    return utf8.decode(bytes, allowMalformed: true).startsWith('-- 轻坛数据库备份');
+  }
+
+  Future<String> _readDownloadError(File file, int statusCode) async {
+    try {
+      if (await file.exists() && await file.length() <= 64 * 1024) {
+        final body = jsonDecode(await file.readAsString());
+        if (body is Map && body['message'] != null) {
+          return body['message'].toString();
+        }
+      }
+    } catch (_) {}
+
+    return statusCode > 0 ? '备份下载失败（HTTP $statusCode）' : '备份下载失败';
+  }
+
+  Future<void> _deleteIfExists(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
   ApiResult<dynamic> _handleResponse(Response response) {
     try {
       final statusCode = response.statusCode ?? 0;

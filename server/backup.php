@@ -1,17 +1,20 @@
 <?php
 /**
  * 数据库备份脚本
- * 用法：
- *   1. 上传到服务器根目录
- *   2. 通过浏览器访问 http://你的域名/backup.php
- *      或通过面板的"在线编辑"运行此文件（部分面板支持）
- *   3. 下载生成的 backup_xxxxx.sql 文件
- *   4. 立即删除本脚本和生成的 sql 文件！
+ * 仅供服务器管理员通过命令行执行：php /path/to/backup.php
+ * 客户端备份请使用管理中心内受鉴权保护的下载功能。
  *
- * 如果 web 服务宕机无法通过浏览器访问：
- *   - 上传后尝试通过面板"文件管理"查看是否生成了 sql 文件
- *   - 如果 PHP 命令行可用： ssh 执行 php /path/to/backup.php
+ * 为避免绕过管理员鉴权，本脚本拒绝所有 Web 请求。
  */
+
+// Web backups must go through the authenticated admin API. Keep this legacy
+// script available only to administrators with command-line server access.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    exit('Not Found');
+}
 
 error_reporting(E_ALL);
 ini_set('display_errors', '1');

@@ -9,7 +9,7 @@ class AdminController
         $user = \Auth::requireLogin();
 
         if ((int)($user['group_id'] ?? 0) !== 99) {
-            \Response::json(403, '无管理员权限');
+            \Response::json(403, '无管理员权限', null, 403);
         }
 
         return $user;
@@ -415,6 +415,49 @@ class AdminController
         }
 
         \Response::success(null, '设置已更新');
+    }
+
+    public static function backupDownload()
+    {
+        self::requireAdmin();
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            \Response::json(405, '仅支持 POST 请求', null, 405);
+        }
+
+        @set_time_limit(600);
+        $backupPath = \DatabaseBackup::createTemporaryFile();
+
+        $filename = 'qingtan_backup_' . date('Ymd_His') . '.sql';
+        $size = filesize($backupPath);
+        if ($size === false) {
+            @unlink($backupPath);
+            throw new \RuntimeException('无法读取备份文件大小');
+        }
+
+        $stream = fopen($backupPath, 'rb');
+        if ($stream === false) {
+            @unlink($backupPath);
+            throw new \RuntimeException('无法读取备份文件');
+        }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        @ini_set('zlib.output_compression', '0');
+
+        header('Content-Type: application/sql; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . $size);
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('X-Content-Type-Options: nosniff');
+
+        fpassthru($stream);
+        fclose($stream);
+        @unlink($backupPath);
+        exit;
     }
 
     // ========== 用户资料编辑 ==========
