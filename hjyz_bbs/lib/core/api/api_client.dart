@@ -1,11 +1,14 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 import '../services/api_cache_service.dart';
 import '../services/connectivity_service.dart';
+import '../services/upload_manager.dart';
 import '../storage/token_storage.dart';
 import '../utils/app_logger.dart';
 import '../utils/device_helper.dart';
@@ -367,6 +370,101 @@ class ApiClient {
     String route, {
     required File file,
     Map<String, String>? fields,
+    String? taskName,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('admin_direct_upload') == true && fields?['type'] != null) {
+      final directResult = await UploadManager.instance.enqueue<ApiResult<dynamic>>(
+        name: taskName ?? file.path.split(RegExp(r'[/\\]')).last,
+        run: (token, progress) => uploadFileDirectToOneDrive(
+          file: file,
+          type: fields!['type']!,
+          fields: fields,
+          cancelToken: token,
+          onProgress: progress,
+        ),
+      );
+      if (directResult.success) return directResult;
+    }
+    if (taskName != null && taskName.trim().isNotEmpty) {
+      return UploadManager.instance.enqueue<ApiResult<dynamic>>(
+        name: taskName,
+        run: (token, progress) => _uploadFileDirect(
+          route,
+          file: file,
+          fields: fields,
+          cancelToken: token,
+          onProgress: progress,
+        ),
+      );
+    }
+    return _uploadFileDirect(route, file: file, fields: fields);
+  }
+
+  Future<ApiResult<dynamic>> uploadFileDirectToOneDrive({
+    required File file,
+    required String type,
+    String? mime,
+    Map<String, String>? fields,
+    CancelToken? cancelToken,
+    ProgressCallback? onProgress,
+  }) async {
+    final name = file.path.split(RegExp(r'[/\\]')).last;
+    final size = await file.length();
+    final session = await post('upload/session', data: {
+      'name': name,
+      'size': size,
+      'type': type,
+      'mime': mime ?? 'application/octet-stream',
+    });
+    if (!session.success || session.data is! Map) return session;
+    final data = Map<String, dynamic>.from(session.data as Map);
+    final uploadUrl = data['upload_url']?.toString() ?? '';
+    if (uploadUrl.isEmpty) return ApiResult.fail('OneDrive上传地址为空');
+    final dio = Dio();
+    const chunkSize = 10 * 1024 * 1024;
+    final handle = await file.open();
+    Map<String, dynamic>? item;
+    try {
+      for (var offset = 0; offset < size; offset += chunkSize) {
+        final end = (offset + chunkSize > size ? size : offset + chunkSize) - 1;
+        final chunk = await handle.read(end - offset + 1);
+        final response = await dio.put<dynamic>(
+          uploadUrl,
+          data: Stream.fromIterable([chunk]),
+          options: Options(headers: {
+            'Content-Length': chunk.length,
+            'Content-Range': 'bytes $offset-$end/$size',
+            'Content-Type': mime ?? 'application/octet-stream',
+          }, responseType: ResponseType.json),
+          cancelToken: cancelToken,
+          onSendProgress: (sent, _) => onProgress?.call(offset + sent, size),
+        );
+        if (response.data is Map && response.data['id'] != null) {
+          item = Map<String, dynamic>.from(response.data as Map);
+        }
+      }
+    } finally {
+      await handle.close();
+    }
+    final itemId = item?['id']?.toString() ?? '';
+    if (itemId.isEmpty) return ApiResult.fail('OneDrive上传未完成');
+    return post('upload/complete', data: {
+      'item_id': itemId,
+      'name': name,
+      'size': size,
+      'type': type,
+      'mime': mime ?? 'application/octet-stream',
+      ...?fields,
+    });
+  }
+
+  Future<ApiResult<dynamic>> _uploadFileDirect(
+    String route, {
+    required File file,
+    Map<String, String>? fields,
+    CancelToken? cancelToken,
+    ProgressCallback? onProgress,
   }) async {
     final servers = ServerManager.instance.requestServers;
     DioException? lastError;
@@ -385,6 +483,8 @@ class ApiClient {
             'route': route,
           },
           data: formData,
+          cancelToken: cancelToken,
+          onSendProgress: onProgress,
           options: Options(
             sendTimeout: const Duration(seconds: 300),
             receiveTimeout: const Duration(seconds: 60),

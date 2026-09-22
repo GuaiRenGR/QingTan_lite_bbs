@@ -80,6 +80,40 @@ class OneDriveService
         ];
     }
 
+    public function createUploadSession($originalName, $type, $mime)
+    {
+        $type = in_array($type, ['music', 'video', 'attachments'], true) ? $type : 'images';
+        $ext = $this->guessExt($originalName, $mime, $type);
+        $folder = trim($this->config['base_path'], '/') . '/' . $type . '/' . date('Y') . '/' . date('m');
+        $this->ensureFolder($folder);
+        $name = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+        $remotePath = $folder . '/' . $name;
+        $endpoint = 'https://graph.microsoft.com/v1.0/me/drive/root:/' .
+            $this->encodePath($remotePath) . ':/createUploadSession';
+        $response = $this->curl($endpoint, 'POST', [
+            'Authorization: Bearer ' . $this->accessToken(),
+            'Content-Type: application/json',
+        ], json_encode([
+            'item' => [
+                '@microsoft.graph.conflictBehavior' => 'rename',
+                'name' => $name,
+            ],
+        ]));
+        if ($response['code'] < 200 || $response['code'] >= 300) {
+            throw new Exception('OneDrive上传会话创建失败：' . $response['body']);
+        }
+        $data = json_decode($response['body'], true);
+        if (empty($data['uploadUrl'])) {
+            throw new Exception('OneDrive上传会话返回异常');
+        }
+        return ['upload_url' => $data['uploadUrl'], 'name' => $name, 'path' => '/' . $remotePath];
+    }
+
+    public function shareLink($itemId)
+    {
+        return $this->createShareLink($itemId)['share_url'];
+    }
+
     private function accessToken()
     {
         $cacheFile = FX_ROOT . '/cache/onedrive_token.json';

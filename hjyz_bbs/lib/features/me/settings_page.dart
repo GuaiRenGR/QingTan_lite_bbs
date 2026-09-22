@@ -317,6 +317,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 subtitle: '查看和管理下载任务',
                 onTap: () => context.push('/downloads'),
               ),
+              if ((auth.user?['group_id']?.toString() ?? '') == '99')
+                _SettingTile(
+                icon: Icons.cloud_upload_outlined,
+                title: '上传管理',
+                subtitle: '查看进行中的文件上传，可暂停或继续',
+                onTap: () => context.push('/upload-management'),
+              ),
             ],
           ),
           ValueListenableBuilder<MusicPlayerVisualSettings>(

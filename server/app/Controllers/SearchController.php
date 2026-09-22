@@ -64,7 +64,7 @@ class SearchController
              LEFT JOIN {$users} u ON u.id = t.user_id
              LEFT JOIN {$threadTags} tt ON tt.thread_id = t.id
              LEFT JOIN {$tags} tg ON tg.id = tt.tag_id
-             WHERE t.status = 1
+             WHERE t.status = 1 AND t.visibility = 'public'
                AND (
                     t.title LIKE ?
                  OR t.summary LIKE ?

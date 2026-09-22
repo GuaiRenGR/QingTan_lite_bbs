@@ -9,6 +9,7 @@ require_once FX_ROOT . '/core/Database.php';
 require_once FX_ROOT . '/core/DatabaseBackup.php';
 require_once FX_ROOT . '/core/Auth.php';
 require_once FX_ROOT . '/core/SiteSetting.php';
+require_once FX_ROOT . '/core/AiReviewService.php';
 require_once FX_ROOT . '/core/OneDriveService.php';
 require_once FX_ROOT . '/core/DvCode.php';
 
@@ -170,6 +171,14 @@ try {
 
         case 'upload/media':
             App\Controllers\UploadController::media();
+            break;
+
+        case 'upload/session':
+            App\Controllers\UploadController::session();
+            break;
+
+        case 'upload/complete':
+            App\Controllers\UploadController::complete();
             break;
 
         case 'upload/delete':

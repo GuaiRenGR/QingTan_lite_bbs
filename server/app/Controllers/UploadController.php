@@ -4,6 +4,64 @@ namespace App\Controllers;
 
 class UploadController
 {
+    public static function session()
+    {
+        $user = \Auth::requireLogin();
+        if (!\SiteSetting::isAdmin($user)) {
+            \Response::json(403, '仅管理员可使用OneDrive直传');
+        }
+        $type = \Request::str('type', 'image');
+        $name = \Request::str('name');
+        $mime = \Request::str('mime', 'application/octet-stream');
+        $size = max(0, (int)\Request::input('size', 0));
+        if ($name === '' || $size <= 0 || !in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
+            \Response::json(422, '上传参数无效');
+        }
+        self::validateSize($type, $size);
+        $folderType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
+        $session = (new \OneDriveService())->createUploadSession($name, $folderType, $mime);
+        \Response::success(array_merge($session, ['type' => $type, 'size' => $size, 'mime' => $mime]), '上传会话已创建');
+    }
+
+    public static function complete()
+    {
+        $user = \Auth::requireLogin();
+        if (!\SiteSetting::isAdmin($user)) {
+            \Response::json(403, '仅管理员可使用OneDrive直传');
+        }
+        $itemId = \Request::str('item_id');
+        $name = \Request::str('name');
+        $type = \Request::str('type', 'image');
+        $mime = \Request::str('mime', 'application/octet-stream');
+        $size = max(0, (int)\Request::input('size', 0));
+        if ($itemId === '' || $name === '' || $size <= 0) \Response::json(422, '上传结果无效');
+        $attachments = \Database::table('attachments');
+        $relativeFileUrl = '/index.php?route=file/resolve&id=';
+        \Database::execute("INSERT INTO {$attachments} (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`) VALUES (?,NULL,NULL,?,?,?,?,?,?,1,?)", [$user['id'], $name, '', '', $mime, $size, $itemId, now()]);
+        $id = (int)\Database::lastInsertId();
+        $relativeFileUrl .= $id;
+        \Database::execute("UPDATE {$attachments} SET file_url = ? WHERE id = ?", [$relativeFileUrl, $id]);
+        $row = \Database::fetch("SELECT * FROM {$attachments} WHERE id = ?", [$id]);
+        record_sync_operation('attachments', $id, 'insert', $row);
+        $url = request_origin() . $relativeFileUrl;
+        $music = null;
+        if ($type === 'music') {
+            $music = MusicLibraryController::createFromUpload((int)$user['id'], $id, $url, $name, [
+                'lyrics_url' => \Request::str('lyrics_url'), 'cover_url' => \Request::str('cover_url'),
+                'title' => \Request::str('title'), 'artist' => \Request::str('artist'),
+            ]);
+        }
+        \Response::success(['id' => $id, 'type' => $type, 'url' => $url, 'share_url' => $url, 'name' => $name, 'size' => $size, 'mime' => $mime, 'onedrive_item_id' => $itemId, 'music' => $music ? MusicLibraryController::serialize($music) : null, 'music_uuid' => $music['uuid'] ?? null], '上传成功');
+    }
+
+    private static function validateSize($type, $size)
+    {
+        $config = require FX_ROOT . '/config/onedrive.php';
+        $limit = $type === 'image' ? (int)$config['max_image_size'] : ($type === 'video' ? (int)$config['max_video_size'] : (($type === 'chatlog') ? 4 * 1024 * 1024 : (($type === 'lyrics') ? 2 * 1024 * 1024 : (int)$config['max_music_size'])));
+        if ($type === 'attachment' && $size > 0) return;
+        if ($size > $limit) \Response::json(422, '文件超过大小限制');
+    }
+
     public static function media()
     {
         $user = \Auth::requireLogin();
@@ -123,19 +181,10 @@ class UploadController
 
         try {
             $service = new \OneDriveService();
-
             $uploadType = $type === 'image'
                 ? 'images'
-                : ($type === 'video'
-                    ? 'video'
-                    : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
-
-            $result = $service->upload(
-                $tmp,
-                $originalName,
-                $uploadType,
-                $mime
-            );
+                : ($type === 'video' ? 'video' : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
+            $result = $service->upload($tmp, $originalName, $uploadType, $mime);
 
             $attachments = \Database::table('attachments');
 
@@ -201,6 +250,24 @@ class UploadController
 
             \Response::json(500, '转存 OneDrive 失败：' . $e->getMessage());
         }
+    }
+
+    private static function storeLocally($source, $originalName)
+    {
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $safeExtension = $extension !== '' && preg_match('/^[a-z0-9]{1,10}$/i', $extension)
+            ? '.' . $extension : '';
+        $relativeDirectory = 'uploads/' . date('Y/m');
+        $directory = FX_ROOT . '/' . $relativeDirectory;
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new \RuntimeException('无法创建上传目录');
+        }
+        $name = bin2hex(random_bytes(16)) . $safeExtension;
+        $target = $directory . '/' . $name;
+        if (!move_uploaded_file($source, $target) && !copy($source, $target)) {
+            throw new \RuntimeException('无法保存上传文件');
+        }
+        return $relativeDirectory . '/' . $name;
     }
 
     private static function detectMime($file, $originalName)

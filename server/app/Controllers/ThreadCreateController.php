@@ -92,6 +92,19 @@ class ThreadCreateController
             $visibility = 'pending';
         }
 
+        $aiReview = null;
+        if (\AiReviewService::enabled() && !\SiteSetting::isReviewer($user)) {
+            try {
+                $aiReview = \AiReviewService::review($title, $content);
+                if (!$aiReview['approved']) {
+                    $visibility = 'locked';
+                }
+            } catch (\Throwable $e) {
+                log_error('[AIReview] ' . $e->getMessage());
+                $visibility = 'pending';
+            }
+        }
+
         $threads = \Database::table('threads');
         $attachments = \Database::table('attachments');
 
@@ -171,6 +184,10 @@ class ThreadCreateController
 
             $newThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ?", [$threadId]);
             record_sync_operation('threads', $threadId, 'insert', $newThread);
+
+            if ($aiReview && !$aiReview['approved']) {
+                log_error('[AIReview] thread=' . $threadId . ' reason=' . $aiReview['reason']);
+            }
 
             \Response::success([
                 'id' => $threadId,

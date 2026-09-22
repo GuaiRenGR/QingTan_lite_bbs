@@ -81,7 +81,7 @@ class ForumController
             SELECT t.*, u.nickname, u.avatar
             FROM {$threads} t
             LEFT JOIN {$users} u ON u.id = t.user_id
-            WHERE t.forum_id = ? AND t.status = 1
+            WHERE t.forum_id = ? AND t.status = 1 AND t.visibility = 'public'
             ORDER BY t.is_top DESC, t.last_reply_at DESC, t.created_at DESC
             LIMIT {$offset}, {$pageSize}
         ";

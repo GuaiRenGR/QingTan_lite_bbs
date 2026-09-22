@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/services/database_backup_service.dart';
@@ -16,11 +17,16 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   bool loading = true;
   Map<String, dynamic> stats = {};
   bool requireReview = false;
+  bool aiReviewEnabled = false;
+  String aiReviewBaseUrl = '';
+  String aiReviewApiKey = '';
+  String aiReviewModel = 'gpt-4o-mini';
   Map<String, String> downloadLinks = {};
   String contactUrl = '';
   bool backupDownloading = false;
   double backupProgress = 0;
   String? lastBackupPath;
+  bool directUpload = false;
 
   @override
   void initState() {
@@ -45,8 +51,14 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     if (result.success && result.data is Map) {
       final data = result.data as Map;
       if (mounted) {
+        final prefs = await SharedPreferences.getInstance();
         setState(() {
           requireReview = data['require_review'] == '1';
+          aiReviewEnabled = data['ai_review_enabled'] == '1';
+          aiReviewBaseUrl = (data['ai_review_base_url'] ?? '').toString();
+          aiReviewApiKey = (data['ai_review_api_key'] ?? '').toString();
+          aiReviewModel = (data['ai_review_model'] ?? 'gpt-4o-mini').toString();
+          directUpload = prefs.getBool('admin_direct_upload') ?? false;
           contactUrl = (data['contact_url'] ?? '').toString();
           for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
             downloadLinks[key] = (data['dl_$key'] ?? '').toString();
@@ -92,6 +104,9 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
 
   void _showSettingsDialog() {
     final contactCtrl = TextEditingController(text: contactUrl);
+    final aiUrlCtrl = TextEditingController(text: aiReviewBaseUrl);
+    final aiKeyCtrl = TextEditingController(text: aiReviewApiKey);
+    final aiModelCtrl = TextEditingController(text: aiReviewModel);
     final dlCtrls = <String, TextEditingController>{};
     for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
       dlCtrls[key] = TextEditingController(text: downloadLinks[key] ?? '');
@@ -116,6 +131,38 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                     _toggleReview(v);
                     setDialogState(() {});
                   },
+                ),
+                const Text('管理员文件上传链路', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('服务器中转')),
+                    ButtonSegment(value: true, label: Text('OneDrive直传')),
+                  ],
+                  selected: {directUpload},
+                  onSelectionChanged: (values) => setDialogState(() => directUpload = values.first),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('AI内容审核'),
+                  subtitle: const Text('使用OpenAI兼容completions接口，关闭思考并要求JSON返回'),
+                  value: aiReviewEnabled,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) => setDialogState(() => aiReviewEnabled = v),
+                ),
+                TextField(
+                  controller: aiUrlCtrl,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(labelText: 'completions接口地址', hintText: 'https://api.example.com/v1'),
+                ),
+                TextField(
+                  controller: aiKeyCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'API Key'),
+                ),
+                TextField(
+                  controller: aiModelCtrl,
+                  decoration: const InputDecoration(labelText: '模型'),
                 ),
                 const Divider(height: 24),
                 const Text(
@@ -169,7 +216,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
             FilledButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _saveSystemLinks(contactCtrl, dlCtrls);
+                _saveSystemLinks(contactCtrl, dlCtrls, aiUrlCtrl, aiKeyCtrl, aiModelCtrl);
               },
               child: const Text('保存'),
             ),
@@ -182,8 +229,17 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   Future<void> _saveSystemLinks(
     TextEditingController contactCtrl,
     Map<String, TextEditingController> ctrls,
+    TextEditingController aiUrlCtrl,
+    TextEditingController aiKeyCtrl,
+    TextEditingController aiModelCtrl,
   ) async {
-    final settings = <String, String>{'contact_url': contactCtrl.text.trim()};
+    final settings = <String, String>{
+      'contact_url': contactCtrl.text.trim(),
+      'ai_review_enabled': aiReviewEnabled ? '1' : '0',
+      'ai_review_base_url': aiUrlCtrl.text.trim(),
+      'ai_review_api_key': aiKeyCtrl.text.trim(),
+      'ai_review_model': aiModelCtrl.text.trim(),
+    };
     for (final entry in ctrls.entries) {
       settings['dl_${entry.key}'] = entry.value.text.trim();
     }
@@ -196,8 +252,13 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
     if (!mounted) return;
 
     if (result.success) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('admin_direct_upload', directUpload);
       setState(() {
         contactUrl = settings['contact_url'] ?? '';
+        aiReviewBaseUrl = settings['ai_review_base_url'] ?? '';
+        aiReviewApiKey = settings['ai_review_api_key'] ?? '';
+        aiReviewModel = settings['ai_review_model'] ?? aiReviewModel;
         for (final entry in settings.entries) {
           if (!entry.key.startsWith('dl_')) continue;
           downloadLinks[entry.key.replaceFirst('dl_', '')] = entry.value;

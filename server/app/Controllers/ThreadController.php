@@ -27,7 +27,7 @@ class ThreadController
             FROM {$threads} t
             LEFT JOIN {$users} u ON u.id = t.user_id
             LEFT JOIN {$forums} f ON f.id = t.forum_id
-            WHERE t.id = ? AND t.status = 1
+            WHERE t.id = ? AND t.status = 1 AND t.visibility = 'public'
             LIMIT 1
         ";
 

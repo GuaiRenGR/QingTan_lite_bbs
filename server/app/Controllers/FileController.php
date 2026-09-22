@@ -15,12 +15,23 @@ class FileController
         $attachments = \Database::table('attachments');
 
         $row = \Database::fetch(
-            "SELECT onedrive_item_id FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
+            "SELECT file_path, file_type, file_name, onedrive_item_id FROM {$attachments} WHERE id = ? AND status = 1 LIMIT 1",
             [$id]
         );
 
-        if (!$row || empty($row['onedrive_item_id'])) {
+        if (!$row) {
             \Response::json(404, '文件不存在');
+        }
+
+        if ($row && !empty($row['file_path'])) {
+            $localPath = FX_ROOT . '/' . ltrim((string)$row['file_path'], '/\\');
+            if (is_file($localPath)) {
+                header('Content-Type: ' . ($row['file_type'] ?: 'application/octet-stream'));
+                header('Content-Length: ' . (string)filesize($localPath));
+                header('Content-Disposition: inline; filename="' . rawurlencode((string)$row['file_name']) . '"');
+                readfile($localPath);
+                exit;
+            }
         }
 
         try {
