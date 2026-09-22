@@ -426,6 +426,52 @@ class AdminController
         \Response::success(null, '设置已更新');
     }
 
+    public static function publishSystemNotification()
+    {
+        self::requireAdmin();
+
+        $title = trim(\Request::str('title', ''));
+        $content = trim(\Request::str('content', ''));
+        $audience = \Request::str('audience', 'registered');
+        if ($title === '' || mb_strlen($title) > 100) {
+            \Response::json(422, '通知标题不能为空且不超过100字');
+        }
+        if (mb_strlen($content) > 10000) {
+            \Response::json(422, '通知内容不能超过10000字');
+        }
+        if (!in_array($audience, ['registered', 'all'], true)) {
+            \Response::json(422, '无效的发布范围');
+        }
+
+        $notifications = \Database::table('notifications');
+        $payload = json_encode([
+            'broadcast' => $audience === 'all',
+            'audience' => $audience,
+        ], JSON_UNESCAPED_UNICODE);
+        $createdAt = now();
+
+        if ($audience === 'all') {
+            \Database::execute(
+                "INSERT INTO {$notifications} (`user_id`, `type`, `title`, `content`, `data`, `is_read`, `created_at`)
+                 VALUES (0, 'system', ?, ?, ?, 0, ?)",
+                [$title, $content, $payload, $createdAt]
+            );
+            record_sync_operation('notifications', (int)\Database::lastInsertId(), 'insert');
+            $count = 0;
+        } else {
+            $users = \Database::table('users');
+            \Database::execute(
+                "INSERT INTO {$notifications} (`user_id`, `type`, `title`, `content`, `data`, `is_read`, `created_at`)
+                 SELECT id, 'system', ?, ?, ?, 0, ? FROM {$users} WHERE status = 1",
+                [$title, $content, $payload, $createdAt]
+            );
+            $countRow = \Database::fetch("SELECT ROW_COUNT() AS c");
+            $count = (int)($countRow['c'] ?? 0);
+        }
+
+        \Response::success(['audience' => $audience, 'count' => $count], '系统通知已发布');
+    }
+
     public static function backupDownload()
     {
         self::requireAdmin();

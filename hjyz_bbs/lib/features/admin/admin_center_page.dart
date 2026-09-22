@@ -382,8 +382,14 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 _AdminEntry(
                   icon: Icons.auto_awesome_outlined,
                   title: '小红书大字报生成器',
-                  subtitle: '本地制作多种风格的图文海报并分享',
+                  subtitle: '本地制作小红书风格图文海报并分享',
                   onTap: () => context.push('/admin/poster-generator'),
+                ),
+                _AdminEntry(
+                  icon: Icons.campaign_outlined,
+                  title: '发布系统通知',
+                  subtitle: '向已注册用户或所有用户发布通知',
+                  onTap: () => context.push('/admin/system-notification'),
                 ),
                 _AdminEntry(
                   icon: Icons.forum_outlined,

@@ -91,6 +91,17 @@ function createTables(PDO $pdo, string $prefix)
     ";
 
     $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}notification_reads` (
+      `notification_id` BIGINT UNSIGNED NOT NULL,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `is_read` TINYINT NOT NULL DEFAULT 1,
+      `read_at` DATETIME NOT NULL,
+      PRIMARY KEY (`notification_id`, `user_id`),
+      KEY `idx_notification_reads_user` (`user_id`, `read_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
     CREATE TABLE IF NOT EXISTS `{$prefix}user_tokens` (
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `user_id` BIGINT UNSIGNED NOT NULL,

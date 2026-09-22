@@ -13,10 +13,11 @@ class NotificationController
         $offset = ($page - 1) * $pageSize;
 
         $notifications = \Database::table('notifications');
+        $reads = \Database::table('notification_reads');
         $users = \Database::table('users');
 
-        $where = "n.user_id = ?";
-        $params = [(int)$user['id']];
+        $where = "(n.user_id = ? OR (n.user_id = 0 AND n.type = 'system'))";
+        $params = [(int)$user['id'], (int)$user['id']];
 
         if ($type) {
             $where .= " AND n.type = ?";
@@ -24,8 +25,10 @@ class NotificationController
         }
 
         $sql = "
-            SELECT n.*
+            SELECT n.*,
+                   CASE WHEN n.user_id = 0 THEN COALESCE(r.is_read, 0) ELSE n.is_read END AS is_read
             FROM {$notifications} n
+            LEFT JOIN {$reads} r ON r.notification_id = n.id AND r.user_id = ?
             WHERE {$where}
             ORDER BY n.created_at DESC
             LIMIT {$offset}, {$pageSize}
@@ -60,6 +63,7 @@ class NotificationController
         $user = \Auth::requireLogin();
         $notifications = \Database::table('notifications');
         $settings = \Database::table('notification_settings');
+        $reads = \Database::table('notification_reads');
 
         $types = ['reply', 'mention', 'like', 'system'];
         $counts = [];
@@ -76,11 +80,21 @@ class NotificationController
                 continue;
             }
 
-            $row = \Database::fetch(
-                "SELECT COUNT(*) AS cnt FROM {$notifications}
-                 WHERE user_id = ? AND type = ? AND is_read = 0",
-                [(int)$user['id'], $t]
-            );
+            if ($t === 'system') {
+                $row = \Database::fetch(
+                    "SELECT COUNT(*) AS cnt FROM {$notifications} n
+                     LEFT JOIN {$reads} r ON r.notification_id = n.id AND r.user_id = ?
+                     WHERE (n.user_id = ? OR n.user_id = 0) AND n.type = ?
+                       AND CASE WHEN n.user_id = 0 THEN COALESCE(r.is_read, 0) ELSE n.is_read END = 0",
+                    [(int)$user['id'], (int)$user['id'], $t]
+                );
+            } else {
+                $row = \Database::fetch(
+                    "SELECT COUNT(*) AS cnt FROM {$notifications}
+                     WHERE user_id = ? AND type = ? AND is_read = 0",
+                    [(int)$user['id'], $t]
+                );
+            }
 
             $counts[$t] = (int)($row['cnt'] ?? 0);
         }
@@ -98,23 +112,47 @@ class NotificationController
         $all = \Request::int('all');
 
         $notifications = \Database::table('notifications');
+        $reads = \Database::table('notification_reads');
 
         if ($id > 0) {
-            \Database::execute(
-                "UPDATE {$notifications} SET is_read = 1 WHERE id = ? AND user_id = ?",
-                [$id, (int)$user['id']]
-            );
+            $item = \Database::fetch("SELECT user_id FROM {$notifications} WHERE id = ? LIMIT 1", [$id]);
+            if ($item && (int)$item['user_id'] === 0) {
+                \Database::execute(
+                    "INSERT INTO {$reads} (`notification_id`, `user_id`, `is_read`, `read_at`) VALUES (?, ?, 1, ?)
+                     ON DUPLICATE KEY UPDATE is_read = 1, read_at = VALUES(read_at)",
+                    [$id, (int)$user['id'], now()]
+                );
+            } else {
+                \Database::execute(
+                    "UPDATE {$notifications} SET is_read = 1 WHERE id = ? AND user_id = ?",
+                    [$id, (int)$user['id']]
+                );
+            }
             record_sync_operation('notifications', $id, 'update');
         } elseif ($type) {
             \Database::execute(
                 "UPDATE {$notifications} SET is_read = 1 WHERE user_id = ? AND type = ? AND is_read = 0",
                 [(int)$user['id'], $type]
             );
+            if ($type === 'system') {
+                \Database::execute(
+                    "INSERT INTO {$reads} (`notification_id`, `user_id`, `is_read`, `read_at`)
+                     SELECT id, ?, 1, ? FROM {$notifications} WHERE user_id = 0 AND type = ?
+                     ON DUPLICATE KEY UPDATE is_read = 1, read_at = VALUES(read_at)",
+                    [(int)$user['id'], now(), $type]
+                );
+            }
             record_sync_operation('notifications', 0, 'update');
         } elseif ($all) {
             \Database::execute(
                 "UPDATE {$notifications} SET is_read = 1 WHERE user_id = ? AND is_read = 0",
                 [(int)$user['id']]
+            );
+            \Database::execute(
+                "INSERT INTO {$reads} (`notification_id`, `user_id`, `is_read`, `read_at`)
+                 SELECT id, ?, 1, ? FROM {$notifications} WHERE user_id = 0 AND type = 'system'
+                 ON DUPLICATE KEY UPDATE is_read = 1, read_at = VALUES(read_at)",
+                [(int)$user['id'], now()]
             );
             record_sync_operation('notifications', 0, 'update');
         }

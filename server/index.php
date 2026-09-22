@@ -445,6 +445,10 @@ try {
             App\Controllers\AdminController::settingsUpdate();
             break;
 
+        case 'admin/notifications/publish':
+            App\Controllers\AdminController::publishSystemNotification();
+            break;
+
         case 'admin/sponsors/create':
             App\Controllers\SponsorController::create();
             break;
