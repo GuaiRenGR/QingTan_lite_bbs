@@ -386,19 +386,16 @@ class ApiClient {
       );
       if (directResult.success) return directResult;
     }
-    if (taskName != null && taskName.trim().isNotEmpty) {
-      return UploadManager.instance.enqueue<ApiResult<dynamic>>(
-        name: taskName,
-        run: (token, progress) => _uploadFileDirect(
-          route,
-          file: file,
-          fields: fields,
-          cancelToken: token,
-          onProgress: progress,
-        ),
-      );
-    }
-    return _uploadFileDirect(route, file: file, fields: fields);
+    return UploadManager.instance.enqueue<ApiResult<dynamic>>(
+      name: taskName ?? file.path.split(RegExp(r'[/\\]')).last,
+      run: (token, progress) => _uploadFileDirect(
+        route,
+        file: file,
+        fields: fields,
+        cancelToken: token,
+        onProgress: progress,
+      ),
+    );
   }
 
   Future<ApiResult<dynamic>> uploadFileDirectToOneDrive({

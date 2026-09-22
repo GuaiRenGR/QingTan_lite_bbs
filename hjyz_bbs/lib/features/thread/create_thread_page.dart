@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/api_client.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/music_cache_service.dart';
+import '../../core/services/upload_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/bbcode_editor_controller.dart';
 import '../../core/widgets/emoji_picker.dart';
@@ -78,6 +79,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
   @override
   void initState() {
     super.initState();
+    UploadManager.instance.addListener(_onUploadChanged);
 
     selectedForumId = widget.forumId;
 
@@ -98,6 +100,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
 
   @override
   void dispose() {
+    UploadManager.instance.removeListener(_onUploadChanged);
     draftTimer?.cancel();
     titleController.dispose();
     contentController.dispose();
@@ -106,6 +109,56 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
       ..dispose();
     tagController.dispose();
     super.dispose();
+  }
+
+  void _onUploadChanged() {
+    if (mounted) setState(() {});
+  }
+
+  List<UploadTask> get _activeUploads => UploadManager.instance.activeTasks;
+
+  Widget _buildUploadProgressPanel(BuildContext context) {
+    final tasks = _activeUploads;
+    if (tasks.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cloud_upload_outlined, size: 18),
+              const SizedBox(width: 6),
+              Text('正在上传 ${tasks.length} 个文件', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final task in tasks) ...[
+            Row(
+              children: [
+                Expanded(child: Text(task.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                Text('${(task.progress * 100).toStringAsFixed(0)}%'),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: task.paused ? '继续' : '暂停',
+                  icon: Icon(task.paused ? Icons.play_arrow : Icons.pause, size: 19),
+                  onPressed: () => task.paused
+                      ? UploadManager.instance.resume(task.id)
+                      : UploadManager.instance.pause(task.id),
+                ),
+              ],
+            ),
+            LinearProgressIndicator(value: task.progress),
+            if (task != tasks.last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
   }
 
   // Draft methods
@@ -1494,6 +1547,7 @@ class _CreateThreadPageState extends ConsumerState<CreateThreadPage> {
               });
             },
           ),
+          _buildUploadProgressPanel(context),
           const SizedBox(height: 10),
           TextField(
             controller: titleController,
