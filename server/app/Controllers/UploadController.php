@@ -14,11 +14,13 @@ class UploadController
         $name = \Request::str('name');
         $mime = \Request::str('mime', 'application/octet-stream');
         $size = max(0, (int)\Request::input('size', 0));
-        if ($name === '' || $size <= 0 || !in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
+        if ($name === '' || $size <= 0 || !in_array($type, ['image', 'chat_image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
             \Response::json(422, '上传参数无效');
         }
         self::validateSize($type, $size);
-        $folderType = $type === 'image' ? 'images' : ($type === 'video' ? 'video' : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
+        $folderType = in_array($type, ['image', 'chat_image'], true)
+            ? ($type === 'chat_image' ? 'chat' : 'images')
+            : ($type === 'video' ? 'video' : (($type === 'attachment') ? 'attachments' : ($type === 'chatlog' ? 'chat' : 'music')));
         $session = (new \OneDriveService())->createUploadSession($name, $folderType, $mime);
         \Response::success(array_merge($session, ['type' => $type, 'size' => $size, 'mime' => $mime]), '上传会话已创建');
     }
@@ -57,7 +59,7 @@ class UploadController
     private static function validateSize($type, $size)
     {
         $config = require FX_ROOT . '/config/onedrive.php';
-        $limit = $type === 'image' ? (int)$config['max_image_size'] : ($type === 'video' ? (int)$config['max_video_size'] : (($type === 'chatlog') ? 4 * 1024 * 1024 : (($type === 'lyrics') ? 2 * 1024 * 1024 : (int)$config['max_music_size'])));
+        $limit = in_array($type, ['image', 'chat_image'], true) ? (int)$config['max_image_size'] : ($type === 'video' ? (int)$config['max_video_size'] : (($type === 'chatlog') ? 4 * 1024 * 1024 : (($type === 'lyrics') ? 2 * 1024 * 1024 : (int)$config['max_music_size'])));
         if ($type === 'attachment' && $size > 0) return;
         if ($size > $limit) \Response::json(422, '文件超过大小限制');
     }
@@ -71,7 +73,7 @@ class UploadController
             $type = 'image';
         }
         $type = trim($type);
-        if (!in_array($type, ['image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
+        if (!in_array($type, ['image', 'chat_image', 'music', 'lyrics', 'video', 'attachment', 'chatlog'], true)) {
             $type = 'image';
         }
 
@@ -89,7 +91,7 @@ class UploadController
 
         $size = intval($file['size']);
 
-        if ($type === 'image') {
+        if ($type === 'image' || $type === 'chat_image') {
             if ($size > intval($config['max_image_size'])) {
                 \Response::json(422, '图片不能超过 ' . intval($config['max_image_size'] / 1024 / 1024) . 'MB');
             }
@@ -135,7 +137,7 @@ class UploadController
             }
         }
 
-        if ($type === 'image') {
+        if ($type === 'image' || $type === 'chat_image') {
             if (!in_array($mime, [
                 'image/jpeg',
                 'image/png',
@@ -181,9 +183,9 @@ class UploadController
 
         try {
             $service = new \OneDriveService();
-            $uploadType = $type === 'image'
-                ? 'images'
-                : ($type === 'video' ? 'video' : (($type === 'attachment' || $type === 'chatlog') ? 'attachments' : 'music'));
+            $uploadType = in_array($type, ['image', 'chat_image'], true)
+                ? ($type === 'chat_image' ? 'chat' : 'images')
+                : ($type === 'video' ? 'video' : (($type === 'attachment') ? 'attachments' : ($type === 'chatlog' ? 'chat' : 'music')));
             $result = $service->upload($tmp, $originalName, $uploadType, $mime);
 
             $attachments = \Database::table('attachments');

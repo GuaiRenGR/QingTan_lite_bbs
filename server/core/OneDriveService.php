@@ -21,7 +21,7 @@ class OneDriveService
             throw new Exception('上传临时文件不存在');
         }
 
-        $type = in_array($type, ['music', 'video', 'attachments'], true) ? $type : 'images';
+        $type = in_array($type, ['music', 'video', 'attachments', 'chat'], true) ? $type : 'images';
 
         $ext = $this->guessExt($originalName, $mime, $type);
 
@@ -82,7 +82,7 @@ class OneDriveService
 
     public function createUploadSession($originalName, $type, $mime)
     {
-        $type = in_array($type, ['music', 'video', 'attachments'], true) ? $type : 'images';
+        $type = in_array($type, ['music', 'video', 'attachments', 'chat'], true) ? $type : 'images';
         $ext = $this->guessExt($originalName, $mime, $type);
         $folder = trim($this->config['base_path'], '/') . '/' . $type . '/' . date('Y') . '/' . date('m');
         $this->ensureFolder($folder);
@@ -334,7 +334,7 @@ class OneDriveService
         $allowImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $allowMusic = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'flac', 'lrc'];
 
-        if ($type === 'images') {
+        if ($type === 'images' || ($type === 'chat' && strpos($mime, 'image/') === 0)) {
             if (in_array($ext, $allowImage, true)) {
                 return $ext;
             }

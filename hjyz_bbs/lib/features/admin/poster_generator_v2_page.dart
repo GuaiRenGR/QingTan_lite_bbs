@@ -35,7 +35,9 @@ class _PosterGeneratorV2PageState extends ConsumerState<PosterGeneratorV2Page> {
 
   @override
   void dispose() {
-    for (final c in [_title, _body, _author, _tags]) c.dispose();
+    for (final c in [_title, _body, _author, _tags]) {
+      c.dispose();
+    }
     super.dispose();
   }
 

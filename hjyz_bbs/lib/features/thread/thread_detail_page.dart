@@ -346,6 +346,52 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
     }
   }
 
+  List<_CommentGroup> _commentGroups() {
+    final byId = <int, Map<String, dynamic>>{
+      for (final post in posts) _toInt(post['id']): post,
+    };
+    final roots = <Map<String, dynamic>>[];
+    final replies = <int, List<Map<String, dynamic>>>{};
+
+    for (final post in posts) {
+      final parentId = _toInt(post['parent_id']);
+      if (parentId <= 0 || !byId.containsKey(parentId)) {
+        roots.add(post);
+        continue;
+      }
+
+      var rootId = parentId;
+      var parent = byId[parentId];
+      final visited = <int>{};
+      while (parent != null && _toInt(parent['parent_id']) > 0) {
+        if (!visited.add(rootId)) break;
+        rootId = _toInt(parent['parent_id']);
+        parent = byId[rootId];
+      }
+      replies.putIfAbsent(rootId, () => []).add(post);
+    }
+
+    return roots
+        .map(
+          (root) => _CommentGroup(
+            root: root,
+            replies: replies[_toInt(root['id'])] ?? const [],
+          ),
+        )
+        .toList();
+  }
+
+  void _openCommentAuthor(
+    BuildContext context,
+    Map<String, dynamic> post,
+  ) {
+    final author = post['author'];
+    if (author is Map) {
+      final uid = _toInt(author['id']);
+      if (uid > 0) context.push('/user/$uid');
+    }
+  }
+
   void _toast(String message) {
     if (message.isEmpty) return;
 
@@ -590,25 +636,31 @@ class _ThreadDetailPageState extends State<ThreadDetailPage> {
                   const SizedBox(height: 12),
                   _CommentHeader(count: posts.length),
                   const SizedBox(height: 8),
-                  for (final post in posts)
+                  for (final group in _commentGroups()) ...[
                     _CommentItem(
-                      post: post,
-                      onUserTap: () {
-                        final author = post['author'];
-
-                        if (author is Map) {
-                          final uid = _toInt(author['id']);
-                          if (uid > 0) {
-                            context.push('/user/$uid');
-                          }
-                        }
-                      },
-                      onLike: () => _togglePostLike(post),
-                      onReply: () => _startReply(post),
-                      onDelete: post['can_delete'] == true
-                          ? () => _deletePost(post)
+                      post: group.root,
+                      onUserTap: () => _openCommentAuthor(context, group.root),
+                      onLike: () => _togglePostLike(group.root),
+                      onReply: () => _startReply(group.root),
+                      onDelete: group.root['can_delete'] == true
+                          ? () => _deletePost(group.root)
                           : null,
                     ),
+                    for (final reply in group.replies)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 28),
+                        child: _CommentItem(
+                          post: reply,
+                          isReply: true,
+                          onUserTap: () => _openCommentAuthor(context, reply),
+                          onLike: () => _togglePostLike(reply),
+                          onReply: () => _startReply(reply),
+                          onDelete: reply['can_delete'] == true
+                              ? () => _deletePost(reply)
+                              : null,
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -762,6 +814,13 @@ class _ThreadMainCard extends StatelessWidget {
 }
 
 
+class _CommentGroup {
+  final Map<String, dynamic> root;
+  final List<Map<String, dynamic>> replies;
+
+  const _CommentGroup({required this.root, required this.replies});
+}
+
 class _CommentHeader extends StatelessWidget {
   final int count;
 
@@ -783,6 +842,7 @@ class _CommentHeader extends StatelessWidget {
 
 class _CommentItem extends StatelessWidget {
   final Map<String, dynamic> post;
+  final bool isReply;
   final VoidCallback onUserTap;
   final VoidCallback onLike;
   final VoidCallback onReply;
@@ -790,6 +850,7 @@ class _CommentItem extends StatelessWidget {
 
   const _CommentItem({
     required this.post,
+    this.isReply = false,
     required this.onUserTap,
     required this.onLike,
     required this.onReply,
@@ -811,10 +872,12 @@ class _CommentItem extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(13),
+      padding: EdgeInsets.all(isReply ? 10 : 13),
       decoration: BoxDecoration(
-        color: AppColors.card(context),
-        borderRadius: BorderRadius.circular(14),
+        color: isReply
+            ? AppColors.card(context).withValues(alpha: 0.72)
+            : AppColors.card(context),
+        borderRadius: BorderRadius.circular(isReply ? 11 : 14),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

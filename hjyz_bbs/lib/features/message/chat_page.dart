@@ -1,8 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/emoji_input_field.dart';
+import '../../core/widgets/emoji_picker.dart';
+import '../../core/widgets/emoji_text.dart';
+import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -31,9 +38,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocus = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
 
   int? _currentUserId;
   late int _conversationId;
+  bool _showEmojiPicker = false;
+  bool _uploadingImage = false;
+  Map<String, dynamic>? _quotedMessage;
 
   @override
   void initState() {
@@ -124,7 +135,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     await _loadMessages(refresh: false);
   }
 
-  Future<void> _send() async {
+  Future<void> _sendLegacy() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
@@ -173,6 +184,159 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.message)),
       );
+    }
+  }
+
+  Future<bool> _sendMessage({
+    String content = '',
+    String messageType = 'text',
+    String imageUrl = '',
+  }) async {
+    final text = content.trim();
+    if (messageType == 'text' && text.isEmpty) return false;
+    if (messageType == 'image' && imageUrl.isEmpty) return false;
+
+    final quote = _quotedMessage;
+    final result = await ApiClient.instance.post(
+      'messages/send',
+      data: {
+        'to_user_id': widget.targetUserId,
+        'content': text,
+        'message_type': messageType,
+        if (imageUrl.isNotEmpty) 'image_url': imageUrl,
+        if (quote != null && _toInt(quote['id']) > 0)
+          'reply_to_id': _toInt(quote['id']),
+      },
+    );
+
+    if (!mounted) return false;
+    if (result.success && result.data is Map) {
+      final data = result.data as Map;
+      if (_conversationId <= 0 && data['conversation_id'] != null) {
+        _conversationId = _toInt(data['conversation_id']);
+      }
+      setState(() {
+        messages.insert(0, {
+          'id': data['id'] ?? 0,
+          'sender_id': _currentUserId,
+          'message_type': data['message_type'] ?? messageType,
+          'content': text,
+          'image_url': data['image_url'] ?? imageUrl,
+          'reply_to_id': data['reply_to_id'],
+          'reply_to': data['reply_to'],
+          'is_read': 0,
+          'created_at': data['created_at'] ?? '',
+          'is_mine': true,
+        });
+        _quotedMessage = null;
+      });
+      if (messageType == 'text') {
+        _inputController.clear();
+      }
+      _inputFocus.unfocus();
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+      return true;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+    return false;
+  }
+
+  Future<void> _send() async {
+    await _sendMessage(content: _inputController.text);
+  }
+
+  Future<void> _pickAndSendImage() async {
+    if (_uploadingImage) return;
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 92,
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      var result = await ApiClient.instance.uploadFile(
+        'upload/media',
+        file: File(picked.path),
+        fields: const {'type': 'chat_image'},
+        taskName: '私信图片 ${picked.name}',
+      );
+      // Older servers do not know the chat_image type yet. Fall back to the
+      // original image route so existing installations can still send media.
+      if (!result.success) {
+        result = await ApiClient.instance.uploadFile(
+          'upload/media',
+          file: File(picked.path),
+          fields: const {'type': 'image'},
+          taskName: '私信图片 ${picked.name}',
+        );
+      }
+      if (!mounted) return;
+      if (result.success && result.data is Map) {
+        final url = (result.data as Map)['url']?.toString() ?? '';
+        if (url.isNotEmpty) {
+          await _sendMessage(messageType: 'image', imageUrl: url);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('图片上传结果无效')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
+  }
+
+  void _toggleEmojiPicker() {
+    setState(() => _showEmojiPicker = !_showEmojiPicker);
+    if (_showEmojiPicker) {
+      _inputFocus.unfocus();
+    } else {
+      _inputFocus.requestFocus();
+    }
+  }
+
+  void _insertEmoji(String char) {
+    final selection = _inputController.selection;
+    final text = _inputController.text;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= start ? selection.end : start;
+    _inputController.value = TextEditingValue(
+      text: text.replaceRange(start, end, char),
+      selection: TextSelection.collapsed(offset: start + char.length),
+    );
+  }
+
+  Future<void> _quoteMessage(Map<String, dynamic> message) async {
+    final shouldQuote = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.format_quote_rounded),
+          title: const Text('引用消息'),
+          onTap: () => Navigator.pop(sheetContext, true),
+        ),
+      ),
+    );
+    if (shouldQuote == true && mounted) {
+      setState(() {
+        _quotedMessage = message;
+        _showEmojiPicker = false;
+      });
+      _inputFocus.requestFocus();
     }
   }
 
@@ -251,10 +415,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           final isMine = msg['is_mine'] == true ||
                               _toInt(msg['sender_id']) == _currentUserId;
 
-                          return _MessageBubble(
-                            content: msg['content']?.toString() ?? '',
-                            isMine: isMine,
-                            time: msg['created_at']?.toString(),
+                          return GestureDetector(
+                            onLongPress: () => _quoteMessage(msg),
+                            child: _MessageBubble(
+                              content: msg['content']?.toString() ?? '',
+                              messageType:
+                                  msg['message_type']?.toString() ?? 'text',
+                              imageUrl: msg['image_url']?.toString() ?? '',
+                              quote: msg['reply_to'] is Map
+                                  ? Map<String, dynamic>.from(msg['reply_to'] as Map)
+                                  : null,
+                              isMine: isMine,
+                              time: msg['created_at']?.toString(),
+                            ),
                           );
                         },
                       ),
@@ -273,8 +446,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               top: 8,
               bottom: MediaQuery.of(context).padding.bottom + 8,
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                if (_quotedMessage != null)
+                  _QuoteComposerPreview(
+                    message: _quotedMessage!,
+                    onClose: () => setState(() => _quotedMessage = null),
+                  ),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _uploadingImage ? null : _pickAndSendImage,
+                      tooltip: '发送图片',
+                      icon: _uploadingImage
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.photo_outlined),
+                    ),
+                    IconButton(
+                      onPressed: _toggleEmojiPicker,
+                      tooltip: '表情',
+                      icon: Icon(
+                        _showEmojiPicker
+                            ? Icons.keyboard_rounded
+                            : Icons.emoji_emotions_outlined,
+                      ),
+                    ),
                 Expanded(
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 100),
@@ -282,11 +483,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       color: AppColors.inputFill(context),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: TextField(
+                    child: EmojiInputField(
                       controller: _inputController,
                       focusNode: _inputFocus,
-                      maxLines: null,
-                      textInputAction: TextInputAction.newline,
+                      minLines: 1,
+                      maxLines: 4,
                       decoration: const InputDecoration(
                         hintText: '输入消息...',
                         border: InputBorder.none,
@@ -295,7 +496,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           vertical: 10,
                         ),
                       ),
-                      style: const TextStyle(fontSize: 15),
                     ),
                   ),
                 ),
@@ -316,6 +516,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ),
                   ),
                 ),
+                  ],
+                ),
+                if (_showEmojiPicker)
+                  EmojiPicker(onEmojiSelected: _insertEmoji),
               ],
             ),
           ),
@@ -327,10 +531,211 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
 class _MessageBubble extends StatelessWidget {
   final String content;
+  final String messageType;
+  final String imageUrl;
+  final Map<String, dynamic>? quote;
   final bool isMine;
   final String? time;
 
   const _MessageBubble({
+    required this.content,
+    required this.messageType,
+    required this.imageUrl,
+    required this.quote,
+    required this.isMine,
+    this.time,
+  });
+
+  String _formatTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    final date = DateTime.tryParse(raw)?.toLocal();
+    if (date == null) return '';
+    final now = DateTime.now();
+    final sameDay = date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
+    final timeText =
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    if (sameDay) return timeText;
+    return '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} $timeText';
+  }
+
+  String _quotePreview(Map<String, dynamic> value) {
+    if (value['message_type']?.toString() == 'image') return '[图片]';
+    final text = value['content']?.toString() ?? '';
+    return text.isEmpty ? '[消息]' : text;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bubbleColor = isMine
+        ? const Color(0xFFFB7299)
+        : AppColors.card(context);
+    final textColor = isMine ? Colors.white : AppColors.text(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        mainAxisAlignment:
+            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMine) ...[
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: Colors.grey.shade300,
+              child: Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.76,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(18),
+                      topRight: const Radius.circular(18),
+                      bottomLeft: Radius.circular(isMine ? 18 : 4),
+                      bottomRight: Radius.circular(isMine ? 4 : 18),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (quote != null)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 7),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isMine
+                                ? Colors.white.withValues(alpha: 0.18)
+                                : Colors.grey.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: EmojiText(
+                            _quotePreview(quote!),
+                            imageSize: 15,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textColor.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ),
+                      if (messageType == 'image' && imageUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SafeNetworkImage(
+                            url: imageUrl,
+                            width: 190,
+                            height: 190,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      else
+                        EmojiText(
+                          content,
+                          imageSize: 20,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: textColor,
+                            height: 1.4,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (time != null && time!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      _formatTime(time),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (isMine) const SizedBox(width: 6),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuoteComposerPreview extends StatelessWidget {
+  final Map<String, dynamic> message;
+  final VoidCallback onClose;
+
+  const _QuoteComposerPreview({
+    required this.message,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sender = message['sender'] is Map
+        ? (message['sender'] as Map)['nickname']?.toString() ?? '用户'
+        : '用户';
+    final isImage = message['message_type']?.toString() == 'image';
+    final preview = isImage
+        ? '[图片]'
+        : (message['content']?.toString() ?? '').trim();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: AppColors.inputFill(context),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '回复 $sender：${preview.isEmpty ? '[消息]' : preview}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
+          ),
+          IconButton(
+            onPressed: onClose,
+            tooltip: '取消引用',
+            icon: const Icon(Icons.close, size: 18),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegacyMessageBubble extends StatelessWidget {
+  final String content;
+  final bool isMine;
+  final String? time;
+
+  const _LegacyMessageBubble({
     required this.content,
     required this.isMine,
     this.time,

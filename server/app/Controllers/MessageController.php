@@ -107,6 +107,9 @@ class MessageController
             );
             $row['sender'] = $sender ?: null;
             $row['is_mine'] = (int)$row['sender_id'] === (int)$user['id'];
+            $row['message_type'] = $row['message_type'] ?? 'text';
+            $row['image_url'] = $row['image_url'] ?? '';
+            $row['reply_to'] = self::loadReply($row, $conversationId, $users);
         }
 
         \Response::success([
@@ -122,6 +125,13 @@ class MessageController
         $user = \Auth::requireLogin();
         $toUserId = \Request::int('to_user_id');
         $content = \Request::str('content');
+        $messageType = \Request::str('message_type', 'text');
+        $imageUrl = \Request::str('image_url');
+        $replyToId = \Request::int('reply_to_id');
+
+        if (!in_array($messageType, ['text', 'image'], true)) {
+            \Response::json(422, '消息类型无效');
+        }
 
         if ($toUserId <= 0) {
             \Response::json(422, '接收用户 ID 错误');
@@ -131,8 +141,15 @@ class MessageController
             \Response::json(422, '不能给自己发私信');
         }
 
-        if ($content === '') {
+        if ($messageType === 'text' && $content === '') {
             \Response::json(422, '请输入消息内容');
+        }
+
+        if ($messageType === 'image' && $imageUrl === '') {
+            \Response::json(422, '图片地址无效');
+        }
+        if ($messageType === 'image' && !validate_remote_url($imageUrl)) {
+            \Response::json(422, '图片地址无效');
         }
 
         if (mb_strlen($content) > 2000) {
@@ -174,18 +191,31 @@ class MessageController
                     "INSERT INTO {$conv}
                     (`user_a_id`, `user_b_id`, `last_message_at`, `last_message_preview`, `created_at`)
                      VALUES (?, ?, ?, ?, ?)",
-                    [$aId, $bId, now(), mb_substr($content, 0, 100), now()]
+                    [$aId, $bId, now(), $messageType === 'image' ? '图片' : mb_substr($content, 0, 100), now()]
                 );
                 $conversationId = (int)\Database::lastInsertId();
                 record_sync_operation('conversations', $conversationId, 'insert');
             }
 
             // 插入消息
+            $replyTo = null;
+            if ($replyToId > 0) {
+                $replyTo = \Database::fetch(
+                    "SELECT id, sender_id, message_type, content, image_url, created_at
+                     FROM {$messages}
+                     WHERE id = ? AND conversation_id = ? LIMIT 1",
+                    [$replyToId, $conversationId]
+                );
+                if (!$replyTo) {
+                    $replyToId = 0;
+                }
+            }
+
             \Database::execute(
                 "INSERT INTO {$messages}
-                (`conversation_id`, `sender_id`, `content`, `is_read`, `created_at`)
-                 VALUES (?, ?, ?, 0, ?)",
-                [$conversationId, $userId, $content, now()]
+                (`conversation_id`, `sender_id`, `message_type`, `content`, `image_url`, `reply_to_id`, `is_read`, `created_at`)
+                 VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+                [$conversationId, $userId, $messageType, $content, $imageUrl ?: null, $replyToId > 0 ? $replyToId : null, now()]
             );
 
             $messageId = (int)\Database::lastInsertId();
@@ -197,7 +227,7 @@ class MessageController
                 "UPDATE {$conv}
                  SET `last_message_at` = ?, `last_message_preview` = ?
                  WHERE id = ?",
-                [now(), mb_substr($content, 0, 100), $conversationId]
+                [now(), $messageType === 'image' ? '图片' : mb_substr($content, 0, 100), $conversationId]
             );
             record_sync_operation('conversations', $conversationId, 'update');
 
@@ -206,7 +236,11 @@ class MessageController
             \Response::success([
                 'id' => $messageId,
                 'conversation_id' => $conversationId,
+                'message_type' => $messageType,
                 'content' => $content,
+                'image_url' => $imageUrl,
+                'reply_to_id' => $replyToId > 0 ? $replyToId : null,
+                'reply_to' => self::serializeReply($replyTo ?: null, $users),
                 'created_at' => now(),
             ], '发送成功');
 
@@ -216,6 +250,39 @@ class MessageController
 
             \Response::json(500, '发送失败');
         }
+    }
+
+    private static function loadReply(array $row, int $conversationId, string $users)
+    {
+        $replyToId = (int)($row['reply_to_id'] ?? 0);
+        if ($replyToId <= 0) return null;
+
+        $messages = \Database::table('messages');
+        $reply = \Database::fetch(
+            "SELECT id, sender_id, message_type, content, image_url, created_at
+             FROM {$messages}
+             WHERE id = ? AND conversation_id = ? LIMIT 1",
+            [$replyToId, $conversationId]
+        );
+        return self::serializeReply($reply ?: null, $users);
+    }
+
+    private static function serializeReply(?array $reply, string $users)
+    {
+        if (!$reply) return null;
+        $sender = \Database::fetch(
+            "SELECT id, nickname, avatar FROM {$users} WHERE id = ? LIMIT 1",
+            [(int)$reply['sender_id']]
+        );
+        return [
+            'id' => (int)$reply['id'],
+            'sender_id' => (int)$reply['sender_id'],
+            'sender' => $sender ?: null,
+            'message_type' => $reply['message_type'] ?? 'text',
+            'content' => $reply['content'] ?? '',
+            'image_url' => $reply['image_url'] ?? '',
+            'created_at' => $reply['created_at'] ?? '',
+        ];
     }
 
     public static function unreadCount()

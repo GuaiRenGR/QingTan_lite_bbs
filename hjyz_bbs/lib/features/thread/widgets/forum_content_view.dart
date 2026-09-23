@@ -662,7 +662,7 @@ class _CollapsedChatLogView extends StatefulWidget {
 }
 
 class _CollapsedChatLogViewState extends State<_CollapsedChatLogView> {
-  bool _expanded = false;
+  final bool _expanded = false;
 
   String _previewText(ChatLogMessage message) {
     switch (message.type) {

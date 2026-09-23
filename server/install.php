@@ -527,12 +527,16 @@ function createTables(PDO $pdo, string $prefix)
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `conversation_id` BIGINT UNSIGNED NOT NULL,
       `sender_id` BIGINT UNSIGNED NOT NULL,
+      `message_type` VARCHAR(16) NOT NULL DEFAULT 'text',
       `content` TEXT NOT NULL,
+      `image_url` TEXT DEFAULT NULL,
+      `reply_to_id` BIGINT UNSIGNED DEFAULT NULL,
       `is_read` TINYINT NOT NULL DEFAULT 0,
       `created_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`),
       KEY `idx_conv_time` (`conversation_id`, `created_at`),
-      KEY `idx_sender` (`sender_id`)
+      KEY `idx_sender` (`sender_id`),
+      KEY `idx_reply_to` (`reply_to_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

@@ -130,13 +130,31 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
         }
         final emoji = EmojiData.findByCodepoint(codeUnit);
         if (emoji != null) {
+          // EditableText measures the PUA character using the current font,
+          // while the image overlay has its own width. Keep the placeholder
+          // width identical to the character advance so the caret remains
+          // aligned after an emoji.
+          final advance = _measureCharacterAdvance(
+            context,
+            String.fromCharCode(codeUnit),
+            inputStyle,
+          );
           spans.add(WidgetSpan(
             alignment: PlaceholderAlignment.middle,
-            child: Image.asset(
-              emoji.assetPath,
-              width: 15,
-              height: 15,
-              fit: BoxFit.contain,
+            child: SizedBox(
+              width: advance,
+              height: MediaQuery.textScalerOf(context).scale(
+                    inputStyle.fontSize!,
+                  ) *
+                  (inputStyle.height ?? 1.0),
+              child: Center(
+                child: Image.asset(
+                  emoji.assetPath,
+                  width: 15,
+                  height: 15,
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           ));
         }
@@ -159,5 +177,21 @@ class _EmojiInputFieldState extends State<EmojiInputField> {
         children: spans,
       ),
     );
+  }
+
+  double _measureCharacterAdvance(
+    BuildContext context,
+    String character,
+    TextStyle style,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: character, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+
+    // A missing-glyph font can report no advance. Keep a stable fallback so
+    // the image does not collapse and the caret still has a predictable slot.
+    return painter.width > 0 ? painter.width : 15;
   }
 }
