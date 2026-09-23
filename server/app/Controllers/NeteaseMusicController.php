@@ -57,10 +57,13 @@ class NeteaseMusicController
             if (is_array($artists)) {
                 $artists = implode(' / ', array_values(array_filter(array_map('strval', $artists))));
             }
-            $picId = trim((string)($song['pic_id'] ?? ''));
+            $picId = trim((string)($song['pic_id'] ?? $song['pic'] ?? $song['picId'] ?? $song['album_pic'] ?? ''));
             $lyricId = trim((string)($song['lyric_id'] ?? $id));
             $query = '&source=' . rawurlencode($source);
-            $coverUrl = self::directMediaUrl($picId);
+            $coverUrl = self::directMediaUrl($song['pic_url'] ?? $song['picUrl'] ?? '');
+            if ($coverUrl === '' && $source === 'netease' && ctype_digit($picId)) {
+                $coverUrl = 'https://music.163.com/api/img/blur/cover500/' . rawurlencode($picId) . '.jpg';
+            }
             if ($coverUrl === '' && $picId !== '') {
                 $coverUrl = request_origin() . '/index.php?route=netease/cover&id='
                     . rawurlencode($picId) . $query;
@@ -141,7 +144,8 @@ class NeteaseMusicController
                 'id' => $id,
                 'size' => 500,
             ]);
-            self::redirectToMedia(trim((string)($payload['url'] ?? '')), 86400);
+            $coverUrl = $payload['url'] ?? $payload['pic'] ?? $payload['pic_url'] ?? '';
+            self::redirectToMedia(trim((string)$coverUrl), 86400);
         } catch (\Throwable $e) {
             log_error('[MusicCover] ' . $e->getMessage());
             http_response_code(502);
@@ -169,14 +173,20 @@ class NeteaseMusicController
                     'lv' => -1,
                     'tv' => -1,
                 ]);
-                $lyrics = trim((string)($payload['lrc']['lyric'] ?? ''));
+                $lyrics = self::mergeBilingualLyrics(
+                    trim((string)($payload['lrc']['lyric'] ?? '')),
+                    trim((string)($payload['tlyric']['lyric'] ?? ''))
+                );
             } else {
                 $payload = self::requestMusicApi([
                     'types' => 'lyric',
                     'source' => $source,
                     'id' => $id,
                 ]);
-                $lyrics = trim((string)($payload['lyric'] ?? ''));
+                $lyrics = self::mergeBilingualLyrics(
+                    trim((string)($payload['lyric'] ?? '')),
+                    trim((string)($payload['tlyric'] ?? ''))
+                );
             }
             header('Content-Type: text/plain; charset=utf-8');
             header('Cache-Control: public, max-age=86400');
@@ -186,6 +196,31 @@ class NeteaseMusicController
             http_response_code(502);
         }
         exit;
+    }
+
+    private static function mergeBilingualLyrics($original, $translated)
+    {
+        if ($original === '' || $translated === '') return $original !== '' ? $original : $translated;
+        $pattern = '/(\[\d{1,3}:\d{1,2}(?:[\.:]\d{1,3})?\])/';
+        preg_match_all($pattern, $translated, $matches, PREG_OFFSET_CAPTURE);
+        if (!$matches[1]) return $original;
+        $translatedByTime = [];
+        foreach ($matches[1] as $index => $match) {
+            $tag = $match[0];
+            $start = $match[1] + strlen($tag);
+            $end = isset($matches[1][$index + 1]) ? $matches[1][$index + 1][1] : strlen($translated);
+            $text = trim(substr($translated, $start, $end - $start));
+            if ($text !== '') $translatedByTime[$tag][] = $text;
+        }
+        $lines = preg_split('/\r?\n/', $original);
+        $result = [];
+        foreach ($lines as $line) {
+            $result[] = $line;
+            if (preg_match_all($pattern, $line, $lineTags)) {
+                foreach ($lineTags[1] as $tag) foreach ($translatedByTime[$tag] ?? [] as $text) $result[] = $tag . $text;
+            }
+        }
+        return implode("\n", $result);
     }
 
     private static function searchOfficial($keyword, $page, $limit)

@@ -525,9 +525,22 @@ class _LyricsPageState extends State<_LyricsPage> {
                   child: Padding(
                     key: _lineKeys.putIfAbsent(index, () => GlobalKey()),
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Text(
-                      lyrics.lines[index].text,
-                      textAlign: TextAlign.center,
+                    child: Column(
+                      children: [
+                        Text(lyrics.lines[index].text, textAlign: TextAlign.center),
+                        if (lyrics.lines[index].translation.isNotEmpty)
+                          Text(
+                            lyrics.lines[index].translation,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: active ? 14 : 13,
+                              fontWeight: FontWeight.w400,
+                              color: active
+                                  ? AppColors.text(context).withOpacity(.82)
+                                  : AppColors.textSecondary(context).withOpacity(.78),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 );

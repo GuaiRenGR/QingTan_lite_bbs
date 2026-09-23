@@ -193,6 +193,26 @@ try {
             App\Controllers\MusicPlaylistController::defaultPlaylist();
             break;
 
+        case 'music/playlists':
+            App\Controllers\MusicPlaylistController::listPlaylists();
+            break;
+
+        case 'music/playlists/create':
+            App\Controllers\MusicPlaylistController::createPlaylist();
+            break;
+
+        case 'music/playlists/tracks':
+            App\Controllers\MusicPlaylistController::playlist();
+            break;
+
+        case 'music/playlists/add':
+            App\Controllers\MusicPlaylistController::addTrack();
+            break;
+
+        case 'music/playlists/remove':
+            App\Controllers\MusicPlaylistController::removeTrack();
+            break;
+
         case 'music/favorites/toggle':
             App\Controllers\MusicPlaylistController::toggleFavorite();
             break;

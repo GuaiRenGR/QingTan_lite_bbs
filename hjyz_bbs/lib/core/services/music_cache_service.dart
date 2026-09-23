@@ -57,8 +57,9 @@ class MusicMetadata {
 class MusicLyricLine {
   final Duration? timestamp;
   final String text;
+  final String translation;
 
-  const MusicLyricLine({required this.timestamp, required this.text});
+  const MusicLyricLine({required this.timestamp, required this.text, this.translation = ''});
 }
 
 class MusicLyrics {
@@ -551,7 +552,16 @@ class MusicCacheService {
 
     if (timedLines.isNotEmpty) {
       timedLines.sort((left, right) => left.timestamp!.compareTo(right.timestamp!));
-      return MusicLyrics(lines: List.unmodifiable(timedLines), synchronized: true);
+      final merged = <MusicLyricLine>[];
+      for (final line in timedLines) {
+        if (merged.isNotEmpty && merged.last.timestamp == line.timestamp && merged.last.translation.isEmpty) {
+          final previous = merged.removeLast();
+          merged.add(MusicLyricLine(timestamp: previous.timestamp, text: previous.text, translation: line.text));
+        } else {
+          merged.add(line);
+        }
+      }
+      return MusicLyrics(lines: List.unmodifiable(merged), synchronized: true);
     }
     return MusicLyrics(lines: List.unmodifiable(plainLines), synchronized: false);
   }

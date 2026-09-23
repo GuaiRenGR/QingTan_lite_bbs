@@ -268,12 +268,14 @@ function createTables(PDO $pdo, string $prefix)
       `description` VARCHAR(500) DEFAULT NULL,
       `cover_url` VARCHAR(1000) DEFAULT NULL,
       `default_key` BIGINT UNSIGNED DEFAULT NULL,
+      `public_id` INT UNSIGNED DEFAULT NULL,
       `is_default` TINYINT NOT NULL DEFAULT 0,
       `status` TINYINT NOT NULL DEFAULT 1,
       `created_at` DATETIME NOT NULL,
       `updated_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`),
       UNIQUE KEY `uk_default_key` (`default_key`),
+      UNIQUE KEY `uk_public_id` (`public_id`),
       KEY `idx_user_status` (`user_id`, `status`, `is_default`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
