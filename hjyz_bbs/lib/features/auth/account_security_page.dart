@@ -349,9 +349,10 @@ class _AccountSecurityPageState extends ConsumerState<AccountSecurityPage> {
                   ),
                 );
 
-                if (confirm == true && mounted) {
+                if (confirm == true) {
                   await ref.read(authControllerProvider.notifier).logout();
-                  if (mounted) context.go('/');
+                  if (!context.mounted) return;
+                  context.go('/');
                 }
               },
               child: const Text('退出登录'),

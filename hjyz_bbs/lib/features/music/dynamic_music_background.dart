@@ -47,7 +47,7 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
   static const _blurFrameInterval = Duration(milliseconds: 50);
 
   late final AnimationController _motionController;
-  final _frameRepaint = ChangeNotifier();
+  final _frameRepaint = _FrameNotifier();
   final _reactiveClock = Stopwatch();
   MusicBackgroundPalette? _targetPalette;
   ui.FragmentShader? _shader;
@@ -125,7 +125,7 @@ class _DynamicMusicBackgroundState extends State<DynamicMusicBackground>
         : _normalFrameInterval;
     if (elapsed - _lastMotionFrame < interval) return;
     _lastMotionFrame = elapsed;
-    _frameRepaint.notifyListeners();
+    _frameRepaint.tick();
   }
 
   Future<void> _ensureShader() async {
@@ -965,4 +965,8 @@ class _BackgroundGrainPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BackgroundGrainPainter oldDelegate) => false;
+}
+
+class _FrameNotifier extends ChangeNotifier {
+  void tick() => notifyListeners();
 }

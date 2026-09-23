@@ -1503,7 +1503,6 @@ class _AttachmentCardState extends State<_AttachmentCard> {
     final name = _info!['name']?.toString() ?? '未知文件';
     final size = _info!['size'] is int ? _info!['size'] as int : 0;
     final mimeType = _info!['type']?.toString();
-    final url = _info!['url']?.toString() ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -1516,18 +1515,20 @@ class _AttachmentCardState extends State<_AttachmentCard> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final router = GoRouter.of(context);
                 final prefs = await SharedPreferences.getInstance();
                 if (!mounted) return;
                 final useBuiltin = prefs.getBool('use_builtin_downloader') ?? true;
                 if (useBuiltin) {
                   final name = _info?['name']?.toString() ?? 'file_${widget.attachmentId}';
                   final service = DownloadService.instance;
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text('开始下载: $name'),
                       action: SnackBarAction(
                         label: '查看下载',
-                        onPressed: () => context.push('/downloads'),
+                        onPressed: () => router.push('/downloads'),
                       ),
                     ),
                   );

@@ -536,8 +536,8 @@ class _LyricsPageState extends State<_LyricsPage> {
                               fontSize: active ? 14 : 13,
                               fontWeight: FontWeight.w400,
                               color: active
-                                  ? AppColors.text(context).withOpacity(.82)
-                                  : AppColors.textSecondary(context).withOpacity(.78),
+                                  ? AppColors.text(context).withValues(alpha: .82)
+                                  : AppColors.textSecondary(context).withValues(alpha: .78),
                             ),
                           ),
                       ],

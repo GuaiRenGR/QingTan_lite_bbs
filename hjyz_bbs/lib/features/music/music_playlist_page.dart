@@ -25,7 +25,9 @@ class _MusicPlaylistPageState extends ConsumerState<MusicPlaylistPage> {
   String? _error;
 
   Future<void> _load(int userId, {int? selectId}) async {
-    if (userId <= 0) return;
+    if (userId <= 0) {
+      return;
+    }
     setState(() { _loading = true; _error = null; });
     final response = await ApiClient.instance.get('music/playlists');
     if (!mounted || _loadedUserId != userId) return;
@@ -42,8 +44,14 @@ class _MusicPlaylistPageState extends ConsumerState<MusicPlaylistPage> {
     final selectedMatches = list.where((item) => item['playlist_id'] == id).toList();
     final selected = selectedMatches.isNotEmpty ? selectedMatches.first : (list.isEmpty ? null : list.first);
     setState(() { _playlists = list; _selectedId = selected?['playlist_id'] as int?; });
-    if (selected != null) await _loadTracks(selected['playlist_id'] as int);
-    else if (mounted) setState(() { _rows = const []; _loading = false; });
+    if (selected != null) {
+      await _loadTracks(selected['playlist_id'] as int);
+    } else if (mounted) {
+      setState(() {
+        _rows = const [];
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _loadTracks(int id) async {
@@ -89,8 +97,13 @@ class _MusicPlaylistPageState extends ConsumerState<MusicPlaylistPage> {
       'playlist_id': id, 'track_id': row['id'],
     });
     if (!mounted) return;
-    if (result.success) await _loadTracks(id);
-    else ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    if (result.success) {
+      await _loadTracks(id);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
   }
 
   @override

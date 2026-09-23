@@ -545,6 +545,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     }
     final streamCacheFile = await MusicCacheService.instance
         .getPersistentStreamCacheFile(track.url);
+    // ignore: experimental_member_use
     return LockCachingAudioSource(
       Uri.parse(resolvedUrl),
       cacheFile: streamCacheFile,

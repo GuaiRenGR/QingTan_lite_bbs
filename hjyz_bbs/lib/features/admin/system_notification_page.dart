@@ -70,21 +70,25 @@ class _SystemNotificationPageState extends State<SystemNotificationPage> {
           const SizedBox(height: 20),
           Text('发布范围', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          RadioListTile<String>(
-            value: 'registered',
+          RadioGroup<String>(
             groupValue: _audience,
-            onChanged: (v) => setState(() => _audience = v!),
-            title: const Text('仅对已注册用户发布'),
-            subtitle: const Text('按当前已注册用户生成通知记录'),
-            contentPadding: EdgeInsets.zero,
-          ),
-          RadioListTile<String>(
-            value: 'all',
-            groupValue: _audience,
-            onChanged: (v) => setState(() => _audience = v!),
-            title: const Text('为所有用户发布'),
-            subtitle: const Text('使用广播记录，新注册用户也可以看到'),
-            contentPadding: EdgeInsets.zero,
+            onChanged: (value) => setState(() => _audience = value ?? 'registered'),
+            child: Column(
+              children: [
+                RadioListTile<String>(
+                  value: 'registered',
+                  title: const Text('仅对已注册用户发布'),
+                  subtitle: const Text('按当前已注册用户生成通知记录'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  value: 'all',
+                  title: const Text('为所有用户发布'),
+                  subtitle: const Text('使用广播记录，新注册用户也可以看到'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           FilledButton.icon(

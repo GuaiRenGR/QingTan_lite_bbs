@@ -253,7 +253,9 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
 
     if (result.success) {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       await prefs.setBool('admin_direct_upload', directUpload);
+      if (!mounted) return;
       setState(() {
         contactUrl = settings['contact_url'] ?? '';
         aiReviewBaseUrl = settings['ai_review_base_url'] ?? '';
