@@ -418,7 +418,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                             : '正在生成备份...')
                       : (lastBackupPath ?? '仅管理员可下载，服务端文件下载后自动删除'),
                   loading: backupDownloading,
-                  onTap: backupDownloading ? null : _confirmDownloadBackup,
+                  onTap: () => context.push('/admin/backups'),
                 ),
                 _AdminEntry(
                   icon: Icons.hub_outlined,

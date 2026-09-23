@@ -33,6 +33,7 @@ import 'features/admin/admin_sponsors_page.dart';
 import 'features/admin/poster_generator_v2_page.dart';
 import 'features/admin/system_notification_page.dart';
 import 'features/admin/multi_server_generator_page.dart';
+import 'features/admin/backup_restore_page.dart';
 import 'features/download/download_page.dart';
 import 'features/discover/discover_page.dart';
 import 'features/user/user_home_page.dart';
@@ -115,6 +116,7 @@ final router = GoRouter(
     GoRoute(path: '/creator', builder: (_, _) => const CreatorCenterPage()),
     GoRoute(path: '/admin', builder: (_, _) => const AdminCenterPage()),
     GoRoute(path: '/admin/multi-server', builder: (_, _) => const MultiServerGeneratorPage()),
+    GoRoute(path: '/admin/backups', builder: (_, _) => const BackupRestorePage()),
     GoRoute(path: '/admin/users', builder: (_, _) => const AdminUsersPage()),
     GoRoute(path: '/admin/review', builder: (_, _) => const AdminReviewPage()),
     GoRoute(
