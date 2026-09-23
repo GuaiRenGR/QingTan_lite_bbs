@@ -515,6 +515,180 @@ class AdminController
         exit;
     }
 
+    /**
+     * Generate a self-contained multi-server deployment archive.
+     * Database passwords are only embedded when explicitly supplied by the
+     * administrator; otherwise the generated installer asks for them.
+     */
+    public static function multiServerPackage()
+    {
+        self::requireAdmin();
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            \Response::json(405, '仅支持 POST 请求', null, 405);
+        }
+        if (!class_exists('ZipArchive')) {
+            \Response::json(500, '服务器未启用 Zip 扩展，无法生成部署包', null, 500);
+        }
+
+        $input = \Request::input();
+        $rawServers = $input['servers'] ?? [];
+        if (!is_array($rawServers) || count($rawServers) < 1 || count($rawServers) > 32) {
+            \Response::json(422, '至少填写一台服务器，最多支持 32 台', null, 422);
+        }
+
+        $servers = [];
+        $seen = [];
+        foreach ($rawServers as $index => $item) {
+            if (!is_array($item)) continue;
+            $url = trim((string)($item['url'] ?? ''));
+            $parts = parse_url($url);
+            if (!$parts || empty($parts['scheme']) || !in_array(strtolower($parts['scheme']), ['http', 'https'], true) || empty($parts['host'])) {
+                \Response::json(422, '第 ' . ((int)$index + 1) . ' 台服务器地址无效', null, 422);
+            }
+            $normalized = rtrim($url, '/');
+            if (isset($seen[$normalized])) {
+                \Response::json(422, '服务器地址不能重复', null, 422);
+            }
+            $seen[$normalized] = true;
+            $weight = max(1, min(1000, (int)($item['weight'] ?? 1)));
+            $name = trim((string)($item['name'] ?? ('服务器 ' . ((int)$index + 1))));
+            $servers[] = [
+                'id' => count($servers) + 1,
+                'name' => $name !== '' ? mb_substr($name, 0, 64) : ('服务器 ' . (count($servers) + 1)),
+                'url' => $normalized,
+                'weight' => $weight,
+            ];
+        }
+
+        $dbName = trim((string)($input['db_name'] ?? ''));
+        $dbPassword = (string)($input['db_password'] ?? '');
+        if ($dbName !== '' && !preg_match('/^[A-Za-z0-9_$-]{1,64}$/', $dbName)) {
+            \Response::json(422, '数据库名格式无效', null, 422);
+        }
+
+        $backupPath = \DatabaseBackup::createTemporaryFile();
+        $workDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qingtan_cluster_' . bin2hex(random_bytes(8));
+        $zipPath = $workDir . '.zip';
+        if (!mkdir($workDir, 0700, true) && !is_dir($workDir)) {
+            \Response::json(500, '无法创建部署包临时目录', null, 500);
+        }
+        $cleanup = static function () use ($workDir, $zipPath, $backupPath) {
+            if (is_file($zipPath)) @unlink($zipPath);
+            if (is_file($backupPath)) @unlink($backupPath);
+            if (is_dir($workDir)) {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($workDir, \FilesystemIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::CHILD_FIRST
+                );
+                foreach ($iterator as $file) {
+                    $file->isDir() ? @rmdir($file->getPathname()) : @unlink($file->getPathname());
+                }
+                @rmdir($workDir);
+            }
+        };
+        register_shutdown_function($cleanup);
+
+        $sourceDir = FX_ROOT;
+        $copyDir = $workDir . DIRECTORY_SEPARATOR . 'server';
+        $skip = ['config/database.php', 'config/onedrive.local.php', 'uploads'];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iterator as $file) {
+            $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($sourceDir) + 1));
+            if (in_array($relative, $skip, true) || strpos($relative, 'storage/') === 0) continue;
+            if (strpos($relative, 'server.zip') === 0) continue;
+            $target = $copyDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            if ($file->isDir()) {
+                @mkdir($target, 0700, true);
+            } else {
+                @mkdir(dirname($target), 0700, true);
+                @copy($file->getPathname(), $target);
+            }
+        }
+        @copy($backupPath, $workDir . DIRECTORY_SEPARATOR . 'database.sql');
+
+        $token = bin2hex(random_bytes(32));
+        $config = [
+            'server_id' => 1,
+            'server_name' => $servers[0]['name'],
+            'server_url' => $servers[0]['url'],
+            'servers' => $servers,
+            'sync' => [
+                'sync_token' => $token,
+                'batch_size' => 100,
+                'retry_times' => 3,
+                'timeout' => 30,
+                'sample_rate' => 10,
+            ],
+        ];
+        $configExport = var_export($config, true);
+        $dbNameJson = json_encode($dbName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $dbPasswordJson = json_encode($dbPassword, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $installer = self::multiServerInstaller($configExport, $dbNameJson ?: "''", $dbPasswordJson ?: "''");
+        file_put_contents($workDir . DIRECTORY_SEPARATOR . 'install-multi-server.php', $installer, LOCK_EX);
+        file_put_contents($workDir . DIRECTORY_SEPARATOR . 'README.txt', "轻坛多服务器部署包\n\n1. 将本目录上传到目标服务器。\n2. 访问 install-multi-server.php，或使用 PHP CLI 执行。\n3. 未预填的数据库名/密码会在安装时询问。\n4. 安装完成后删除安装脚本和 database.sql。\n\n所有节点必须使用同一份 servers.php 和 sync_token。\n", LOCK_EX);
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            \Response::json(500, '无法创建部署包', null, 500);
+        }
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($workDir, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if (!$file->isFile()) continue;
+            $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($workDir) + 1));
+            $zip->addFile($file->getPathname(), $relative);
+        }
+        $zip->close();
+
+        $size = filesize($zipPath);
+        $stream = fopen($zipPath, 'rb');
+        if ($stream === false || $size === false) {
+            \Response::json(500, '无法读取部署包', null, 500);
+        }
+        while (ob_get_level() > 0) ob_end_clean();
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="qingtan_multi_server_' . date('Ymd_His') . '.zip"');
+        header('Content-Length: ' . $size);
+        header('Cache-Control: no-store');
+        fpassthru($stream);
+        fclose($stream);
+        $cleanup();
+        exit;
+    }
+
+    private static function multiServerInstaller($configExport, $dbName, $dbPassword)
+    {
+        return <<<PHP
+<?php
+// 轻坛多服务器一键安装器。安装完成后请立即删除本文件和 database.sql。
+\$defaults = ['db_name' => {$dbName}, 'db_password' => {$dbPassword}];
+\$isCli = PHP_SAPI === 'cli';
+\$value = function (\$key, \$fallback = '') use (\$isCli) {
+    if (\$isCli) { global \$argv; foreach (\$argv as \$arg) if (strpos(\$arg, \"--\$key=\") === 0) return substr(\$arg, strlen(\"--\$key=\")); }
+    return \$_POST[\$key] ?? \$fallback;
+};
+\$dbHost = trim((string)\$value('db_host', '127.0.0.1'));
+\$dbPort = (int)\$value('db_port', '3306');
+\$dbUser = trim((string)\$value('db_user', 'root'));
+\$dbName = trim((string)\$value('db_name', \$defaults['db_name']));
+\$dbPass = (string)\$value('db_password', \$defaults['db_password']);
+if (\$dbName === '') { if (\$isCli) { fwrite(STDERR, "--db_name is required\\n"); exit(1); } echo '<form method="post"><input name="db_host" value="127.0.0.1"><input name="db_port" value="3306"><input name="db_user" value="root"><input name="db_name" required placeholder="数据库名"><input name="db_password" type="password" placeholder="数据库密码"><button>开始安装</button></form>'; exit; }
+if (!preg_match('/^[A-Za-z0-9_$-]{1,64}$/', \$dbName)) die('数据库名格式无效');
+\$pdo = new PDO('mysql:host=' . \\$dbHost . ';port=' . \\$dbPort . ';dbname=' . \\$dbName . ';charset=utf8mb4', \\$dbUser, \\$dbPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+\$sql = file_get_contents(__DIR__ . '/database.sql');
+if (\$sql === false || \\$pdo->exec(\$sql) === false) die('数据库恢复失败');
+\$serverDir = __DIR__ . '/server';
+\$configDir = \\$serverDir . '/config';
+if (!is_dir(\$configDir)) mkdir(\$configDir, 0750, true);
+file_put_contents(\$configDir . '/database.php', "<?php\\nreturn " . var_export(['host' => \\$dbHost, 'port' => \\$dbPort, 'database' => \\$dbName, 'username' => \\$dbUser, 'password' => \\$dbPass, 'charset' => 'utf8mb4', 'prefix' => ''], true) . ";\\n", LOCK_EX);
+file_put_contents(\$configDir . '/servers.php', "<?php\\nreturn " . var_export({$configExport}, true) . ";\\n", LOCK_EX);
+echo \\$isCli ? "安装完成，请将 server 目录配置为网站根目录。\\n" : '<p>安装完成，请将 server 目录配置为网站根目录，并删除本安装脚本及 database.sql。</p>';
+PHP;
+    }
+
     // ========== 用户资料编辑 ==========
 
     public static function updateUser()

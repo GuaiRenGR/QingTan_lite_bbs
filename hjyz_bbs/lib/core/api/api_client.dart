@@ -280,6 +280,53 @@ class ApiClient {
     );
   }
 
+  Future<ApiResult<String>> downloadMultiServerPackage({
+    required String savePath,
+    required Map<String, dynamic> data,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    // Database credentials are sent only to the selected server, never to
+    // every failover endpoint.
+    final server = ServerManager.instance.currentServer;
+    if (server == null) return ApiResult.fail('当前没有可用服务器');
+    final partialFile = File('$savePath.part');
+    try {
+      await _deleteIfExists(partialFile);
+      final response = await _getDioForServer(server.id, server.url).download(
+        '',
+        partialFile.path,
+        queryParameters: const {'route': 'admin/multi-server/package'},
+        data: data,
+        options: Options(
+          method: 'POST',
+          headers: const {'Accept': 'application/zip'},
+          receiveTimeout: const Duration(minutes: 20),
+        ),
+        onReceiveProgress: onReceiveProgress,
+        deleteOnError: false,
+      );
+      final bytes = await partialFile.exists()
+          ? await partialFile.openRead(0, 4).fold<List<int>>(<int>[], (b, c) => b..addAll(c))
+          : const <int>[];
+      if (response.statusCode == 200 && bytes.length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4b) {
+        final target = File(savePath);
+        await _deleteIfExists(target);
+        await partialFile.rename(savePath);
+        ServerManager.instance.reportSuccess(server.id);
+        return ApiResult.ok(savePath, message: '多服务器部署包已下载');
+      }
+      final message = await _readDownloadError(partialFile, response.statusCode ?? 0);
+      await _deleteIfExists(partialFile);
+      return ApiResult.fail(message, code: response.statusCode ?? -1);
+    } on DioException catch (e) {
+      await _deleteIfExists(partialFile);
+      return ApiResult.fail(_dioErrorMessage(e));
+    } catch (e) {
+      await _deleteIfExists(partialFile);
+      return ApiResult.fail(e.toString());
+    }
+  }
+
   Future<bool> _hasBackupSignature(File file) async {
     if (!await file.exists() || await file.length() == 0) return false;
 

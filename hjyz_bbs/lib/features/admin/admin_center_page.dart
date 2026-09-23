@@ -411,7 +411,7 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                 ),
                 _AdminEntry(
                   icon: Icons.cloud_download_outlined,
-                  title: '下载数据库备份',
+                  title: '备份与恢复',
                   subtitle: backupDownloading
                       ? (backupProgress > 0
                             ? '正在下载 ${(backupProgress * 100).toStringAsFixed(0)}%'
@@ -419,6 +419,12 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                       : (lastBackupPath ?? '仅管理员可下载，服务端文件下载后自动删除'),
                   loading: backupDownloading,
                   onTap: backupDownloading ? null : _confirmDownloadBackup,
+                ),
+                _AdminEntry(
+                  icon: Icons.hub_outlined,
+                  title: '一键生成多服务器配置',
+                  subtitle: '生成服务端、安装脚本及数据库恢复包',
+                  onTap: () => context.push('/admin/multi-server'),
                 ),
               ],
             ),

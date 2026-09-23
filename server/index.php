@@ -485,6 +485,10 @@ try {
             App\Controllers\AdminController::backupDownload();
             break;
 
+        case 'admin/multi-server/package':
+            App\Controllers\AdminController::multiServerPackage();
+            break;
+
         case 'admin/user/update':
             App\Controllers\AdminController::updateUser();
             break;
