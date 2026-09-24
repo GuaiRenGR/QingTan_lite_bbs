@@ -453,6 +453,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                   ? Map<String, dynamic>.from(msg['reply_to'] as Map)
                                   : null,
                               isMine: isMine,
+                              senderName: widget.groupId != null
+                                  ? (msg['sender'] is Map
+                                      ? (msg['sender'] as Map)['nickname']?.toString()
+                                      : msg['sender_nickname']?.toString())
+                                  : null,
                               time: msg['created_at']?.toString(),
                             ),
                           );
@@ -562,6 +567,7 @@ class _MessageBubble extends StatelessWidget {
   final String imageUrl;
   final Map<String, dynamic>? quote;
   final bool isMine;
+  final String? senderName;
   final String? time;
 
   const _MessageBubble({
@@ -570,6 +576,7 @@ class _MessageBubble extends StatelessWidget {
     required this.imageUrl,
     required this.quote,
     required this.isMine,
+    this.senderName,
     this.time,
   });
 
@@ -620,6 +627,14 @@ class _MessageBubble extends StatelessWidget {
               crossAxisAlignment:
                   isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
+                if (senderName != null && senderName!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(
+                      senderName!,
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                  ),
                 Container(
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.of(context).size.width * 0.76,
