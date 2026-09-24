@@ -24,6 +24,7 @@ class GroupController
     {
         $user = self::user();
         $t = self::tables();
+        \Database::execute("DELETE FROM {$t['messages']} WHERE conversation_id IN (SELECT id FROM {$t['conversations']} WHERE group_id IS NOT NULL) AND created_at < ?", [date('Y-m-d H:i:s', time() - 30 * 86400)]);
         $rows = \Database::fetchAll(
             "SELECT g.id, g.group_no, g.name, g.owner_id, g.created_at,
                     c.id AS conversation_id, c.last_message_at, c.last_message_preview,
