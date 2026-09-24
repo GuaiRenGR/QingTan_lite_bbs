@@ -133,6 +133,20 @@ class GroupController
         \Database::execute("INSERT INTO {$t['messages']} (conversation_id, sender_id, message_type, content, image_url, reply_to_id, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)", [$conversationId, (int)$user['id'], $type, $content, $image ?: null, $reply > 0 ? $reply : null, now()]);
         $id = (int)\Database::lastInsertId();
         \Database::execute("UPDATE {$t['conversations']} SET last_message_at = ?, last_message_preview = ? WHERE id = ?", [now(), $type === 'image' ? '图片' : mb_substr($content, 0, 100), $conversationId]);
+        if ($type === 'text' && preg_match_all('/@([\\p{L}\\p{N}_-]{1,32})/u', $content, $matches)) {
+            $notifications = \Database::table('notifications');
+            $seen = [];
+            foreach (array_unique($matches[1]) as $nickname) {
+                $mentioned = \Database::fetch("SELECT id FROM {$t['users']} WHERE nickname = ? AND status = 1 LIMIT 1", [$nickname]);
+                $mentionedId = (int)($mentioned['id'] ?? 0);
+                if ($mentionedId <= 0 || $mentionedId === (int)$user['id'] || isset($seen[$mentionedId])) continue;
+                $seen[$mentionedId] = true;
+                \Database::execute(
+                    "INSERT INTO {$notifications} (user_id, type, title, content, data, is_read, created_at) VALUES (?, 'mention', ?, ?, ?, 0, ?)",
+                    [$mentionedId, '群聊中有人提到你', mb_substr($content, 0, 100), json_encode(['conversation_id' => $conversationId, 'message_id' => $id], JSON_UNESCAPED_UNICODE), now()]
+                );
+            }
+        }
         \Response::success(['id' => $id, 'conversation_id' => $conversationId, 'message_type' => $type, 'content' => $content, 'image_url' => $image, 'reply_to_id' => $reply > 0 ? $reply : null, 'created_at' => now()]);
     }
 
