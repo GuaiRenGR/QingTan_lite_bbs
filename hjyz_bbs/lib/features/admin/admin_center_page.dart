@@ -21,12 +21,14 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
   String aiReviewBaseUrl = '';
   String aiReviewApiKey = '';
   String aiReviewModel = 'gpt-4o-mini';
+  String aiReviewApiType = 'completions';
   Map<String, String> downloadLinks = {};
   String contactUrl = '';
   bool backupDownloading = false;
   double backupProgress = 0;
   String? lastBackupPath;
   bool directUpload = false;
+  bool userUploadOneDrive = true;
 
   @override
   void initState() {
@@ -58,7 +60,9 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
           aiReviewBaseUrl = (data['ai_review_base_url'] ?? '').toString();
           aiReviewApiKey = (data['ai_review_api_key'] ?? '').toString();
           aiReviewModel = (data['ai_review_model'] ?? 'gpt-4o-mini').toString();
+          aiReviewApiType = (data['ai_review_api_type'] ?? 'completions').toString();
           directUpload = prefs.getBool('admin_direct_upload') ?? false;
+          userUploadOneDrive = (data['user_upload_storage'] ?? 'onedrive') == 'onedrive';
           contactUrl = (data['contact_url'] ?? '').toString();
           for (final key in ['android', 'ios', 'windows', 'macos', 'linux']) {
             downloadLinks[key] = (data['dl_$key'] ?? '').toString();
@@ -143,6 +147,17 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   onSelectionChanged: (values) => setDialogState(() => directUpload = values.first),
                 ),
                 const SizedBox(height: 12),
+                const Text('普通用户文件上传链路', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('服务器存储')),
+                    ButtonSegment(value: true, label: Text('OneDrive存储')),
+                  ],
+                  selected: {userUploadOneDrive},
+                  onSelectionChanged: (values) => setDialogState(() => userUploadOneDrive = values.first),
+                ),
+                const SizedBox(height: 12),
                 SwitchListTile(
                   title: const Text('AI内容审核'),
                   subtitle: const Text('使用OpenAI兼容completions接口，关闭思考并要求JSON返回'),
@@ -150,10 +165,21 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
                   contentPadding: EdgeInsets.zero,
                   onChanged: (v) => setDialogState(() => aiReviewEnabled = v),
                 ),
+                const Text('AI接口类型', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'completions', label: Text('Chat Completions')),
+                    ButtonSegment(value: 'responses', label: Text('Responses')),
+                  ],
+                  selected: {aiReviewApiType},
+                  onSelectionChanged: (values) => setDialogState(() => aiReviewApiType = values.first),
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: aiUrlCtrl,
                   keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(labelText: 'completions接口地址', hintText: 'https://api.example.com/v1'),
+                  decoration: const InputDecoration(labelText: 'AI接口地址', hintText: 'https://api.example.com/v1'),
                 ),
                 TextField(
                   controller: aiKeyCtrl,
@@ -239,6 +265,8 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
       'ai_review_base_url': aiUrlCtrl.text.trim(),
       'ai_review_api_key': aiKeyCtrl.text.trim(),
       'ai_review_model': aiModelCtrl.text.trim(),
+      'ai_review_api_type': aiReviewApiType,
+      'user_upload_storage': userUploadOneDrive ? 'onedrive' : 'local',
     };
     for (final entry in ctrls.entries) {
       settings['dl_${entry.key}'] = entry.value.text.trim();
@@ -261,6 +289,8 @@ class _AdminCenterPageState extends State<AdminCenterPage> {
         aiReviewBaseUrl = settings['ai_review_base_url'] ?? '';
         aiReviewApiKey = settings['ai_review_api_key'] ?? '';
         aiReviewModel = settings['ai_review_model'] ?? aiReviewModel;
+        aiReviewApiType = settings['ai_review_api_type'] ?? aiReviewApiType;
+        userUploadOneDrive = settings['user_upload_storage'] == 'onedrive';
         for (final entry in settings.entries) {
           if (!entry.key.startsWith('dl_')) continue;
           downloadLinks[entry.key.replaceFirst('dl_', '')] = entry.value;

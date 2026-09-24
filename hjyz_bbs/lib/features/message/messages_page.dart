@@ -120,10 +120,15 @@ class _MessagesPageState extends State<MessagesPage> {
                   })
               .toList()
           : <Map<String, dynamic>>[];
+      final combined = [...list, ...groups];
+      combined.sort((a, b) {
+        final aTime = DateTime.tryParse(a['last_message_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = DateTime.tryParse(b['last_message_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
       setState(() {
         if (refresh) conversations.clear();
-        conversations.addAll(list);
-        conversations.addAll(groups);
+        conversations.addAll(combined);
         loadingMore = false;
         noMore = list.isEmpty;
       });
@@ -459,6 +464,10 @@ class _ConversationItem extends StatelessWidget {
     final lastMessage = conversation['last_message']?.toString() ?? '';
     final lastTime = conversation['last_message_at']?.toString();
     final unread = conversation['unread_count'] ?? 0;
+    final isGroup = conversation['is_group'] == true;
+    final preview = isGroup
+        ? '群号 ${conversation['group_no'] ?? '-'}${lastMessage.isEmpty ? '' : ' · $lastMessage'}'
+        : lastMessage;
 
     return Container(
       decoration: BoxDecoration(
@@ -508,7 +517,7 @@ class _ConversationItem extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  lastMessage,
+                  preview,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

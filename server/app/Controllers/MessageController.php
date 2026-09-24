@@ -20,7 +20,7 @@ class MessageController
                    CASE WHEN c.user_a_id = ? THEN c.user_b_id ELSE c.user_a_id END AS other_user_id
             FROM {$conv} c
             WHERE c.user_a_id = ? OR c.user_b_id = ?
-            ORDER BY c.last_message_at DESC
+            ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
             LIMIT {$offset}, {$pageSize}
         ";
 
@@ -307,6 +307,21 @@ class MessageController
         \Response::success([
             'unread_count' => (int)($row['cnt'] ?? 0),
         ]);
+    }
+
+    public static function recall()
+    {
+        $user = \Auth::requireLogin();
+        $conversationId = \Request::int('conversation_id');
+        $messageId = \Request::int('message_id');
+        $messages = \Database::table('messages');
+        $conv = \Database::table('conversations');
+        $message = \Database::fetch("SELECT m.id, m.sender_id, m.created_at FROM {$messages} m INNER JOIN {$conv} c ON c.id = m.conversation_id WHERE m.id = ? AND m.conversation_id = ? AND (c.user_a_id = ? OR c.user_b_id = ?) LIMIT 1", [$messageId, $conversationId, (int)$user['id'], (int)$user['id']]);
+        if (!$message) \Response::json(404, '消息不存在', null, 404);
+        if ((int)$message['sender_id'] !== (int)$user['id']) \Response::json(403, '只能撤回自己发送的消息', null, 403);
+        if (strtotime($message['created_at']) < time() - 120) \Response::json(422, '消息发送超过 2 分钟，无法撤回');
+        \Database::execute("UPDATE {$messages} SET message_type = 'recalled', content = '', image_url = NULL WHERE id = ?", [$messageId]);
+        \Response::success(null, '消息已撤回');
     }
 
     public static function markRead()

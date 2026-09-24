@@ -421,6 +421,10 @@ try {
             App\Controllers\MessageController::markRead();
             break;
 
+        case 'messages/recall':
+            App\Controllers\MessageController::recall();
+            break;
+
         case 'groups/list':
             App\Controllers\GroupController::list();
             break;
@@ -431,6 +435,42 @@ try {
 
         case 'groups/join':
             App\Controllers\GroupController::join();
+            break;
+
+        case 'groups/info':
+            App\Controllers\GroupController::info();
+            break;
+
+        case 'groups/members':
+            App\Controllers\GroupController::members();
+            break;
+
+        case 'groups/update':
+            App\Controllers\GroupController::update();
+            break;
+
+        case 'groups/leave':
+            App\Controllers\GroupController::leave();
+            break;
+
+        case 'groups/dismiss':
+            App\Controllers\GroupController::dismiss();
+            break;
+
+        case 'groups/remove-member':
+            App\Controllers\GroupController::removeMember();
+            break;
+
+        case 'groups/mute-member':
+            App\Controllers\GroupController::muteMember();
+            break;
+
+        case 'groups/set-role':
+            App\Controllers\GroupController::setRole();
+            break;
+
+        case 'groups/recall':
+            App\Controllers\GroupController::recall();
             break;
 
         case 'groups/messages':

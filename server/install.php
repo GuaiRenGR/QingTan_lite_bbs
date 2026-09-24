@@ -549,6 +549,7 @@ function createTables(PDO $pdo, string $prefix)
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `group_no` CHAR(8) NOT NULL,
       `name` VARCHAR(80) NOT NULL,
+      `announcement` TEXT NULL,
       `owner_id` BIGINT UNSIGNED NOT NULL,
       `created_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`), UNIQUE KEY `uk_group_no` (`group_no`), KEY `idx_owner` (`owner_id`)
@@ -561,6 +562,7 @@ function createTables(PDO $pdo, string $prefix)
       `group_id` BIGINT UNSIGNED NOT NULL,
       `user_id` BIGINT UNSIGNED NOT NULL,
       `role` VARCHAR(16) NOT NULL DEFAULT 'member',
+      `muted_until` DATETIME NULL,
       `joined_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`), UNIQUE KEY `uk_group_user` (`group_id`, `user_id`), KEY `idx_user` (`user_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

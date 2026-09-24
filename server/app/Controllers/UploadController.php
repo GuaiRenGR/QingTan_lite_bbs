@@ -120,6 +120,53 @@ class UploadController
 
         $mime = self::detectMime($tmp, $originalName);
 
+        if (\SiteSetting::get('user_upload_storage', 'onedrive') === 'local') {
+            try {
+                $relativePath = self::storeLocally($tmp, $originalName);
+                $attachments = \Database::table('attachments');
+                \Database::execute(
+                    "INSERT INTO {$attachments} (`user_id`,`object_type`,`object_id`,`file_name`,`file_path`,`file_url`,`file_type`,`file_size`,`onedrive_item_id`,`status`,`created_at`) VALUES (?,NULL,NULL,?,?,?,?,?,NULL,1,?)",
+                    [$user['id'], $originalName, $relativePath, '', $mime, $size, now()]
+                );
+                $attachmentId = (int)\Database::lastInsertId();
+                $relativeFileUrl = '/index.php?route=file/resolve&id=' . $attachmentId;
+                \Database::execute("UPDATE {$attachments} SET file_url = ? WHERE id = ?", [$relativeFileUrl, $attachmentId]);
+                $row = \Database::fetch("SELECT * FROM {$attachments} WHERE id = ?", [$attachmentId]);
+                record_sync_operation('attachments', $attachmentId, 'insert', $row);
+                $fileUrl = request_origin() . $relativeFileUrl;
+                $music = null;
+                if ($type === 'music') {
+                    $music = MusicLibraryController::createFromUpload(
+                        (int)$user['id'],
+                        $attachmentId,
+                        $fileUrl,
+                        $originalName,
+                        [
+                            'lyrics_url' => \Request::str('lyrics_url'),
+                            'cover_url' => \Request::str('cover_url'),
+                            'title' => \Request::str('title'),
+                            'artist' => \Request::str('artist'),
+                        ]
+                    );
+                }
+                \Response::success([
+                    'id' => $attachmentId,
+                    'type' => $type,
+                    'url' => $fileUrl,
+                    'share_url' => $fileUrl,
+                    'name' => $originalName,
+                    'size' => $size,
+                    'mime' => $mime,
+                    'onedrive_item_id' => null,
+                    'music' => $music ? MusicLibraryController::serialize($music) : null,
+                    'music_uuid' => $music['uuid'] ?? null,
+                ], '上传成功');
+            } catch (\Throwable $e) {
+                log_error($e->getMessage());
+                \Response::json(500, '保存上传文件失败：' . $e->getMessage());
+            }
+        }
+
         if ($type === 'chatlog') {
             if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'json') {
                 \Response::json(422, '聊天记录文件扩展名必须为 .json');

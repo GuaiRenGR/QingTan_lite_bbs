@@ -49,9 +49,6 @@ class GroupController
     public static function create()
     {
         $user = self::user();
-        if ((int)($user['group_id'] ?? 0) !== 99) {
-            \Response::json(403, '仅管理员可以创建群聊', null, 403);
-        }
         $name = trim(\Request::str('name'));
         if ($name === '' || mb_strlen($name) > 80) {
             \Response::json(422, '群名称不能为空且不能超过 80 个字符');
@@ -89,6 +86,126 @@ class GroupController
         \Response::success(['id' => (int)$group['id'], 'group_no' => $group['group_no'], 'name' => $group['name'], 'conversation_id' => (int)$group['conversation_id']], '已加入群聊');
     }
 
+    public static function info()
+    {
+        $user = self::user();
+        $groupId = \Request::int('group_id');
+        $t = self::tables();
+        $group = \Database::fetch("SELECT * FROM {$t['groups']} WHERE id = ? LIMIT 1", [$groupId]);
+        if (!$group) \Response::json(404, '群聊不存在', null, 404);
+        $member = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        if (!$member) \Response::json(403, '你不是群成员', null, 403);
+        $group['id'] = (int)$group['id'];
+        $group['owner_id'] = (int)$group['owner_id'];
+        $group['member_count'] = (int)(\Database::fetch("SELECT COUNT(*) AS cnt FROM {$t['members']} WHERE group_id = ?", [$groupId])['cnt'] ?? 0);
+        $group['role'] = $member['role'];
+        $group['is_owner'] = (int)$group['owner_id'] === (int)$user['id'];
+        \Response::success($group);
+    }
+
+    public static function members()
+    {
+        $user = self::user();
+        $groupId = \Request::int('group_id');
+        $t = self::tables();
+        $member = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        if (!$member) \Response::json(403, '你不是群成员', null, 403);
+        $rows = \Database::fetchAll(
+            "SELECT gm.user_id, gm.role, gm.muted_until, gm.joined_at, u.nickname, u.username, u.avatar
+             FROM {$t['members']} gm INNER JOIN {$t['users']} u ON u.id = gm.user_id
+             WHERE gm.group_id = ? ORDER BY FIELD(gm.role, 'owner', 'admin', 'member'), gm.joined_at ASC",
+            [$groupId]
+        );
+        foreach ($rows as &$row) $row['user_id'] = (int)$row['user_id'];
+        \Response::success(['list' => $rows]);
+    }
+
+    public static function update()
+    {
+        $user = self::user();
+        $groupId = \Request::int('group_id');
+        $t = self::tables();
+        $member = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        if (!$member || !in_array($member['role'], ['owner', 'admin'], true)) \Response::json(403, '没有群管理权限', null, 403);
+        $fields = [];
+        $params = [];
+        if (\Request::input('name') !== null) {
+            $name = trim(\Request::str('name'));
+            if ($name === '' || mb_strlen($name) > 80) \Response::json(422, '群名称长度无效');
+            $fields[] = 'name = ?'; $params[] = $name;
+        }
+        if (\Request::input('announcement') !== null) {
+            $announcement = trim(\Request::str('announcement'));
+            if (mb_strlen($announcement) > 2000) \Response::json(422, '群公告不能超过 2000 字');
+            $fields[] = 'announcement = ?'; $params[] = $announcement;
+        }
+        if (!$fields) \Response::json(422, '没有需要更新的内容');
+        $params[] = $groupId;
+        \Database::execute("UPDATE {$t['groups']} SET " . implode(', ', $fields) . " WHERE id = ?", $params);
+        \Response::success(null, '群资料已更新');
+    }
+
+    public static function leave()
+    {
+        $user = self::user(); $groupId = \Request::int('group_id'); $t = self::tables();
+        $member = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        if (!$member) \Response::json(404, '你不是群成员', null, 404);
+        if ($member['role'] === 'owner') \Response::json(422, '群主不能直接退出，请先转让群主或解散群聊');
+        \Database::execute("DELETE FROM {$t['members']} WHERE group_id = ? AND user_id = ?", [$groupId, (int)$user['id']]);
+        \Response::success(null, '已退出群聊');
+    }
+
+    public static function dismiss()
+    {
+        $user = self::user(); $groupId = \Request::int('group_id'); $t = self::tables();
+        $group = \Database::fetch("SELECT owner_id FROM {$t['groups']} WHERE id = ? LIMIT 1", [$groupId]);
+        if (!$group || (int)$group['owner_id'] !== (int)$user['id']) \Response::json(403, '只有群主可以解散群聊', null, 403);
+        \Database::begin();
+        try {
+            $conversation = \Database::fetch("SELECT id FROM {$t['conversations']} WHERE group_id = ? LIMIT 1", [$groupId]);
+            if ($conversation) \Database::execute("DELETE FROM {$t['messages']} WHERE conversation_id = ?", [(int)$conversation['id']]);
+            \Database::execute("DELETE FROM {$t['members']} WHERE group_id = ?", [$groupId]);
+            \Database::execute("DELETE FROM {$t['conversations']} WHERE group_id = ?", [$groupId]);
+            \Database::execute("DELETE FROM {$t['groups']} WHERE id = ?", [$groupId]);
+            \Database::commit();
+        } catch (\Throwable $e) { \Database::rollback(); throw $e; }
+        \Response::success(null, '群聊已解散');
+    }
+
+    public static function removeMember()
+    {
+        $user = self::user(); $groupId = \Request::int('group_id'); $targetId = \Request::int('user_id'); $t = self::tables();
+        $operator = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        $target = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, $targetId]);
+        if (!$operator || !$target || !in_array($operator['role'], ['owner', 'admin'], true)) \Response::json(403, '没有群管理权限', null, 403);
+        if ($target['role'] === 'owner' || ($target['role'] === 'admin' && $operator['role'] !== 'owner') || $targetId === (int)$user['id']) \Response::json(403, '不能移出该成员', null, 403);
+        \Database::execute("DELETE FROM {$t['members']} WHERE group_id = ? AND user_id = ?", [$groupId, $targetId]);
+        \Response::success(null, '成员已移出群聊');
+    }
+
+    public static function muteMember()
+    {
+        $user = self::user(); $groupId = \Request::int('group_id'); $targetId = \Request::int('user_id'); $minutes = max(0, min(10080, \Request::int('minutes'))); $t = self::tables();
+        $operator = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        $target = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, $targetId]);
+        if (!$operator || !$target || !in_array($operator['role'], ['owner', 'admin'], true)) \Response::json(403, '没有群管理权限', null, 403);
+        if ($target['role'] === 'owner' || ($target['role'] === 'admin' && $operator['role'] !== 'owner')) \Response::json(403, '不能禁言该成员', null, 403);
+        $until = $minutes > 0 ? date('Y-m-d H:i:s', time() + $minutes * 60) : null;
+        \Database::execute("UPDATE {$t['members']} SET muted_until = ? WHERE group_id = ? AND user_id = ?", [$until, $groupId, $targetId]);
+        \Response::success(['muted_until' => $until], $until ? '已禁言' : '已解除禁言');
+    }
+
+    public static function setRole()
+    {
+        $user = self::user(); $groupId = \Request::int('group_id'); $targetId = \Request::int('user_id'); $role = \Request::str('role', 'member'); $t = self::tables();
+        if (!in_array($role, ['admin', 'member'], true)) \Response::json(422, '成员角色无效');
+        $operator = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, (int)$user['id']]);
+        $target = \Database::fetch("SELECT role FROM {$t['members']} WHERE group_id = ? AND user_id = ? LIMIT 1", [$groupId, $targetId]);
+        if (!$operator || $operator['role'] !== 'owner' || !$target || $target['role'] === 'owner') \Response::json(403, '只有群主可以设置管理员', null, 403);
+        \Database::execute("UPDATE {$t['members']} SET role = ? WHERE group_id = ? AND user_id = ?", [$role, $groupId, $targetId]);
+        \Response::success(null, $role === 'admin' ? '已设为管理员' : '已取消管理员');
+    }
+
     private static function member($userId, $conversationId)
     {
         $t = self::tables();
@@ -124,6 +241,9 @@ class GroupController
         $conversationId = \Request::int('conversation_id');
         [$conversation, $member] = self::member((int)$user['id'], $conversationId);
         if (!$conversation || !$member) \Response::json(404, '群聊不存在或你不是群成员', null, 404);
+        if (!empty($member['muted_until']) && strtotime($member['muted_until']) > time()) {
+            \Response::json(403, '你已被禁言至 ' . $member['muted_until'], null, 403);
+        }
         $type = \Request::str('message_type', 'text');
         $content = \Request::str('content');
         $image = \Request::str('image_url');
@@ -161,6 +281,21 @@ class GroupController
         $messages = \Database::table('messages');
         \Database::execute("UPDATE {$messages} SET is_read = 1 WHERE conversation_id = ? AND sender_id != ?", [$conversationId, (int)$user['id']]);
         \Response::success(null, '已读');
+    }
+
+    public static function recall()
+    {
+        $user = self::user();
+        $conversationId = \Request::int('conversation_id');
+        $messageId = \Request::int('message_id');
+        [$conversation, $member] = self::member((int)$user['id'], $conversationId);
+        if (!$conversation || !$member) \Response::json(404, '群聊不存在', null, 404);
+        $t = self::tables();
+        $message = \Database::fetch("SELECT id, sender_id, created_at FROM {$t['messages']} WHERE id = ? AND conversation_id = ? LIMIT 1", [$messageId, $conversationId]);
+        if (!$message || (int)$message['sender_id'] !== (int)$user['id']) \Response::json(403, '只能撤回自己发送的消息', null, 403);
+        if (strtotime($message['created_at']) < time() - 120) \Response::json(422, '消息发送超过 2 分钟，无法撤回');
+        \Database::execute("UPDATE {$t['messages']} SET message_type = 'recalled', content = '', image_url = NULL WHERE id = ?", [$messageId]);
+        \Response::success(null, '消息已撤回');
     }
 
     private static function reply(array $row, string $messages, string $users)

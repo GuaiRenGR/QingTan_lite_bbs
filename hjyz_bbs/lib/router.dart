@@ -15,6 +15,7 @@ import 'features/me/sponsor_list_page.dart';
 import 'features/message/messages_page.dart';
 import 'features/message/notification_list_page.dart';
 import 'features/message/chat_page.dart';
+import 'features/message/group_info_page.dart';
 import 'features/message/notification_settings_page.dart';
 import 'features/music/music_player_page.dart';
 import 'features/music/music_playlist_page.dart';
@@ -77,6 +78,13 @@ final router = GoRouter(
           groupId: groupId,
         );
       },
+    ),
+    GoRoute(
+      path: '/group-info',
+      builder: (_, state) => GroupInfoPage(
+        groupId: int.tryParse(state.uri.queryParameters['group_id'] ?? '') ?? 0,
+        initialName: state.uri.queryParameters['name'] ?? '群聊',
+      ),
     ),
     GoRoute(
       path: '/notification-settings',

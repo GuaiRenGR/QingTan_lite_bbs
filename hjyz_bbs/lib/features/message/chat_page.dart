@@ -2,7 +2,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_client.dart';
@@ -11,6 +13,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/emoji_input_field.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/emoji_text.dart';
+import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -48,6 +51,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showEmojiPicker = false;
   bool _uploadingImage = false;
   Map<String, dynamic>? _quotedMessage;
+  final Set<int> _forcedTimeMessageIds = <int>{};
+  final Set<int> _selectedMessageIds = <int>{};
+  bool _selectionMode = false;
 
   @override
   void initState() {
@@ -375,12 +381,196 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return 0;
   }
 
+  bool _shouldShowTime(Map<String, dynamic> message, int index) {
+    final id = _toInt(message['id']);
+    if (_forcedTimeMessageIds.contains(id)) return true;
+    if (index == 0) return true;
+    final current = DateTime.tryParse(message['created_at']?.toString() ?? '');
+    final newer = DateTime.tryParse(messages[index - 1]['created_at']?.toString() ?? '');
+    if (current == null || newer == null) return true;
+    return newer.difference(current).abs() >= const Duration(minutes: 5);
+  }
+
+  Future<void> _showMentionPicker() async {
+    if (widget.groupId == null) return;
+    final result = await ApiClient.instance.get('groups/members', query: {'group_id': widget.groupId});
+    if (!mounted || !result.success || result.data is! Map) return;
+    final members = ((result.data as Map)['list'] as List? ?? []).whereType<Map>().toList();
+    final selected = await showModalBottomSheet<Map>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => ListView(
+        children: members.map((member) {
+          final name = member['nickname']?.toString() ?? member['username']?.toString() ?? '用户';
+          return ListTile(
+            leading: SafeNetworkImage(url: member['avatar']?.toString() ?? '', width: 38, height: 38, borderRadius: BorderRadius.circular(19), errorWidget: const CircleAvatar(child: Icon(Icons.person_outline))),
+            title: Text(name),
+            onTap: () => Navigator.pop(sheetContext, member),
+          );
+        }).toList(),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    final name = selected['nickname']?.toString() ?? selected['username']?.toString() ?? '用户';
+    final text = _inputController.text;
+    final separator = text.isEmpty || text.endsWith(' ') ? '' : ' ';
+    _inputController.text = '$text$separator@$name ';
+    _inputController.selection = TextSelection.collapsed(offset: _inputController.text.length);
+    _inputFocus.requestFocus();
+  }
+
+  Future<void> _mentionUser(Map<String, dynamic> message) async {
+    final name = message['sender'] is Map
+        ? (message['sender'] as Map)['nickname']?.toString()
+        : message['sender_nickname']?.toString();
+    if (name == null || name.isEmpty) return;
+    final text = _inputController.text;
+    final separator = text.isEmpty || text.endsWith(' ') ? '' : ' ';
+    _inputController.text = '$text$separator@$name ';
+    _inputController.selection = TextSelection.collapsed(offset: _inputController.text.length);
+    _inputFocus.requestFocus();
+  }
+
+  Future<void> _showMessageActions(Map<String, dynamic> message) async {
+    final createdAt = DateTime.tryParse(message['created_at']?.toString() ?? '');
+    final canRecall = (message['is_mine'] == true || _toInt(message['sender_id']) == _currentUserId) && createdAt != null && DateTime.now().difference(createdAt.toLocal()).inSeconds <= 120;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(children: [
+          ListTile(leading: const Icon(Icons.copy_outlined), title: const Text('复制'), onTap: () => Navigator.pop(sheetContext, 'copy')),
+          if (widget.groupId != null) ListTile(leading: const Icon(Icons.alternate_email), title: const Text('@此人'), onTap: () => Navigator.pop(sheetContext, 'mention')),
+          ListTile(leading: const Icon(Icons.reply_outlined), title: const Text('引用'), onTap: () => Navigator.pop(sheetContext, 'quote')),
+          ListTile(leading: const Icon(Icons.forward_outlined), title: const Text('转发'), onTap: () => Navigator.pop(sheetContext, 'forward')),
+          ListTile(leading: const Icon(Icons.checklist_outlined), title: const Text('多选'), onTap: () => Navigator.pop(sheetContext, 'select')),
+          if (canRecall) ListTile(leading: const Icon(Icons.undo_outlined), title: const Text('撤回'), onTap: () => Navigator.pop(sheetContext, 'recall')),
+          ListTile(leading: const Icon(Icons.schedule_outlined), title: const Text('显示此条时间'), onTap: () => Navigator.pop(sheetContext, 'time')),
+        ]),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: message['content']?.toString() ?? ''));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已复制')));
+    } else if (action == 'mention') {
+      _mentionUser(message);
+    } else if (action == 'quote') {
+      _quoteMessage(message);
+    } else if (action == 'time') {
+      setState(() => _forcedTimeMessageIds.add(_toInt(message['id'])));
+    } else if (action == 'forward') {
+      _forwardMessage(message);
+    } else if (action == 'select') {
+      setState(() {
+        _selectionMode = true;
+        _selectedMessageIds.add(_toInt(message['id']));
+      });
+    } else if (action == 'recall') {
+      _recallMessage(message);
+    }
+  }
+
+  Future<void> _recallMessage(Map<String, dynamic> message) async {
+    final result = await ApiClient.instance.post(
+      widget.groupId != null ? 'groups/recall' : 'messages/recall',
+      data: {'conversation_id': _conversationId, 'message_id': _toInt(message['id'])},
+    );
+    if (!mounted) return;
+    if (result.success) {
+      await _loadMessages(refresh: true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    }
+  }
+
+  Future<void> _recallSelected() async {
+    final selected = messages.where((m) => _selectedMessageIds.contains(_toInt(m['id']))).toList();
+    for (final message in selected) {
+      await ApiClient.instance.post(widget.groupId != null ? 'groups/recall' : 'messages/recall', data: {'conversation_id': _conversationId, 'message_id': _toInt(message['id'])});
+    }
+    if (mounted) {
+      _cancelSelection();
+      _loadMessages(refresh: true);
+    }
+  }
+
+  void _toggleSelected(Map<String, dynamic> message) {
+    final id = _toInt(message['id']);
+    setState(() {
+      if (!_selectedMessageIds.add(id)) _selectedMessageIds.remove(id);
+      if (_selectedMessageIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _cancelSelection() => setState(() {
+        _selectionMode = false;
+        _selectedMessageIds.clear();
+      });
+
+  void _selectAllMessages() => setState(() {
+        _selectionMode = true;
+        _selectedMessageIds
+          ..clear()
+          ..addAll(messages.map((message) => _toInt(message['id'])));
+      });
+
+  Future<void> _copySelected() async {
+    final text = messages.where((m) => _selectedMessageIds.contains(_toInt(m['id']))).map((m) => m['content']?.toString() ?? '').where((v) => v.isNotEmpty).join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已复制')));
+      _cancelSelection();
+    }
+  }
+
+  Future<void> _forwardMessage(Map<String, dynamic> message) async {
+    final result = await ApiClient.instance.get('messages/conversations', query: {'page': 1, 'page_size': 50});
+    if (!mounted || !result.success || result.data is! Map) return;
+    final items = ((result.data as Map)['list'] as List? ?? []).whereType<Map>().map((item) => {...item, 'is_group': false}).toList();
+    final groupsResult = await ApiClient.instance.get('groups/list');
+    if (groupsResult.success && groupsResult.data is Map) {
+      items.addAll((((groupsResult.data as Map)['list'] as List? ?? []).whereType<Map>()).map((group) => {...group, 'is_group': true}));
+    }
+    final target = await showModalBottomSheet<Map>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => ListView(children: items.map((item) {
+        final other = item['other_user'] as Map? ?? {};
+        return ListTile(title: Text(item['is_group'] == true ? item['name']?.toString() ?? '群聊' : other['nickname']?.toString() ?? '用户'), onTap: () => Navigator.pop(sheetContext, item));
+      }).toList()),
+    );
+    if (!mounted || target == null) return;
+    final other = target['other_user'] as Map? ?? {};
+    final sent = await ApiClient.instance.post(target['is_group'] == true ? 'groups/send' : 'messages/send', data: target['is_group'] == true
+        ? {'conversation_id': _toInt(target['conversation_id']), 'content': message['content']?.toString() ?? '', 'message_type': 'text'}
+        : {'to_user_id': _toInt(other['id']), 'content': message['content']?.toString() ?? '', 'message_type': 'text'});
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(sent.success ? '已转发' : sent.message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: Text(widget.targetNickname),
+        title: Text(_selectionMode ? '已选择 ${_selectedMessageIds.length} 条' : widget.targetNickname),
+        actions: widget.groupId == null
+            ? (_selectionMode ? [IconButton(onPressed: _selectAllMessages, icon: const Icon(Icons.select_all), tooltip: '全选'), IconButton(onPressed: _copySelected, icon: const Icon(Icons.copy_outlined), tooltip: '复制'), IconButton(onPressed: _recallSelected, icon: const Icon(Icons.undo_outlined), tooltip: '撤回'), IconButton(onPressed: _cancelSelection, icon: const Icon(Icons.close), tooltip: '取消')] : null)
+            : [
+                if (_selectionMode) IconButton(onPressed: _selectAllMessages, icon: const Icon(Icons.select_all), tooltip: '全选'),
+                if (_selectionMode) IconButton(onPressed: _copySelected, icon: const Icon(Icons.copy_outlined), tooltip: '复制'),
+                if (_selectionMode) IconButton(onPressed: _recallSelected, icon: const Icon(Icons.undo_outlined), tooltip: '撤回'),
+                if (_selectionMode) IconButton(onPressed: _cancelSelection, icon: const Icon(Icons.close), tooltip: '取消'),
+                if (!_selectionMode)
+                IconButton(
+                  icon: const Icon(Icons.more_horiz),
+                  tooltip: '更多',
+                  onPressed: () async {
+                    await context.push('/group-info?group_id=${widget.groupId}&name=${Uri.encodeComponent(widget.targetNickname)}');
+                    if (mounted) _loadMessages(refresh: true);
+                  },
+                ),
+              ],
       ),
       body: Column(
         children: [
@@ -444,7 +634,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               _toInt(msg['sender_id']) == _currentUserId;
 
                           return GestureDetector(
-                            onLongPress: () => _quoteMessage(msg),
+                            onTap: _selectionMode ? () => _toggleSelected(msg) : null,
+                            onLongPress: _selectionMode ? null : () => _showMessageActions(msg),
                             child: _MessageBubble(
                               content: msg['content']?.toString() ?? '',
                               messageType:
@@ -459,6 +650,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                       ? (msg['sender'] as Map)['nickname']?.toString()
                                       : msg['sender_nickname']?.toString())
                                   : null,
+                              senderAvatar: msg['sender'] is Map
+                                  ? (msg['sender'] as Map)['avatar']?.toString()
+                                  : msg['sender_avatar']?.toString(),
+                              showTime: _shouldShowTime(msg, index),
+                              onAvatarLongPress: widget.groupId != null ? () => _mentionUser(msg) : null,
                               time: msg['created_at']?.toString(),
                             ),
                           );
@@ -500,6 +696,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             )
                           : const Icon(Icons.photo_outlined),
                     ),
+                    if (widget.groupId != null)
+                      IconButton(
+                        onPressed: _showMentionPicker,
+                        tooltip: '@成员',
+                        icon: const Icon(Icons.alternate_email),
+                      ),
                     IconButton(
                       onPressed: _toggleEmojiPicker,
                       tooltip: '表情',
@@ -569,6 +771,9 @@ class _MessageBubble extends StatelessWidget {
   final Map<String, dynamic>? quote;
   final bool isMine;
   final String? senderName;
+  final String? senderAvatar;
+  final bool showTime;
+  final VoidCallback? onAvatarLongPress;
   final String? time;
 
   const _MessageBubble({
@@ -578,6 +783,9 @@ class _MessageBubble extends StatelessWidget {
     required this.quote,
     required this.isMine,
     this.senderName,
+    this.senderAvatar,
+    this.showTime = true,
+    this.onAvatarLongPress,
     this.time,
   });
 
@@ -616,10 +824,19 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMine) ...[
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: Colors.grey.shade300,
-              child: Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+            GestureDetector(
+              onLongPress: onAvatarLongPress,
+              child: SafeNetworkImage(
+                url: senderAvatar ?? '',
+                width: 30,
+                height: 30,
+                borderRadius: BorderRadius.circular(15),
+                errorWidget: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: Colors.grey.shade300,
+                  child: Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                ),
+              ),
             ),
             const SizedBox(width: 6),
           ],
@@ -681,7 +898,9 @@ class _MessageBubble extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (messageType == 'image' && imageUrl.isNotEmpty)
+                      if (messageType == 'recalled')
+                        Text('消息已撤回', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.65), fontStyle: FontStyle.italic))
+                      else if (messageType == 'image' && imageUrl.isNotEmpty)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
@@ -709,7 +928,7 @@ class _MessageBubble extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (time != null && time!.isNotEmpty)
+                if (showTime && time != null && time!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 3),
                     child: Text(
@@ -723,7 +942,23 @@ class _MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (isMine) const SizedBox(width: 6),
+          if (isMine) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onLongPress: onAvatarLongPress,
+              child: SafeNetworkImage(
+                url: senderAvatar ?? '',
+                width: 30,
+                height: 30,
+                borderRadius: BorderRadius.circular(15),
+                errorWidget: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: Colors.grey.shade300,
+                  child: Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

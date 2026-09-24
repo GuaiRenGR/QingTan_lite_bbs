@@ -411,13 +411,19 @@ class AdminController
                     \Response::json(422, '联系我们链接格式不正确');
                 }
             }
-            if (in_array($key, ['ai_review_enabled', 'ai_review_base_url', 'ai_review_api_key', 'ai_review_model'], true)) {
+            if (in_array($key, ['ai_review_enabled', 'ai_review_base_url', 'ai_review_api_key', 'ai_review_model', 'ai_review_api_type', 'user_upload_storage'], true)) {
                 $value = trim((string)$value);
                 if ($key === 'ai_review_base_url' && $value !== '' && !filter_var($value, FILTER_VALIDATE_URL)) {
                     \Response::json(422, 'AI接口地址格式错误');
                 }
                 if ($key === 'ai_review_enabled') {
                     $value = $value === '1' ? '1' : '0';
+                }
+                if ($key === 'ai_review_api_type' && !in_array($value, ['completions', 'responses'], true)) {
+                    \Response::json(422, 'AI接口类型无效');
+                }
+                if ($key === 'user_upload_storage' && !in_array($value, ['local', 'onedrive'], true)) {
+                    \Response::json(422, '上传存储类型无效');
                 }
             }
             \SiteSetting::set($key, (string)$value);
