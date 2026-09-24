@@ -1,9 +1,11 @@
 // ignore_for_file: unused_element, unused_element_parameter
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -17,12 +19,14 @@ class ChatPage extends ConsumerStatefulWidget {
   final int conversationId;
   final int targetUserId;
   final String targetNickname;
+  final int? groupId;
 
   const ChatPage({
     super.key,
     required this.conversationId,
     required this.targetUserId,
     required this.targetNickname,
+    this.groupId,
   });
 
   @override
@@ -53,6 +57,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _currentUserId = _toInt(ref.read(authControllerProvider).user?['id']);
     _conversationId = widget.conversationId;
     _loadMessages(refresh: true);
+    if (widget.groupId != null) _loadCachedGroupMessages();
     _scrollController.addListener(_onScroll);
   }
 
@@ -89,7 +94,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
 
     final result = await ApiClient.instance.get(
-      'messages/list',
+      widget.groupId != null ? 'groups/messages' : 'messages/list',
       query: {
         'conversation_id': convId,
         'page': page,
@@ -113,11 +118,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         loadingMore = false;
         noMore = list.isEmpty;
       });
+      if (widget.groupId != null) _saveCachedGroupMessages();
 
       // 标记已读
       if (refresh && convId > 0) {
         ApiClient.instance.post(
-          'messages/read',
+          widget.groupId != null ? 'groups/read' : 'messages/read',
           data: {'conversation_id': convId},
         );
       }
@@ -199,9 +205,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     final quote = _quotedMessage;
     final result = await ApiClient.instance.post(
-      'messages/send',
+      widget.groupId != null ? 'groups/send' : 'messages/send',
       data: {
-        'to_user_id': widget.targetUserId,
+        if (widget.groupId != null) 'conversation_id': _conversationId,
+        if (widget.groupId == null) 'to_user_id': widget.targetUserId,
         'content': text,
         'message_type': messageType,
         if (imageUrl.isNotEmpty) 'image_url': imageUrl,
@@ -231,6 +238,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         });
         _quotedMessage = null;
       });
+      if (widget.groupId != null) _saveCachedGroupMessages();
       if (messageType == 'text') {
         _inputController.clear();
       }
@@ -249,6 +257,24 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       SnackBar(content: Text(result.message)),
     );
     return false;
+  }
+
+  String get _groupCacheKey => 'group_messages_${widget.groupId}';
+
+  Future<void> _loadCachedGroupMessages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_groupCacheKey);
+    if (!mounted || raw == null) return;
+    try {
+      final cached = (jsonDecode(raw) as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      if (cached.isNotEmpty && messages.isEmpty) setState(() { messages = cached; loading = false; });
+    } catch (_) {}
+  }
+
+  Future<void> _saveCachedGroupMessages() async {
+    if (widget.groupId == null || messages.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_groupCacheKey, jsonEncode(messages.take(300).toList()));
   }
 
   Future<void> _send() async {

@@ -66,11 +66,13 @@ final router = GoRouter(
             int.tryParse(state.uri.queryParameters['conv_id'] ?? '') ?? 0;
         final userId =
             int.tryParse(state.uri.queryParameters['user_id'] ?? '') ?? 0;
+        final groupId = int.tryParse(state.uri.queryParameters['group_id'] ?? '');
         final nickname = state.uri.queryParameters['nickname'] ?? '用户';
         return ChatPage(
           conversationId: convId,
           targetUserId: userId,
           targetNickname: nickname,
+          groupId: groupId,
         );
       },
     ),

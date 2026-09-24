@@ -421,6 +421,30 @@ try {
             App\Controllers\MessageController::markRead();
             break;
 
+        case 'groups/list':
+            App\Controllers\GroupController::list();
+            break;
+
+        case 'groups/create':
+            App\Controllers\GroupController::create();
+            break;
+
+        case 'groups/join':
+            App\Controllers\GroupController::join();
+            break;
+
+        case 'groups/messages':
+            App\Controllers\GroupController::messages();
+            break;
+
+        case 'groups/send':
+            App\Controllers\GroupController::send();
+            break;
+
+        case 'groups/read':
+            App\Controllers\GroupController::read();
+            break;
+
         case 'admin/stats':
             App\Controllers\AdminController::stats();
             break;

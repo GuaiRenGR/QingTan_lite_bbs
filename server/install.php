@@ -514,11 +514,13 @@ function createTables(PDO $pdo, string $prefix)
       `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       `user_a_id` BIGINT UNSIGNED NOT NULL,
       `user_b_id` BIGINT UNSIGNED NOT NULL,
+      `group_id` BIGINT UNSIGNED DEFAULT NULL,
       `last_message_at` DATETIME DEFAULT NULL,
       `last_message_preview` VARCHAR(100) DEFAULT NULL,
       `created_at` DATETIME NOT NULL,
       PRIMARY KEY (`id`),
-      UNIQUE KEY `uk_pair` (`user_a_id`, `user_b_id`),
+      UNIQUE KEY `uk_pair_group` (`user_a_id`, `user_b_id`, `group_id`),
+      KEY `idx_group` (`group_id`),
       KEY `idx_user_a` (`user_a_id`, `last_message_at`),
       KEY `idx_user_b` (`user_b_id`, `last_message_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -539,6 +541,28 @@ function createTables(PDO $pdo, string $prefix)
       KEY `idx_conv_time` (`conversation_id`, `created_at`),
       KEY `idx_sender` (`sender_id`),
       KEY `idx_reply_to` (`reply_to_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}chat_groups` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `group_no` CHAR(8) NOT NULL,
+      `name` VARCHAR(80) NOT NULL,
+      `owner_id` BIGINT UNSIGNED NOT NULL,
+      `created_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`), UNIQUE KEY `uk_group_no` (`group_no`), KEY `idx_owner` (`owner_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}chat_group_members` (
+      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `group_id` BIGINT UNSIGNED NOT NULL,
+      `user_id` BIGINT UNSIGNED NOT NULL,
+      `role` VARCHAR(16) NOT NULL DEFAULT 'member',
+      `joined_at` DATETIME NOT NULL,
+      PRIMARY KEY (`id`), UNIQUE KEY `uk_group_user` (`group_id`, `user_id`), KEY `idx_user` (`user_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ";
 

@@ -105,9 +105,25 @@ class _MessagesPageState extends State<MessagesPage> {
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
+      final groupResult = await ApiClient.instance.get('groups/list');
+      final groups = groupResult.success && groupResult.data is Map
+          ? ((groupResult.data as Map)['list'] as List? ?? const [])
+              .whereType<Map>()
+              .map((e) => <String, dynamic>{
+                    ...Map<String, dynamic>.from(e),
+                    'is_group': true,
+                    'other_user': {
+                      'id': 0,
+                      'nickname': e['name']?.toString() ?? '群聊',
+                      'avatar': '',
+                    },
+                  })
+              .toList()
+          : <Map<String, dynamic>>[];
       setState(() {
         if (refresh) conversations.clear();
         conversations.addAll(list);
+        conversations.addAll(groups);
         loadingMore = false;
         noMore = list.isEmpty;
       });
@@ -160,6 +176,14 @@ class _MessagesPageState extends State<MessagesPage> {
       appBar: AppBar(
         title: const Text('消息'),
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.add),
+            onSelected: _handleGroupAction,
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'join', child: Text('加入群聊')),
+              PopupMenuItem(value: 'create', child: Text('创建群聊')),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/notification-settings'),
@@ -282,6 +306,17 @@ class _MessagesPageState extends State<MessagesPage> {
                     conversation: conv,
                     formatTime: _formatTime,
                     onTap: () async {
+                      if (conv['is_group'] == true) {
+                        final groupId = conv['id'] ?? 0;
+                        final conversationId = conv['conversation_id'] ?? 0;
+                        final nickname = conv['name']?.toString() ?? '群聊';
+                        await context.push('/chat?conv_id=$conversationId&group_id=$groupId&nickname=${Uri.encodeComponent(nickname)}');
+                        if (mounted) {
+                          _loadUnreadCounts();
+                          _loadConversations(refresh: true);
+                        }
+                        return;
+                      }
                       final otherUser = conv['other_user'] as Map? ?? {};
                       final convId = conv['id'] ?? 0;
                       final userId = otherUser['id'] ?? 0;
@@ -322,6 +357,35 @@ class _MessagesPageState extends State<MessagesPage> {
         ),
       ),
     );
+  }
+  Future<void> _handleGroupAction(String action) async {
+    final controller = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(action == 'join' ? '加入群聊' : '创建群聊'),
+        content: TextField(
+          controller: controller,
+          maxLength: action == 'join' ? 8 : 80,
+          keyboardType: action == 'join' ? TextInputType.number : TextInputType.text,
+          decoration: InputDecoration(labelText: action == 'join' ? '8 位群聊编号' : '群名称'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: Text(action == 'join' ? '加入' : '创建')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null || value.isEmpty) return;
+    final result = await ApiClient.instance.post(
+      action == 'join' ? 'groups/join' : 'groups/create',
+      data: action == 'join' ? {'group_no': value} : {'name': value},
+    );
+    if (!mounted) return;
+    final number = (result.data as Map?)?['group_no']?.toString();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.success && action == 'create' ? '创建成功，群号：$number' : result.message)));
+    if (result.success) _loadConversations(refresh: true);
   }
 }
 
