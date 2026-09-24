@@ -24,5 +24,6 @@ return [
         'retry_times' => 3,
         'timeout'     => 30,
         'sample_rate' => 10,
+        'auto_sync'   => true,
     ],
 ];

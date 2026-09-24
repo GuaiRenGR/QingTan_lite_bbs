@@ -50,6 +50,10 @@ class ImageCacheService {
     }
   }
 
+  Future<void> clearCache() async {
+    await cacheManager.emptyCache();
+  }
+
   Future<void> _drainPreloadQueue() async {
     _preloading = true;
 

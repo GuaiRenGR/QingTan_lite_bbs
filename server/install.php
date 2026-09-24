@@ -626,6 +626,16 @@ function createTables(PDO $pdo, string $prefix)
     ";
 
     $sqls[] = "
+    CREATE TABLE IF NOT EXISTS `{$prefix}sync_operation_delivery` (
+      `operation_id` BIGINT UNSIGNED NOT NULL,
+      `peer_server_id` INT UNSIGNED NOT NULL,
+      `delivered_at` DATETIME NOT NULL,
+      PRIMARY KEY (`operation_id`, `peer_server_id`),
+      KEY `idx_peer_time` (`peer_server_id`, `delivered_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ";
+
+    $sqls[] = "
     CREATE TABLE IF NOT EXISTS `{$prefix}id_sequences` (
       `table_name` VARCHAR(64) NOT NULL,
       `next_id` BIGINT UNSIGNED NOT NULL DEFAULT 1,

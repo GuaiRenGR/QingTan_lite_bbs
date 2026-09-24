@@ -118,6 +118,16 @@ class MusicCacheService {
 
   String resolveUrl(String source) => ApiClient.instance.resolveUrl(source);
 
+  Future<void> clearCaches() async {
+    await Future.wait([
+      audioCache.emptyCache(),
+      metadataCache.emptyCache(),
+      lyricsCache.emptyCache(),
+    ]);
+    _metadataMemory.clear();
+    _lyricsMemory.clear();
+  }
+
   Future<MusicMetadata> loadMetadata(String source) {
     final url = resolveUrl(source);
     final fallback = MusicMetadata(

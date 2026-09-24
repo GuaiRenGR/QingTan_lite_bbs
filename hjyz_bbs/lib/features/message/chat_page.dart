@@ -1,18 +1,16 @@
 // ignore_for_file: unused_element, unused_element_parameter
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/services/local_chat_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/emoji_input_field.dart';
 import '../../core/widgets/emoji_picker.dart';
 import '../../core/widgets/emoji_text.dart';
-import '../../core/widgets/safe_network_image.dart';
 import '../auth/auth_controller.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -57,7 +55,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _currentUserId = _toInt(ref.read(authControllerProvider).user?['id']);
     _conversationId = widget.conversationId;
     _loadMessages(refresh: true);
-    if (widget.groupId != null) _loadCachedGroupMessages();
+    _loadLocalMessages();
     _scrollController.addListener(_onScroll);
   }
 
@@ -118,7 +116,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         loadingMore = false;
         noMore = list.isEmpty;
       });
-      if (widget.groupId != null) _saveCachedGroupMessages();
+      _saveLocalMessages();
 
       // 标记已读
       if (refresh && convId > 0) {
@@ -238,7 +236,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         });
         _quotedMessage = null;
       });
-      if (widget.groupId != null) _saveCachedGroupMessages();
+      _saveLocalMessages();
       if (messageType == 'text') {
         _inputController.clear();
       }
@@ -259,22 +257,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return false;
   }
 
-  String get _groupCacheKey => 'group_messages_${widget.groupId}';
+  String get _localConversationKey => 'conversation_$_conversationId';
 
-  Future<void> _loadCachedGroupMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_groupCacheKey);
-    if (!mounted || raw == null) return;
-    try {
-      final cached = (jsonDecode(raw) as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-      if (cached.isNotEmpty && messages.isEmpty) setState(() { messages = cached; loading = false; });
-    } catch (_) {}
+  Future<void> _loadLocalMessages() async {
+    if (_conversationId <= 0) return;
+    final cached = await LocalChatDatabase.instance.loadMessages(_localConversationKey);
+    if (!mounted || cached.isEmpty || messages.isNotEmpty) return;
+    setState(() {
+      messages = cached;
+      loading = false;
+    });
   }
 
-  Future<void> _saveCachedGroupMessages() async {
-    if (widget.groupId == null || messages.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_groupCacheKey, jsonEncode(messages.take(300).toList()));
+  Future<void> _saveLocalMessages() async {
+    if (_conversationId <= 0 || messages.isEmpty) return;
+    await LocalChatDatabase.instance.saveMessages(
+      _localConversationKey,
+      widget.targetNickname,
+      messages,
+    );
   }
 
   Future<void> _send() async {
@@ -683,11 +684,16 @@ class _MessageBubble extends StatelessWidget {
                       if (messageType == 'image' && imageUrl.isNotEmpty)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: SafeNetworkImage(
-                            url: imageUrl,
+                          child: Image.network(
+                            imageUrl,
                             width: 190,
                             height: 190,
                             fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              width: 190,
+                              height: 190,
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
                           ),
                         )
                       else

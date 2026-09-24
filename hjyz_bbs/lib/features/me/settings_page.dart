@@ -317,6 +317,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 subtitle: '查看和管理下载任务',
                 onTap: () => context.push('/downloads'),
               ),
+              _SettingTile(
+                icon: Icons.storage_outlined,
+                title: '存储空间管理',
+                subtitle: '清理普通缓存或删除指定聊天记录',
+                onTap: () => context.push('/storage-management'),
+              ),
               if ((auth.user?['group_id']?.toString() ?? '') == '99')
                 _SettingTile(
                 icon: Icons.cloud_upload_outlined,

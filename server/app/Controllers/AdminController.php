@@ -622,6 +622,7 @@ class AdminController
                 'retry_times' => 3,
                 'timeout' => 30,
                 'sample_rate' => 10,
+                'auto_sync' => true,
             ],
         ];
         $configExport = var_export($config, true);
@@ -953,7 +954,8 @@ PHP;
             "UPDATE {$threads} SET status = 0, updated_at = ? WHERE id = ?",
             [now(), $threadId]
         );
-        record_sync_operation('threads', $threadId, 'delete');
+        $updatedThread = \Database::fetch("SELECT * FROM {$threads} WHERE id = ? LIMIT 1", [$threadId]);
+        record_sync_operation('threads', $threadId, 'update', $updatedThread);
 
         \Response::success(null, '帖子已删除');
     }

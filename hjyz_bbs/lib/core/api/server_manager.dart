@@ -175,6 +175,7 @@ class ServerManager {
       lastChecked: DateTime.now(),
     );
     if (_currentServer?.id == serverId && old.consecutiveFailures >= 1) {
+      _selectedServerId = null;
       _switchToNextServer();
     }
   }
@@ -200,6 +201,18 @@ class ServerManager {
           return candidateLatency < bestLatency ? candidate : best;
         });
       }
+    }
+    if (_selectedServerId == null) {
+      final reachable = _servers
+          .where((server) => _healthStatus[server.id]?.reachable == true)
+          .toList()
+        ..sort((a, b) {
+          final weight = b.weight.compareTo(a.weight);
+          if (weight != 0) return weight;
+          return (_healthStatus[a.id]?.latencyMs ?? 99999)
+              .compareTo(_healthStatus[b.id]?.latencyMs ?? 99999);
+        });
+      if (reachable.isNotEmpty) _currentServer = reachable.first;
     }
   }
 
@@ -246,6 +259,12 @@ class ServerManager {
     final active = activeServers
         .where((server) => server.id != _currentServer?.id)
         .toList();
+    active.sort((a, b) {
+      final weight = b.weight.compareTo(a.weight);
+      if (weight != 0) return weight;
+      return (_healthStatus[a.id]?.latencyMs ?? 99999)
+          .compareTo(_healthStatus[b.id]?.latencyMs ?? 99999);
+    });
     if (active.isNotEmpty) _currentServer = active.first;
   }
 

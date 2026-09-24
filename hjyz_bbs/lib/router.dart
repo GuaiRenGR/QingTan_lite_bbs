@@ -10,6 +10,7 @@ import 'features/home/x_feed_page.dart';
 import 'features/main/main_shell_page.dart';
 import 'features/me/settings_page.dart';
 import 'features/me/upload_management_page.dart';
+import 'features/me/storage_management_page.dart';
 import 'features/me/sponsor_list_page.dart';
 import 'features/message/messages_page.dart';
 import 'features/message/notification_list_page.dart';
@@ -46,6 +47,7 @@ final router = GoRouter(
     GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
     GoRoute(path: '/upload-management', builder: (_, _) => const UploadManagementPage()),
+    GoRoute(path: '/storage-management', builder: (_, _) => const StorageManagementPage()),
     GoRoute(path: '/sponsors', builder: (_, _) => const SponsorListPage()),
     GoRoute(
       path: '/account-security',

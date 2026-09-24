@@ -119,6 +119,7 @@ try {
             "        'retry_times' => 3,\n" .
             "        'timeout'     => 30,\n" .
             "        'sample_rate' => 10,\n" .
+            "        'auto_sync'   => true,\n" .
             "    ],\n" .
             "];\n";
         file_put_contents($serversConfigFile, $configContent);

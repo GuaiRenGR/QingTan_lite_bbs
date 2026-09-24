@@ -7,6 +7,13 @@ class SystemController
     public static function ping()
     {
         $config = \load_server_config();
+        if ($config && !empty($config['sync']['auto_sync'])) {
+            try {
+                \sync_run_all();
+            } catch (\Throwable $e) {
+                \log_error('[SyncHeartbeat] ' . $e->getMessage());
+            }
+        }
 
         \Response::success([
             'server_id'   => $config ? $config['server_id'] : 0,
@@ -185,6 +192,9 @@ class SystemController
         }
 
         $result = \sync_receive_ops($sourceServerId, $operations);
+        if (($result['failed'] ?? 0) > 0) {
+            \Response::json(409, '部分同步操作无法应用，请先补齐目标节点数据库结构', $result, 409);
+        }
 
         \Response::success($result, '接收完成');
     }
