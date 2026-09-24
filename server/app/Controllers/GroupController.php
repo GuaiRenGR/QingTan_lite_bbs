@@ -113,6 +113,7 @@ class GroupController
         foreach ($rows as &$row) {
             $row['is_mine'] = (int)$row['sender_id'] === (int)$user['id'];
             $row['sender'] = ['id' => (int)$row['sender_id'], 'nickname' => $row['sender_nickname'] ?? '', 'avatar' => $row['sender_avatar'] ?? ''];
+            $row['reply_to'] = self::reply($row, $t['messages'], $t['users']);
         }
         \Response::success(['list' => $rows, 'page' => $page, 'page_size' => $size, 'has_more' => count($rows) >= $size]);
     }
@@ -148,7 +149,7 @@ class GroupController
                 );
             }
         }
-        \Response::success(['id' => $id, 'conversation_id' => $conversationId, 'message_type' => $type, 'content' => $content, 'image_url' => $image, 'reply_to_id' => $reply > 0 ? $reply : null, 'created_at' => now()]);
+        \Response::success(['id' => $id, 'conversation_id' => $conversationId, 'message_type' => $type, 'content' => $content, 'image_url' => $image, 'reply_to_id' => $reply > 0 ? $reply : null, 'reply_to' => self::reply(['reply_to_id' => $reply], $t['messages'], $t['users']), 'created_at' => now()]);
     }
 
     public static function read()
@@ -160,5 +161,16 @@ class GroupController
         $messages = \Database::table('messages');
         \Database::execute("UPDATE {$messages} SET is_read = 1 WHERE conversation_id = ? AND sender_id != ?", [$conversationId, (int)$user['id']]);
         \Response::success(null, '已读');
+    }
+
+    private static function reply(array $row, string $messages, string $users)
+    {
+        $replyId = (int)($row['reply_to_id'] ?? 0);
+        if ($replyId <= 0) return null;
+        $reply = \Database::fetch("SELECT id, sender_id, message_type, content, image_url, created_at FROM {$messages} WHERE id = ? LIMIT 1", [$replyId]);
+        if (!$reply) return null;
+        $sender = \Database::fetch("SELECT id, nickname, avatar FROM {$users} WHERE id = ? LIMIT 1", [(int)$reply['sender_id']]);
+        $reply['sender'] = $sender ?: null;
+        return $reply;
     }
 }
